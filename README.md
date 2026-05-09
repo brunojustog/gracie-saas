@@ -2,13 +2,13 @@
 
 SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-> **Status: Fase 5/12 — Webhook Chatwoot operacional.**
-> Fases anteriores: setup ✓, schema completo ✓, multi-tenancy ✓, RBAC + test infra ✓.
-> Fase 5 entregou endpoint `POST /api/webhooks/chatwoot/<slug>`, idempotente,
-> com auth via `X-Chatwoot-Webhook-Secret` (timingSafeEqual), persistência
-> defensiva em `WebhookLog`, handlers para 3 eventos (`conversation_created`,
-> `contact_created`, `message_created`), e 24 novos testes (62 total).
-> Próxima: Kanban com drag-and-drop (6).
+> **Status: Fase 6/12 — Kanban operacional.**
+> Fases anteriores: setup ✓, schema ✓, multi-tenancy ✓, RBAC + tests ✓, webhook Chatwoot ✓.
+> Fase 6 entregou `/kanban` com drag-and-drop (dnd-kit), filtros por modalidade
+> + vendedora + busca por nome/telefone, optimistic UI com revert em erro, toast
+> via sonner, indicador "frio" baseado em `lastInteractionAt`, e RBAC honrado:
+> SELLER vê SÓ leads atribuídos a si.
+> Próxima: detalhes do lead em sheet/página (7).
 
 ## Stack
 
@@ -103,6 +103,7 @@ npm run db:studio    # Prisma Studio
 npm run db:seed      # roda prisma/seed.ts (idempotente)
 npm run db:reset     # reset total + re-seed
 npm run db:inspect   # imprime leads + webhook logs do tenant gracie (debug)
+npm run db:demo-leads # popula 20 leads de exemplo distribuídos no kanban (idempotente)
 ```
 
 ## Estrutura
@@ -158,7 +159,8 @@ sessão real**, siga o checklist em [`docs/manual-smoke.md`](docs/manual-smoke.m
 
 ## Próximas fases
 
-- **Fase 6+:** Kanban (dnd-kit), Lead detail, Aulas experimentais, Matrículas, Dashboard, Configs.
+- **Fase 7:** Lead detail (sheet/página) — visão geral, histórico de stages, conversas.
+- **Fase 8+:** Aulas experimentais (calendário), Matrículas, Dashboard de KPIs, Configs.
 - **Fase 11:** Configurações + convites de usuário + integração Resend.
 - **Deploy:** Docker + Hetzner + GitHub Actions + SSL.
 

@@ -94,6 +94,27 @@ curl -X POST http://localhost:3000/api/webhooks/chatwoot/gracie \
 
 Pra testar com secret: setar `chatwootWebhookSecret` direto no DB (Prisma Studio) e mandar `-H "X-Chatwoot-Webhook-Secret: <valor>"`. Sem o header (ou com valor errado), retorna 401.
 
+## Kanban (Fase 6)
+
+Pré-requisito: `npm run db:demo-leads` (popula 20 leads distribuídos pelos stages, idempotente).
+
+| # | Persona | Ação | Resultado esperado |
+|---|---|---|---|
+| 1 | super-admin Bruno | abrir `gracie.localhost:3000/kanban` | vê 11 colunas, 20 leads distribuídos, badge "20 leads" no header |
+| 2 | super-admin Bruno | arrastar "Maria Silva" de "Novo Lead" → "Contatado" | card move suave, toast verde "Maria movida para Contatado", recarregar mantém estado, em `npm run db:inspect` há StageHistory novo |
+| 3 | super-admin Bruno | arrastar e soltar fora de coluna | nada acontece (drag cancelado) |
+| 4 | super-admin Bruno | digitar "maria" no campo de busca | só leads com "maria" no nome/telefone/email aparecem |
+| 5 | super-admin Bruno | filtrar por modalidade "GBF" | só leads dessa modalidade |
+| 6 | super-admin Bruno | filtrar por vendedora "Anna" | só leads atribuídos à Anna |
+| 7 | seller Anna em `gracie.localhost:3000/kanban` | conta de leads visíveis | apenas os 4 leads atribuídos a `anna@gracie.com` (badge "4 leads"); filtro de vendedora **não aparece** (ela não pode filtrar) |
+| 8 | seller Anna | arrastar lead da Evelyn (não vai aparecer no kanban dela mesmo) | não aplicável — leads dela não estão visíveis |
+| 9 | seller Anna | tentar mover lead próprio entre stages | funciona normal (toast verde) |
+
+Indicadores visuais no card:
+- Bolinha verde: interação < 2 dias atrás
+- Bolinha amarela: 2-4 dias
+- Bolinha vermelha: 5+ dias (lead "frio")
+
 ## Quando rodar
 
 - Antes de qualquer commit que mexa em `proxy.ts`, `auth.config.ts`,

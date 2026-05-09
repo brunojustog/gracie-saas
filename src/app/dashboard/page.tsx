@@ -41,15 +41,24 @@ export default async function DashboardPage() {
         </form>
       </header>
 
-      <section className="rounded-lg border bg-card p-6">
-        <h2 className="font-semibold">Fase 3 ativa: multi-tenancy</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Você está no tenant <span className="font-medium text-foreground">{tenant.slug}</span>
-          {" "}via subdomínio. As próximas fases (kanban, calendário, dashboard de KPIs) já
-          herdam essa segregação automaticamente — toda query do servidor vai
-          filtrar por <code className="rounded bg-muted px-1 py-0.5 text-xs">tenantId</code>{" "}
-          via os helpers em <code className="rounded bg-muted px-1 py-0.5 text-xs">src/server/tenant.ts</code>.
-        </p>
+      <section className="grid gap-3 sm:grid-cols-2">
+        <a
+          href="/kanban"
+          className="rounded-lg border bg-card p-6 transition-colors hover:bg-accent"
+        >
+          <h2 className="font-semibold">Funil comercial</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Kanban dos leads por estágio. Arraste pra mover, filtre por vendedora,
+            modalidade, ou busque por nome/telefone.
+          </p>
+        </a>
+        <div className="rounded-lg border border-dashed bg-muted/30 p-6 text-sm text-muted-foreground">
+          <h2 className="font-semibold text-foreground">Em breve</h2>
+          <p className="mt-1">
+            Calendário de aulas experimentais (fase 8), matrículas (fase 9),
+            KPIs e gráficos (fase 10).
+          </p>
+        </div>
       </section>
     </main>
   );
