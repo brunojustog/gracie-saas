@@ -2,15 +2,17 @@
 
 SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-> **Status: Fase 9/12 — Matrículas.**
-> Fases anteriores: setup ✓, schema ✓, multi-tenancy ✓, RBAC + tests ✓, webhook Chatwoot ✓, kanban ✓, lead detail ✓, aulas ✓.
-> Fase 9 entregou `/matriculas` com tabela + filtros (search/modalidade/status) +
-> KPIs (ativas, receita mensal, canceladas), modal "Nova matrícula" reusable
-> (lead picker quando direto da página, lead pré-selecionado quando via drag/sheet),
-> cancelamento inline com opção de mover lead pra "Aluno Perdido".
-> Drag pro stage Matriculado intercepta e força criação de Enrollment — stage e
-> matrícula nunca mais ficam fora de sync.
-> Próxima: dashboard de KPIs (10).
+> **Status: Fase 10/12 — Dashboard de KPIs.**
+> Fases anteriores: tudo do funil (setup→matrículas) ✓.
+> Fase 10 entregou `/dashboard` com 6 KPI cards (leads, aulas, comparecimentos,
+> matrículas, receita, conversão) com variação % vs período anterior,
+> filtro de período por preset (mês atual/anterior/7d/30d), funil bar chart
+> ordenado por stage.order, linha de novos leads por dia, pie de matrículas
+> ativas por modalidade, e ranking de vendedoras (ADMIN/MANAGER only — SELLER
+> vê só os próprios números).
+> Recharts 3.8 + queries agregadas no server (`groupBy`, `$queryRaw` pra
+> leads-por-dia com `Prisma.sql` + scope condicional).
+> Próxima: configurações + convites com Resend (11).
 
 ## Stack
 
@@ -163,8 +165,8 @@ sessão real**, siga o checklist em [`docs/manual-smoke.md`](docs/manual-smoke.m
 
 ## Próximas fases
 
-- **Fase 10:** Dashboard de KPIs (Recharts) — funil, conversão, ranking de vendedoras, faturamento.
-- **Fase 11+:** Configurações (CRUDs admin), convites de usuário (Resend).
+- **Fase 11:** Configurações (CRUDs admin de modalidades/planos/estágios/usuários) + convites de usuário (Resend).
+- **Fase 12:** Deploy (Hetzner/Nginx/CI).
 - **Fase 11:** Configurações + convites de usuário + integração Resend.
 - **Deploy:** Docker + Hetzner + GitHub Actions + SSL.
 

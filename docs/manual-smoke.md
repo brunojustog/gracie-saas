@@ -171,6 +171,23 @@ Pré-requisito: `npm run db:demo-leads && npm run db:demo-classes && npm run db:
 | 11 | seller Anna | tentar cancelar matrícula de outra vendedora via DevTools | servidor recusa: `{ ok: false, error: 'matrícula não encontrada ou sem permissão' }` |
 | 12 | seller Anna | filtros search "Aline" | encontra (combina scope + search no mesmo `lead.where`) |
 
+## Dashboard de KPIs (Fase 10)
+
+Pré-requisito: `npm run db:demo-leads && npm run db:demo-classes && npm run db:demo-enrollments`.
+
+| # | Persona | Ação | Resultado esperado |
+|---|---|---|---|
+| 1 | super-admin Bruno em `gracie.localhost:3000/dashboard` | abrir | 6 KPI cards no topo (Leads novos / Aulas agendadas / Comparecimentos / Matrículas / Receita mensal / Conversão), seletor de período "Mês atual" ativo. Variação % visível abaixo de cada KPI quando há dado anterior. |
+| 2 | super-admin Bruno | clicar "30 dias" no seletor de período | URL muda pra `?period=last_30_days`, KPIs recalculam, gráficos re-renderizam, label do período mostra "Últimos 30 dias" |
+| 3 | super-admin Bruno | clicar "Mês anterior" | conta KPIs do mês passado vs mês retrasado |
+| 4 | super-admin Bruno | observar funil de leads | barras horizontais ordenadas pelo `stage.order`, cores dos stages preservadas (Novo Lead cinza, Negociação laranja, Matriculado verde, etc) |
+| 5 | super-admin Bruno | observar gráfico "Novos leads por dia" | linha com volume diário no período (nas demos só os 20 leads do db:demo-leads aparecem) |
+| 6 | super-admin Bruno | observar pie "Matrículas ativas por modalidade" | mostra Thiago Mendes (GB1) — 1 matrícula sólida; ao adicionar mais via /matriculas, fatias surgem |
+| 7 | super-admin Bruno | observar ranking de vendedoras | tabela com Anna/Evelyn/Rafaela ordenadas por matrículas no período. Cada linha tem Leads / Matr. / Conv. % / Receita |
+| 8 | seller Anna | abrir `/dashboard` | KPIs mostram só números dos LEADS dela. Funil tem só leads atribuídos a ela. Pie tem só matrículas dela. **Painel de ranking NÃO aparece** — em vez disso, "Resumo do período" com nota "Você está vendo somente os números dos seus leads" |
+| 9 | super-admin Bruno | mudar de Bruno → ?period=last_7_days e voltar pra ?period=this_month | KPI "Conversão" pode aparecer "—" se não houve lead no período anterior (divisão por zero) |
+| 10 | super-admin Bruno | botões topo (Kanban / Aulas / Matrículas) | linkam pras outras páginas |
+
 ## Quando rodar
 
 - Antes de qualquer commit que mexa em `proxy.ts`, `auth.config.ts`,
