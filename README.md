@@ -1,36 +1,135 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gracie SaaS
 
-## Getting Started
+SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-First, run the development server:
+> **Status: Fase 1/12 — Setup do projeto.**
+> Domínio (Tenant, Lead, Modality, Plan, Stage, kanban, calendário, dashboard) será adicionado nas fases seguintes. Veja o spec completo em `docs/spec.md` (TODO) ou no prompt original.
+
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Framework | **Next.js 16** (App Router, Turbopack) — note: spec dizia "14+", `create-next-app@latest` puxou v16 |
+| UI | Tailwind CSS v4 + shadcn/ui (new-york), lucide-react |
+| Linguagem | TypeScript estrito |
+| Banco | PostgreSQL 16 (Docker Compose) |
+| ORM | **Prisma 7** com `@prisma/adapter-pg` (v7 mudou: `url` saiu do `schema.prisma` e foi pra `prisma.config.ts`; PrismaClient exige `adapter` explícito) |
+| Auth | Auth.js v5 (`next-auth@beta`) com Credentials provider |
+| Validação | Zod v4 |
+| Hash de senha | bcryptjs |
+
+> **Breaking changes com que tive que lidar:**
+> - **Next 16:** `middleware.ts` foi renomeado pra **`proxy.ts`**. Mesma assinatura, mesmo runtime Edge.
+> - **Prisma 7:** datasource URL não fica mais no schema; vai pra `prisma.config.ts`. PrismaClient precisa de `adapter: new PrismaPg(...)`.
+> - **Tailwind 4:** sem `tailwind.config.ts` — toda config é via `@theme inline` em `globals.css`.
+
+## Setup local
+
+### Pré-requisitos
+
+- Node 20+ (testado com Node 24)
+- Docker Desktop
+- npm 10+
+
+### Passo a passo
 
 ```bash
+# 1. clonar e instalar
+npm install
+
+# 2. configurar variáveis de ambiente
+cp .env.example .env
+# (.env já tem defaults pra dev — funcionam direto)
+
+# 3. subir Postgres
+docker compose up -d
+
+# 4. aplicar schema + gerar client + seed do super-admin
+npx prisma db push
+npx prisma generate
+npm run db:seed
+
+# 5. rodar dev
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse [http://localhost:3000](http://localhost:3000), você é redirecionado pra `/login`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Credenciais default (do seed)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+email:  bruno@simplificaonline.site
+senha:  gracie-2026
+```
 
-## Learn More
+Override via `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` no `.env`.
 
-To learn more about Next.js, take a look at the following resources:
+> **Nota:** o Postgres do projeto sobe na porta **5433** (a 5432 já é usada pelo `casa-roxa-gestao` na mesma máquina).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run dev          # Next dev (porta 3000, Turbopack)
+npm run build        # build de produção
+npm run start        # serve build de produção
+npm run lint         # ESLint
+npm run typecheck    # tsc --noEmit
 
-## Deploy on Vercel
+npm run db:push      # aplica schema sem migration file (dev)
+npm run db:migrate   # cria + aplica nova migration
+npm run db:deploy    # aplica migrations pendentes (produção)
+npm run db:studio    # Prisma Studio
+npm run db:seed      # roda prisma/seed.ts (idempotente)
+npm run db:reset     # reset total + re-seed
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Estrutura
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+  app/                  Pages (App Router)
+    api/auth/[...nextauth]/route.ts   handler do Auth.js v5
+    dashboard/page.tsx                placeholder (fase 1)
+    login/                            login com server action
+  components/ui/        primitivos shadcn/ui
+  lib/
+    prisma.ts           singleton do PrismaClient (com adapter-pg)
+    utils.ts            cn() helper (clsx + tailwind-merge)
+  server/
+    auth.config.ts      config Edge-safe (sem Prisma/bcrypt) — usado pelo proxy.ts
+    auth.ts             config full (Credentials + PrismaAdapter) — Node only
+  types/
+    next-auth.d.ts      module augmentation pra Session.user.id
+  proxy.ts              Next 16: era middleware.ts. Edge-only, importa só auth.config.ts.
+prisma/
+  schema.prisma         User + Account + Session + VerificationToken (mínimo Auth.js)
+  seed.ts               cria super-admin (Bruno)
+prisma.config.ts        Prisma 7: datasource URL e seed config
+docker-compose.yml      Postgres 16 na porta 5433
+```
+
+### Por que dois arquivos de config Auth.js?
+
+Auth.js v5 + Edge runtime (proxy.ts) **não** suporta Prisma nem bcrypt. Por isso:
+
+- `auth.config.ts` é Edge-safe: define `pages`, `callbacks.authorized`, sem providers reais. É o que o `proxy.ts` importa.
+- `auth.ts` (Node) estende o config adicionando `Credentials` provider, `PrismaAdapter`, `bcrypt.compare`, etc. É o que server actions e route handlers importam.
+
+Mesmo padrão usado em `casa-roxa-gestao` — funciona bem.
+
+## Próximas fases
+
+- **Fase 2:** Schema completo de domínio (Tenant, Lead, Modality, Plan, Stage, ExperimentalClass, Enrollment, StageHistory, WebhookLog) + seed do tenant Gracie com modalidades/planos/estágios reais.
+- **Fase 3:** Multi-tenancy via subdomínio (proxy.ts extrai `tenantSlug`, helpers de query injetam `tenantId`).
+- **Fase 4:** RBAC (Admin/Manager/Seller).
+- **Fase 5:** Webhook Chatwoot → cria Lead.
+- **Fase 6+:** Kanban, Lead detail, Aulas experimentais, Matrículas, Dashboard, Configs.
+- **Deploy:** Docker + Hetzner + GitHub Actions + SSL.
+
+## Deploy
+
+Ainda não configurado. Será feito ao fim da Fase 12.
+
+---
+
+🥋 _Construído com chimarrão._
