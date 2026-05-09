@@ -134,6 +134,24 @@ Pré-requisito: `npm run db:demo-leads` e o kanban da Fase 6 já rodou ok.
 | 11 | seller Anna | tab Visão Geral: editar nome dos próprios leads | funciona normal |
 | 12 | seller Anna | tentar acessar lead alheio via DevTools (POST /api/.../actions com leadId de outra) | servidor recusa: action retorna `{ ok: false, error: 'lead não encontrado ou sem permissão' }` (testar no DevTools Network) |
 
+## Aulas experimentais (Fase 8)
+
+Pré-requisito: `npm run db:demo-leads && npm run db:demo-classes`.
+
+| # | Persona | Ação | Resultado esperado |
+|---|---|---|---|
+| 1 | super-admin Bruno em `gracie.localhost:3000/aulas` | abrir | FullCalendar carrega, vista semana, slots da grade aparecem como blocos translúcidos coloridos por modalidade; aulas reais aparecem como blocos sólidos por cima |
+| 2 | super-admin Bruno | clicar num slot da grade vazio (ex: GB1 segunda 7h) | modal "Agendar" abre; data/hora pré-populada; modalidade GB1 pré-selecionada; campo Lead vazio |
+| 3 | super-admin Bruno | escolher Maria Silva e clicar Agendar | toast "Aula agendada"; novo bloco sólido aparece no calendário |
+| 4 | super-admin Bruno | clicar numa aula sólida existente | modal "Ações" abre; mostra modalidade, lead, telefone, status atual; botões Confirmar / Compareceu / Faltou / Remarcar / Cancelar |
+| 5 | super-admin Bruno | marcar "Compareceu" | toast verde; card vira fundo verde no calendário; status no DB ATTENDED + attendedAt |
+| 6 | super-admin Bruno | em outra aula, clicar "Remarcar" | input de nova data aparece; mudar pra outra hora; salvar; aula pula pra novo horário |
+| 7 | super-admin Bruno | clicar célula vazia FORA da grade (ex: domingo 15h) | modal abre com aviso "fora de horário regular da grade"; não pré-seleciona modalidade |
+| 8 | seller Anna | abrir `gracie.localhost:3000/aulas` | vê apenas aulas dos seus leads (Lucas, Camila, Diego, Patrícia, Aline, Rodrigo, Marcelo, Família Vieira) |
+| 9 | seller Anna | tentar abrir aula de lead alheio via DevTools (chamar updateClassStatus com classId de outra) | servidor retorna `{ ok: false, error: 'aula não encontrada ou sem permissão' }` |
+| 10 | super-admin Bruno | abrir lead Maria no kanban → tab Aulas | lista a aula que foi agendada no passo 3 |
+| 11 | super-admin Bruno | tela /aulas no mobile (ou DevTools narrow) | calendário se mantém usável (FullCalendar tem responsivo built-in); pode rolar lateralmente |
+
 ## Quando rodar
 
 - Antes de qualquer commit que mexa em `proxy.ts`, `auth.config.ts`,

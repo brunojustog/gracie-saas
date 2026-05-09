@@ -19,15 +19,113 @@ const prisma = new PrismaClient({ adapter });
 
 const TENANT_SLUG = "gracie";
 
-const MODALITIES: Array<{ name: string; ageRange?: string; description?: string }> = [
-  { name: "GB1", ageRange: "16+", description: "Fundamentos" },
-  { name: "GB2", ageRange: "16+", description: "Intermediário" },
-  { name: "GB3", ageRange: "16+", description: "Avançado" },
-  { name: "BarraFit" },
-  { name: "GBF", description: "Feminino" },
-  { name: "GBK - Pequenos Campeões 1", ageRange: "4-7" },
-  { name: "GBK - Pequenos Campeões 2", ageRange: "8-9" },
-  { name: "GBK - Juniors", ageRange: "10-15" },
+/**
+ * Modalidades da grade da Gracie Barra Anália Franco.
+ *
+ * Histórico: o seed original tinha "GB3" como avançado. A grade real da
+ * academia chama esta turma de "GBA" (em vermelho). Renomeei pra alinhar.
+ * Caso algum lead/matrícula em prod aponte pra "GB3", a renomeação é
+ * idempotente porque busca por `name` no upsertCatalog.
+ *
+ * Cores extraídas do quadro de horários (referência visual no calendário).
+ */
+const MODALITIES: Array<{
+  name: string;
+  ageRange?: string;
+  description?: string;
+  color: string;
+  /** Nome anterior pra rebatizar se já existir. */
+  previousName?: string;
+}> = [
+  { name: "GB1", ageRange: "16+", description: "Fundamentos / todos os níveis", color: "#3B82F6" },
+  { name: "GB2", ageRange: "16+", description: "Intermediário", color: "#8B5CF6" },
+  { name: "GBA", ageRange: "16+", description: "Avançado / Atletas", color: "#EF4444", previousName: "GB3" },
+  { name: "GB NOGI", ageRange: "16+", description: "Submission / sem kimono", color: "#7C3AED" },
+  { name: "BarraFit", description: "Funcional", color: "#6B7280" },
+  { name: "GBF", description: "Feminino", color: "#EC4899" },
+  { name: "GBK - Pequenos Campeões 1", ageRange: "4-7", color: "#FBBF24" },
+  { name: "GBK - Pequenos Campeões 2", ageRange: "8-9", color: "#FBBF24" },
+  { name: "GBK - Juniors", ageRange: "10-15", color: "#10B981" },
+];
+
+/**
+ * Grade semanal fixa. dayOfWeek segue Date.getDay() (0=dom, 1=seg, ..., 6=sáb).
+ * Compilada a partir do quadro oficial da academia (foto enviada pelo cliente
+ * em 2026-05). Cada slot vira UMA entrada por modalidade — quando dois
+ * retângulos compartilham horário (PC1+PC2, GBA+BarraFit, GB1+GB NOGI), são
+ * 2 entradas paralelas.
+ */
+const SCHEDULE: Array<{ modality: string; day: number; time: string; durationMinutes?: number }> = [
+  // Segunda
+  { modality: "GB1", day: 1, time: "07:00" },
+  { modality: "GBK - Pequenos Campeões 1", day: 1, time: "09:00" },
+  { modality: "GBK - Pequenos Campeões 2", day: 1, time: "09:00" },
+  { modality: "GB1", day: 1, time: "12:00" },
+  { modality: "GBK - Pequenos Campeões 1", day: 1, time: "17:30" },
+  { modality: "GBK - Pequenos Campeões 2", day: 1, time: "17:30" },
+  { modality: "GBK - Juniors", day: 1, time: "18:30" },
+  { modality: "GB1", day: 1, time: "19:30" },
+  { modality: "GB NOGI", day: 1, time: "19:30" },
+  { modality: "GB2", day: 1, time: "20:30" },
+
+  // Terça
+  { modality: "GB1", day: 2, time: "07:00" },
+  { modality: "GBK - Pequenos Campeões 1", day: 2, time: "09:00" },
+  { modality: "GBK - Pequenos Campeões 2", day: 2, time: "09:00" },
+  { modality: "GB1", day: 2, time: "12:00" },
+  { modality: "GBK - Juniors", day: 2, time: "17:30" },
+  { modality: "GBA", day: 2, time: "17:30" },
+  { modality: "BarraFit", day: 2, time: "17:30" },
+  { modality: "GBK - Pequenos Campeões 1", day: 2, time: "18:30" },
+  { modality: "GBK - Pequenos Campeões 2", day: 2, time: "18:30" },
+  { modality: "GBA", day: 2, time: "18:30" },
+  { modality: "BarraFit", day: 2, time: "18:30" },
+  { modality: "GB2", day: 2, time: "19:30" },
+  { modality: "GBF", day: 2, time: "19:30" },
+  { modality: "GB1", day: 2, time: "20:30" },
+  { modality: "GB NOGI", day: 2, time: "20:30" },
+
+  // Quarta
+  { modality: "GB1", day: 3, time: "07:00" },
+  { modality: "GBK - Pequenos Campeões 1", day: 3, time: "09:00" },
+  { modality: "GBK - Pequenos Campeões 2", day: 3, time: "09:00" },
+  { modality: "GB1", day: 3, time: "12:00" },
+  { modality: "GBK - Pequenos Campeões 1", day: 3, time: "17:30" },
+  { modality: "GBK - Pequenos Campeões 2", day: 3, time: "17:30" },
+  { modality: "GBK - Juniors", day: 3, time: "18:30" },
+  { modality: "GB NOGI", day: 3, time: "19:30" },
+  { modality: "GB2", day: 3, time: "20:30" },
+
+  // Quinta
+  { modality: "GB1", day: 4, time: "07:00" },
+  { modality: "GBK - Pequenos Campeões 1", day: 4, time: "09:00" },
+  { modality: "GBK - Pequenos Campeões 2", day: 4, time: "09:00" },
+  { modality: "GB1", day: 4, time: "12:00" },
+  { modality: "GBK - Juniors", day: 4, time: "17:30" },
+  { modality: "GBA", day: 4, time: "17:30" },
+  { modality: "BarraFit", day: 4, time: "17:30" },
+  { modality: "GBK - Pequenos Campeões 1", day: 4, time: "18:30" },
+  { modality: "GBK - Pequenos Campeões 2", day: 4, time: "18:30" },
+  { modality: "GBA", day: 4, time: "18:30" },
+  { modality: "BarraFit", day: 4, time: "18:30" },
+  { modality: "GB2", day: 4, time: "19:30" },
+  { modality: "GBF", day: 4, time: "19:30" },
+  { modality: "GB1", day: 4, time: "20:30" },
+  { modality: "GB NOGI", day: 4, time: "20:30" },
+
+  // Sexta
+  { modality: "GB1", day: 5, time: "07:00" },
+  { modality: "GB1", day: 5, time: "12:00" },
+  { modality: "GBK - Pequenos Campeões 1", day: 5, time: "17:30" },
+  { modality: "GBK - Pequenos Campeões 2", day: 5, time: "17:30" },
+  { modality: "GBK - Juniors", day: 5, time: "18:30" },
+  { modality: "GB1", day: 5, time: "19:30" },
+  { modality: "GB NOGI", day: 5, time: "19:30" },
+  { modality: "GB2", day: 5, time: "20:30" },
+
+  // Sábado
+  { modality: "GB1", day: 6, time: "09:00" },
+  { modality: "GB2", day: 6, time: "10:00" }, // Open Mat
 ];
 
 const PLANS: Array<{ name: string; monthlyValue: number; description?: string }> = [
@@ -97,17 +195,52 @@ async function upsertTenant() {
 
 async function upsertCatalog(tenantId: string) {
   for (const m of MODALITIES) {
+    // Rebatizar (ex: GB3 → GBA): se existe pelo nome anterior e não pelo novo,
+    // só rename. Mantém id, leads/matrículas existentes.
+    if (m.previousName) {
+      const old = await prisma.modality.findFirst({
+        where: { tenantId, name: m.previousName },
+      });
+      const already = await prisma.modality.findFirst({
+        where: { tenantId, name: m.name },
+      });
+      if (old && !already) {
+        await prisma.modality.update({
+          where: { id: old.id },
+          data: {
+            name: m.name,
+            ageRange: m.ageRange,
+            description: m.description,
+            color: m.color,
+            active: true,
+          },
+        });
+        continue;
+      }
+    }
+
     const existing = await prisma.modality.findFirst({
       where: { tenantId, name: m.name },
     });
     if (existing) {
       await prisma.modality.update({
         where: { id: existing.id },
-        data: { ageRange: m.ageRange, description: m.description, active: true },
+        data: {
+          ageRange: m.ageRange,
+          description: m.description,
+          color: m.color,
+          active: true,
+        },
       });
     } else {
       await prisma.modality.create({
-        data: { tenantId, name: m.name, ageRange: m.ageRange, description: m.description },
+        data: {
+          tenantId,
+          name: m.name,
+          ageRange: m.ageRange,
+          description: m.description,
+          color: m.color,
+        },
       });
     }
   }
@@ -148,6 +281,36 @@ async function upsertCatalog(tenantId: string) {
       },
     });
   }
+}
+
+async function upsertSchedule(tenantId: string) {
+  // Estratégia: blow-and-rebuild da grade do tenant. ClassSchedule não tem
+  // FK pra ExperimentalClass (aulas existentes não são afetadas), então
+  // recriar é seguro e mantém a grade sincronizada com a fonte (este array).
+  const modalities = await prisma.modality.findMany({ where: { tenantId } });
+  const modalityByName = new Map(modalities.map((m) => [m.name, m.id]));
+
+  await prisma.classSchedule.deleteMany({ where: { tenantId } });
+
+  let inserted = 0;
+  for (const slot of SCHEDULE) {
+    const modalityId = modalityByName.get(slot.modality);
+    if (!modalityId) {
+      console.warn(`  · pulando slot — modalidade "${slot.modality}" não encontrada`);
+      continue;
+    }
+    await prisma.classSchedule.create({
+      data: {
+        tenantId,
+        modalityId,
+        dayOfWeek: slot.day,
+        startTime: slot.time,
+        durationMinutes: slot.durationMinutes ?? 60,
+      },
+    });
+    inserted++;
+  }
+  console.log(`✓ Grade semanal: ${inserted} slots`);
 }
 
 async function upsertTenantUser(params: {
@@ -191,6 +354,8 @@ async function main() {
   console.log(
     `✓ Catálogo: ${MODALITIES.length} modalidades, ${PLANS.length} planos, ${STAGES.length} estágios`,
   );
+
+  await upsertSchedule(tenant.id);
 
   // Bruno como ADMIN do tenant Gracie (além de super-admin global)
   await prisma.tenantUser.upsert({

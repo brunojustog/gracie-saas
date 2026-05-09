@@ -108,6 +108,7 @@ model Tenant {
   experimentalClasses ExperimentalClass[]
   enrollments         Enrollment[]
   webhookLogs         WebhookLog[]
+  classSchedules      ClassSchedule[]
 }
 
 enum Role {
@@ -159,6 +160,8 @@ model Modality {
   name        String
   description String?
   ageRange    String?
+  /** Cor hex (#RRGGBB) usada no calendário pra pintar slots/aulas dessa modalidade. */
+  color       String?
   active      Boolean  @default(true)
 
   tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -166,8 +169,31 @@ model Modality {
   leads               Lead[]
   experimentalClasses ExperimentalClass[]
   enrollments         Enrollment[]
+  classSchedules      ClassSchedule[]
 
   @@index([tenantId])
+}
+
+/**
+ * Grade fixa: cada modalidade tem um conjunto de slots regulares (ex: GB1 toda
+ * segunda 7h). Calendar usa pra desenhar background events e oferecer slots
+ * pra agendar aulas experimentais.
+ */
+model ClassSchedule {
+  id              String  @id @default(cuid())
+  tenantId        String
+  modalityId      String
+  /** 0=domingo, 1=segunda, ..., 6=sábado (igual `Date.getDay()`). */
+  dayOfWeek       Int
+  /** Hora local da aula no formato "HH:MM" (sem timezone — academia tem fuso fixo). */
+  startTime       String
+  durationMinutes Int     @default(60)
+  active          Boolean @default(true)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  modality Modality @relation(fields: [modalityId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, dayOfWeek])
 }
 
 model Plan {

@@ -52,13 +52,20 @@ export default async function DashboardPage() {
             modalidade, ou busque por nome/telefone.
           </p>
         </a>
-        <div className="rounded-lg border border-dashed bg-muted/30 p-6 text-sm text-muted-foreground">
-          <h2 className="font-semibold text-foreground">Em breve</h2>
-          <p className="mt-1">
-            Calendário de aulas experimentais (fase 8), matrículas (fase 9),
-            KPIs e gráficos (fase 10).
+        <a
+          href="/aulas"
+          className="rounded-lg border bg-card p-6 transition-colors hover:bg-accent"
+        >
+          <h2 className="font-semibold">Aulas experimentais</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Calendário com a grade da academia. Clique num horário pra agendar
+            um lead; marque comparecimento, remarque ou cancele.
           </p>
-        </div>
+        </a>
+      </section>
+
+      <section className="rounded-lg border border-dashed bg-muted/30 p-4 text-xs text-muted-foreground">
+        Em breve: matrículas (fase 9), KPIs e gráficos (fase 10), configurações (fase 11).
       </section>
     </main>
   );

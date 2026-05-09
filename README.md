@@ -2,13 +2,15 @@
 
 SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-> **Status: Fase 7/12 — Lead detail.**
-> Fases anteriores: setup ✓, schema ✓, multi-tenancy ✓, RBAC + tests ✓, webhook Chatwoot ✓, kanban ✓.
-> Fase 7 entregou sheet lateral abrindo do card do kanban, com 4 tabs (Visão geral
-> editável + estágio + modalidade + vendedora; Histórico com timeline; Aulas e
-> Conversas como stubs pra fases 8/integração futura). Optimistic update reflete
-> mudanças no card do board sem reload. RBAC: SELLER edita só os próprios; reatribuição só ADMIN/MANAGER.
-> Próxima: aulas experimentais com calendário (8).
+> **Status: Fase 8/12 — Aulas experimentais.**
+> Fases anteriores: setup ✓, schema ✓, multi-tenancy ✓, RBAC + tests ✓, webhook Chatwoot ✓, kanban ✓, lead detail ✓.
+> Fase 8 entregou `/aulas` com FullCalendar (semana/dia/mês), grade fixa da academia (59 slots de modalidades reais) renderizada como background events,
+> agendamento clicando num slot (modalidade pré-selecionada se único naquele
+> horário), modal de ações (confirmar, compareceu, faltou, remarcar, cancelar).
+> Tab "Aulas" do LeadSheet agora lista aulas reais do lead.
+> GB3 → renomeado pra GBA pra alinhar com o quadro de horários da Gracie Barra.
+> Adicionado GB NOGI.
+> Próxima: matrículas (9).
 
 ## Stack
 
@@ -104,6 +106,7 @@ npm run db:seed      # roda prisma/seed.ts (idempotente)
 npm run db:reset     # reset total + re-seed
 npm run db:inspect   # imprime leads + webhook logs do tenant gracie (debug)
 npm run db:demo-leads # popula 20 leads de exemplo distribuídos no kanban (idempotente)
+npm run db:demo-classes # popula 9 aulas experimentais em estados variados (idempotente)
 ```
 
 ## Estrutura
@@ -159,8 +162,8 @@ sessão real**, siga o checklist em [`docs/manual-smoke.md`](docs/manual-smoke.m
 
 ## Próximas fases
 
-- **Fase 8:** Aulas experimentais (calendário) — `ExperimentalClass`, agendamento, check-in.
-- **Fase 9+:** Matrículas, Dashboard de KPIs, Configs.
+- **Fase 9:** Matrículas — `Enrollment`, conversão Lead → aluno, valor mensal.
+- **Fase 10+:** Dashboard de KPIs (Recharts), Configurações (CRUDs).
 - **Fase 11:** Configurações + convites de usuário + integração Resend.
 - **Deploy:** Docker + Hetzner + GitHub Actions + SSL.
 

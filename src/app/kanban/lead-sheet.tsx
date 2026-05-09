@@ -26,6 +26,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
+import { getClassesForLead } from "./../aulas/actions";
+
 import {
   type LeadDetails,
   assignSeller,
@@ -205,9 +207,7 @@ function LeadSheetContent({
         </TabsContent>
 
         <TabsContent value="classes" className="pt-4">
-          <p className="text-sm text-muted-foreground">
-            Agendamento e checagem de aulas experimentais entram na fase 8.
-          </p>
+          <ClassesTab leadId={lead.id} leadName={lead.name} />
         </TabsContent>
 
         <TabsContent value="conversations" className="space-y-2 pt-4">
@@ -487,6 +487,77 @@ function OverviewTab({
         {pending ? "Salvando…" : "Salvar alterações"}
       </Button>
     </div>
+  );
+}
+
+type LeadClass = NonNullable<
+  Awaited<ReturnType<typeof getClassesForLead>>
+>[number];
+
+function ClassesTab({ leadId, leadName }: { leadId: string; leadName: string }) {
+  const [classes, setClasses] = useState<LeadClass[] | null>(null);
+
+  useEffect(() => {
+    let aborted = false;
+    getClassesForLead(leadId).then((data) => {
+      if (!aborted) setClasses(data ?? []);
+    });
+    return () => {
+      aborted = true;
+    };
+  }, [leadId]);
+
+  if (classes === null) {
+    return (
+      <div className="flex items-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Carregando…
+      </div>
+    );
+  }
+
+  if (classes.length === 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">
+          {leadName} ainda não tem aulas experimentais agendadas.
+        </p>
+        <a
+          href="/aulas"
+          className="inline-block text-sm font-medium text-primary hover:underline"
+        >
+          Abrir calendário para agendar →
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <ol className="space-y-2">
+      {classes.map((c) => (
+        <li
+          key={c.id}
+          className="flex items-start gap-3 rounded border bg-card p-3"
+        >
+          <span
+            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+            style={{ background: c.modality.color ?? "#6B7280" }}
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{c.modality.name}</div>
+            <div className="text-xs text-muted-foreground">
+              {format(new Date(c.scheduledDate), "EEE, dd MMM 'às' HH:mm", { locale: ptBR })}
+            </div>
+            {c.notes ? (
+              <div className="mt-1 text-xs italic text-muted-foreground">{c.notes}</div>
+            ) : null}
+          </div>
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase">
+            {c.status.toLowerCase().replace("_", " ")}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
