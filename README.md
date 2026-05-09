@@ -2,8 +2,9 @@
 
 SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-> **Status: Fase 1/12 — Setup do projeto.**
-> Domínio (Tenant, Lead, Modality, Plan, Stage, kanban, calendário, dashboard) será adicionado nas fases seguintes. Veja o spec completo em `docs/spec.md` (TODO) ou no prompt original.
+> **Status: Fase 3/12 — Multi-tenancy ativa.**
+> Setup ✓, schema completo ✓, roteamento por subdomínio + helpers de tenant ✓.
+> Próximas: RBAC (4), webhook Chatwoot (5), kanban (6), etc.
 
 ## Stack
 
@@ -53,16 +54,29 @@ npm run db:seed
 npm run dev
 ```
 
-Acesse [http://localhost:3000](http://localhost:3000), você é redirecionado pra `/login`.
+### Acesso por subdomínio
+
+A app usa **`*.localhost`** em dev (RFC 6761 — Chrome/Firefox/Safari resolvem automaticamente para 127.0.0.1, sem mexer no `/etc/hosts`).
+
+| URL | Quem usa |
+|---|---|
+| [http://gracie.localhost:3000](http://gracie.localhost:3000) | Tenant Gracie Barra (admin do tenant + vendedoras) |
+| [http://admin.localhost:3000](http://admin.localhost:3000) | Super-admin (Bruno) — visão agregada de todos os tenants |
+| [http://localhost:3000](http://localhost:3000) | Sem contexto de tenant — cai num **picker** após login |
+
+Em produção a mesma lógica funciona com `gracie.app.simplifica.com.br` / `admin.app.simplifica.com.br`. A extração de tenant está em `src/server/tenant-routing.ts` (Edge-safe) e roda igual local e prod.
 
 ### Credenciais default (do seed)
 
-```
-email:  bruno@simplificaonline.site
-senha:  gracie-2026
-```
+| Email | Senha | Papel |
+|---|---|---|
+| `bruno@simplificaonline.site` | `gracie-2026` | Super-admin (vê tudo) |
+| `gracie-admin@example.com` | `gracie-2026` | ADMIN do tenant Gracie |
+| `anna@gracie.com` | `gracie-2026` | SELLER (Gracie) |
+| `evelyn@gracie.com` | `gracie-2026` | SELLER (Gracie) |
+| `rafaela@gracie.com` | `gracie-2026` | SELLER (Gracie) |
 
-Override via `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` no `.env`.
+Override do super-admin via `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` no `.env`.
 
 > **Nota:** o Postgres do projeto sobe na porta **5433** (a 5432 já é usada pelo `casa-roxa-gestao` na mesma máquina).
 
@@ -89,21 +103,26 @@ npm run db:reset     # reset total + re-seed
 src/
   app/                  Pages (App Router)
     api/auth/[...nextauth]/route.ts   handler do Auth.js v5
-    dashboard/page.tsx                placeholder (fase 1)
+    admin/page.tsx                    painel super-admin (visão agregada)
+    dashboard/page.tsx                dashboard scopado pelo tenant atual
+    tenants/page.tsx                  picker (quem vê: user logado sem tenant na URL)
     login/                            login com server action
   components/ui/        primitivos shadcn/ui
   lib/
     prisma.ts           singleton do PrismaClient (com adapter-pg)
+    tenant-url.ts       gera URLs de subdomínio (preserva porta/protocolo)
     utils.ts            cn() helper (clsx + tailwind-merge)
   server/
     auth.config.ts      config Edge-safe (sem Prisma/bcrypt) — usado pelo proxy.ts
     auth.ts             config full (Credentials + PrismaAdapter) — Node only
+    tenant-routing.ts   Edge-safe: parseTenantFromHost() + sentinels
+    tenant.ts           Node: getCurrentTenant, requireTenantUser, requireRole, requireSuperAdmin
   types/
     next-auth.d.ts      module augmentation pra Session.user.id
-  proxy.ts              Next 16: era middleware.ts. Edge-only, importa só auth.config.ts.
+  proxy.ts              Edge: extrai tenant do host e propaga via x-tenant-slug
 prisma/
-  schema.prisma         User + Account + Session + VerificationToken (mínimo Auth.js)
-  seed.ts               cria super-admin (Bruno)
+  schema.prisma         schema completo (Tenant, Lead, Stage, Modality, Plan, ...)
+  seed.ts               tenant Gracie + catálogo + admin/sellers (idempotente)
 prisma.config.ts        Prisma 7: datasource URL e seed config
 docker-compose.yml      Postgres 16 na porta 5433
 ```
@@ -119,9 +138,7 @@ Mesmo padrão usado em `casa-roxa-gestao` — funciona bem.
 
 ## Próximas fases
 
-- **Fase 2:** Schema completo de domínio (Tenant, Lead, Modality, Plan, Stage, ExperimentalClass, Enrollment, StageHistory, WebhookLog) + seed do tenant Gracie com modalidades/planos/estágios reais.
-- **Fase 3:** Multi-tenancy via subdomínio (proxy.ts extrai `tenantSlug`, helpers de query injetam `tenantId`).
-- **Fase 4:** RBAC (Admin/Manager/Seller).
+- **Fase 4:** RBAC (Admin/Manager/Seller) — `requireRole(role)` já existe; falta gating de UI e Server Actions.
 - **Fase 5:** Webhook Chatwoot → cria Lead.
 - **Fase 6+:** Kanban, Lead detail, Aulas experimentais, Matrículas, Dashboard, Configs.
 - **Deploy:** Docker + Hetzner + GitHub Actions + SSL.

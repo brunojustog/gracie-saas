@@ -1,13 +1,38 @@
 // Next.js 16 renomeou `middleware.ts` → `proxy.ts`. Mesma assinatura,
-// mesmo runtime Edge. Auth.js v5 ainda exporta `auth` como handler
-// universal — funciona como proxy default export.
+// mesmo runtime Edge.
 //
-// IMPORTANTE: este arquivo é Edge-only. Importe APENAS de
-// `auth.config.ts`, nunca de `auth.ts` (Prisma + bcrypt quebrariam Edge).
+// IMPORTANTE: este arquivo é Edge-only. Importe APENAS de:
+//   - auth.config.ts (Edge-safe, sem Prisma/bcrypt)
+//   - tenant-routing.ts (puro, sem Node)
+//
+// Pipeline:
+//   1. Auth.js valida sessão via callback `authorized` (em auth.config.ts).
+//      Se não autenticado em rota privada → redirect pra /login.
+//   2. Se autenticado, este wrapper extrai o tenant do `host` e propaga
+//      via header `x-tenant-slug` para Server Components/Actions lerem.
 import NextAuth from "next-auth";
-import { authConfig } from "@/server/auth.config";
+import { NextResponse } from "next/server";
 
-export default NextAuth(authConfig).auth;
+import { authConfig } from "@/server/auth.config";
+import {
+  TENANT_HEADER,
+  encodeTenantHeader,
+  parseTenantFromHost,
+} from "@/server/tenant-routing";
+
+const { auth } = NextAuth(authConfig);
+
+export default auth((req) => {
+  const host = req.headers.get("host");
+  const tenant = parseTenantFromHost(host);
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set(TENANT_HEADER, encodeTenantHeader(tenant));
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+});
 
 export const config = {
   matcher: [
