@@ -1,90 +1,102 @@
-version: "3.7"
+version: "3.8"
 
-# Stack do Gracie SaaS pra Docker Swarm.
-# Padrão: Traefik com Let's Encrypt automático, rede `simplificanet` external,
-# constraint no manager (mesma estrutura dos outros stacks da Simplifica).
+# Stack do Gracie SaaS pra Docker Swarm via Portainer.
 #
 # Deploy:
-#   docker stack deploy -c stack.yml gracie-saas
+#   1. Cole o conteúdo deste arquivo numa nova stack do Portainer
+#   2. Preencha as env vars no formulário do Portainer (campos com "" abaixo)
+#   3. "Deploy the stack"
 #
-# Variáveis lidas do environment do shell que rodar `docker stack deploy`:
-#   IMAGE_TAG                — tag da imagem (default: latest)
-#   AUTH_SECRET              — secret do Auth.js (gere com `openssl rand -base64 32`)
-#   DATABASE_URL             — postgres://user:pass@postgres:5432/gracie_saas
-#   RESEND_API_KEY           — chave do Resend
-#   EMAIL_FROM               — sender (ex: "Gracie SaaS <noreply@simplificaonline.site>")
-#   TENANT_SLUG              — slug do tenant em prod (ex: bgaf)
-#   TENANT_NAME              — nome do tenant (ex: "Gracie Barra Anália Franco")
-#   SEED_ADMIN_EMAIL         — email do super-admin
-#   SEED_ADMIN_PASSWORD      — senha temporária do super-admin (trocar após primeiro login)
-#   PUBLIC_HOST              — hostname público (bgaf.simplificaonline.site)
+# Update (após push de novo código no main):
+#   - Aguarda o GitHub Actions buildar a imagem (~3-5 min)
+#   - No Portainer: stack > Editor > "Update the stack" + marca
+#     "Re-pull image and redeploy"
+#
+# Variáveis a preencher (via formulário do Portainer):
+#   POSTGRES_PASSWORD       — senha do role/banco (gere com `openssl rand -hex 24`)
+#   AUTH_SECRET             — `openssl rand -base64 32`
+#   RESEND_API_KEY          — chave do Resend (re_...)
+#   SEED_ADMIN_PASSWORD     — senha temporária do super-admin (trocar após login)
+#   RUN_SEED_ON_BOOT        — "true" SÓ no primeiro deploy; mude pra "false" depois
+#                             (evita re-seedar a cada redeploy)
 
 services:
   app:
-    image: ghcr.io/brunojustog/gracie-saas:${IMAGE_TAG:-latest}
+    image: ghcr.io/brunojustog/gracie-saas:latest
     networks:
-      - simplificanet
-
+      - traefik-public
+      - gracie-saas-internal
     environment:
-      - NODE_ENV=production
-      - TZ=America/Sao_Paulo
+      DATABASE_URL: "postgresql://gracie_saas:${POSTGRES_PASSWORD}@postgres:5432/gracie_saas?schema=public"
 
-      # Auth.js v5
-      - AUTH_SECRET=${AUTH_SECRET}
-      - AUTH_TRUST_HOST=true
-      - NEXTAUTH_URL=https://${PUBLIC_HOST}
+      AUTH_SECRET: "${AUTH_SECRET}"
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: "https://bgaf.simplificaonline.site"
 
-      # Postgres (rodando no swarm como serviço `postgres`)
-      - DATABASE_URL=${DATABASE_URL}
+      RESEND_API_KEY: "${RESEND_API_KEY}"
+      EMAIL_FROM: "Gracie SaaS <noreply@simplificaonline.site>"
 
-      # Email
-      - RESEND_API_KEY=${RESEND_API_KEY}
-      - EMAIL_FROM=${EMAIL_FROM}
+      TENANT_SLUG: "bgaf"
+      TENANT_NAME: "Gracie Barra Anália Franco"
 
-      # Tenant inicial (primeiro deploy roda RUN_SEED_ON_BOOT=true; remover depois)
-      - TENANT_SLUG=${TENANT_SLUG:-bgaf}
-      - TENANT_NAME=${TENANT_NAME}
-      - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
-      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD}
-      - RUN_SEED_ON_BOOT=${RUN_SEED_ON_BOOT:-false}
+      SEED_ADMIN_EMAIL: "bruno@simplificaonline.site"
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD}"
+      RUN_SEED_ON_BOOT: "${RUN_SEED_ON_BOOT:-false}"
+
+      NODE_ENV: "production"
+      TZ: "America/Sao_Paulo"
 
     deploy:
-      mode: replicated
       replicas: 1
       placement:
         constraints:
           - node.role == manager
-      resources:
-        limits:
-          cpus: "1"
-          memory: 1024M
-      update_config:
-        parallelism: 1
-        order: start-first
-        failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 10s
-        max_attempts: 3
-
+        delay: 5s
+        max_attempts: 5
+      update_config:
+        order: start-first
+        failure_action: rollback
       labels:
-        - traefik.enable=true
-        - traefik.docker.network=simplificanet
-        - traefik.http.services.gracie_saas.loadbalancer.server.port=3000
-        - traefik.http.services.gracie_saas.loadbalancer.passhostheader=true
+        - "traefik.enable=true"
+        - "traefik.docker.network=traefik-public"
 
-        # Roteia o host público pro app
-        - traefik.http.routers.gracie_saas.rule=Host(`${PUBLIC_HOST}`)
-        - traefik.http.routers.gracie_saas.entrypoints=websecure
-        - traefik.http.routers.gracie_saas.tls=true
-        - traefik.http.routers.gracie_saas.tls.certresolver=letsencryptresolver
-        - traefik.http.routers.gracie_saas.service=gracie_saas
+        - "traefik.http.routers.gracie-saas.rule=Host(`bgaf.simplificaonline.site`)"
+        - "traefik.http.routers.gracie-saas.entrypoints=websecure"
+        - "traefik.http.routers.gracie-saas.tls=true"
+        - "traefik.http.routers.gracie-saas.tls.certresolver=le"
+        - "traefik.http.routers.gracie-saas.service=gracie-saas-app"
 
-        # X-Forwarded-Proto pro Next confiar no proxy (NEXTAUTH_URL HTTPS)
-        - traefik.http.middlewares.gracie_saas_ssl.headers.customrequestheaders.X-Forwarded-Proto=https
-        - traefik.http.routers.gracie_saas.middlewares=gracie_saas_ssl@docker
+        - "traefik.http.services.gracie-saas-app.loadbalancer.server.port=3000"
+
+  postgres:
+    image: postgres:16-alpine
+    networks:
+      - gracie-saas-internal
+    environment:
+      POSTGRES_USER: "gracie_saas"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "gracie_saas"
+    volumes:
+      - gracie_saas_postgres_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
 
 networks:
-  simplificanet:
-    name: simplificanet
+  traefik-public:
     external: true
+
+  gracie-saas-internal:
+    driver: overlay
+    attachable: true
+
+volumes:
+  gracie_saas_postgres_data:
+    driver: local
