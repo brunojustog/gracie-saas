@@ -41,7 +41,7 @@ export default async function DashboardPage() {
         </form>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2">
+      <section className="grid gap-3 sm:grid-cols-3">
         <a
           href="/kanban"
           className="rounded-lg border bg-card p-6 transition-colors hover:bg-accent"
@@ -62,10 +62,19 @@ export default async function DashboardPage() {
             um lead; marque comparecimento, remarque ou cancele.
           </p>
         </a>
+        <a
+          href="/matriculas"
+          className="rounded-lg border bg-card p-6 transition-colors hover:bg-accent"
+        >
+          <h2 className="font-semibold">Matrículas</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Alunos ativos, valor mensal, planos. Crie nova ou cancele inline.
+          </p>
+        </a>
       </section>
 
       <section className="rounded-lg border border-dashed bg-muted/30 p-4 text-xs text-muted-foreground">
-        Em breve: matrículas (fase 9), KPIs e gráficos (fase 10), configurações (fase 11).
+        Em breve: KPIs e gráficos (fase 10), configurações (fase 11).
       </section>
     </main>
   );

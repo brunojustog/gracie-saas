@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 import { getClassesForLead } from "./../aulas/actions";
+import { EnrollmentModal } from "./../matriculas/enrollment-modal";
 
 import {
   type LeadDetails,
@@ -486,7 +487,63 @@ function OverviewTab({
       <Button onClick={handleSave} disabled={!dirty || pending} className="w-full">
         {pending ? "Salvando…" : "Salvar alterações"}
       </Button>
+
+      <EnrollmentSection lead={lead} />
     </div>
+  );
+}
+
+function EnrollmentSection({ lead }: { lead: LeadDetails }) {
+  const [open, setOpen] = useState(false);
+
+  if (lead.enrollment) {
+    const e = lead.enrollment;
+    const value = Number(e.monthlyValue);
+    const tone =
+      e.status === "ACTIVE"
+        ? "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30"
+        : e.status === "CANCELED"
+          ? "border-red-500/40 bg-red-50 dark:bg-red-950/30"
+          : "border-amber-500/40 bg-amber-50 dark:bg-amber-950/30";
+    return (
+      <div className={`rounded-lg border ${tone} p-3 text-sm`}>
+        <div className="font-medium">
+          Matriculado em {format(new Date(e.enrolledAt), "dd/MM/yyyy")}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {e.modality.name} · {e.plan.name} ·{" "}
+          {value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês ·{" "}
+          {e.status.toLowerCase()}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Button
+        variant="default"
+        className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+        onClick={() => setOpen(true)}
+      >
+        Marcar como matriculado
+      </Button>
+      <EnrollmentModal
+        open={open}
+        onOpenChange={setOpen}
+        presetLead={{
+          id: lead.id,
+          name: lead.name,
+          modalityId: lead.modalityId,
+        }}
+        onCreated={() => {
+          setOpen(false);
+          // Próxima abertura do sheet vai trazer o enrollment via getLeadDetails
+          // (server action revalidatePath('/kanban') invalida o cache)
+          window.location.reload();
+        }}
+      />
+    </>
   );
 }
 

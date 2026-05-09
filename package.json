@@ -20,6 +20,7 @@
     "db:inspect": "tsx scripts/inspect-leads.ts",
     "db:demo-leads": "tsx scripts/seed-demo-leads.ts",
     "db:demo-classes": "tsx scripts/seed-demo-classes.ts",
+    "db:demo-enrollments": "tsx scripts/seed-demo-enrollments.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

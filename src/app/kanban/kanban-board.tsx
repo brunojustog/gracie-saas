@@ -12,9 +12,12 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+
+import { EnrollmentModal } from "../matriculas/enrollment-modal";
 
 import { moveLeadToStage } from "./actions";
 import { LeadCard } from "./lead-card";
@@ -22,6 +25,9 @@ import { LeadSheet } from "./lead-sheet";
 
 type Lead = React.ComponentProps<typeof LeadCard>["lead"] & {
   stageId: string;
+  modalityId: string | null;
+  /** Se já tem matrícula, drag pro stage Matriculado NÃO intercepta. */
+  enrollment: { id: string; status: string } | null;
 };
 
 type Stage = {
@@ -52,9 +58,15 @@ export function KanbanBoard({
   sellers,
   canReassign,
 }: Props) {
+  const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [enrollLead, setEnrollLead] = useState<{
+    id: string;
+    name: string;
+    modalityId: string | null;
+  } | null>(null);
   const [, startTransition] = useTransition();
 
   const sensors = useSensors(
@@ -95,6 +107,16 @@ export function KanbanBoard({
     const lead = leads.find((l) => l.id === leadId);
     if (!lead || lead.stageId === overId) return;
 
+    const targetStage = stages.find((s) => s.id === overId);
+
+    // Interceptação: dragar pro stage isWon (Matriculado) sem ter Enrollment
+    // abre modal de matrícula em vez de só mover. NÃO altera estado local
+    // ainda — se o user cancelar, o card permanece no stage original.
+    if (targetStage?.isWon && !lead.enrollment) {
+      setEnrollLead({ id: lead.id, name: lead.name, modalityId: lead.modalityId });
+      return;
+    }
+
     const previousStageId = lead.stageId;
     setLeads((prev) =>
       prev.map((l) => (l.id === leadId ? { ...l, stageId: overId } : l)),
@@ -109,7 +131,7 @@ export function KanbanBoard({
         toast.error(`Não foi possível mover: ${result.error}`);
         return;
       }
-      const stageName = stages.find((s) => s.id === overId)?.name ?? "estágio";
+      const stageName = targetStage?.name ?? "estágio";
       toast.success(`${lead.name} movido para ${stageName}`);
     });
   };
@@ -140,6 +162,20 @@ export function KanbanBoard({
         modalities={modalities}
         sellers={sellers}
         onLeadPatch={patchLead}
+      />
+
+      <EnrollmentModal
+        open={enrollLead !== null}
+        onOpenChange={(open) => {
+          if (!open) setEnrollLead(null);
+        }}
+        presetLead={enrollLead}
+        onCreated={() => {
+          setEnrollLead(null);
+          // Server action moveu o lead pro stage Matriculado e revalidou
+          // o path. Força refresh pra trazer o estado novo.
+          router.refresh();
+        }}
       />
     </>
   );

@@ -42,6 +42,16 @@ export async function getLeadDetails(leadId: string) {
       modality: { select: { id: true, name: true } },
       stage: { select: { id: true, name: true, color: true } },
       assignedSeller: { select: { id: true, name: true, email: true } },
+      enrollment: {
+        select: {
+          id: true,
+          status: true,
+          enrolledAt: true,
+          monthlyValue: true,
+          modality: { select: { id: true, name: true } },
+          plan: { select: { id: true, name: true } },
+        },
+      },
       history: {
         orderBy: { changedAt: "desc" },
         take: 50,

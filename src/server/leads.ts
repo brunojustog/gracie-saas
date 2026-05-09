@@ -92,6 +92,7 @@ export async function getLeadsForKanban(
       createdAt: true,
       modality: { select: { id: true, name: true } },
       assignedSeller: { select: { id: true, name: true, email: true } },
+      enrollment: { select: { id: true, status: true } },
     },
     orderBy: { lastInteractionAt: "desc" },
   });

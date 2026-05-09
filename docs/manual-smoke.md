@@ -152,6 +152,25 @@ Pré-requisito: `npm run db:demo-leads && npm run db:demo-classes`.
 | 10 | super-admin Bruno | abrir lead Maria no kanban → tab Aulas | lista a aula que foi agendada no passo 3 |
 | 11 | super-admin Bruno | tela /aulas no mobile (ou DevTools narrow) | calendário se mantém usável (FullCalendar tem responsivo built-in); pode rolar lateralmente |
 
+## Matrículas (Fase 9)
+
+Pré-requisito: `npm run db:demo-leads && npm run db:demo-classes && npm run db:demo-enrollments`.
+
+| # | Persona | Ação | Resultado esperado |
+|---|---|---|---|
+| 1 | super-admin Bruno em `gracie.localhost:3000/matriculas` | abrir | Tabela com 1 linha (Thiago Mendes / GB1 / Plano Mensal / R$ 599,90 / pix / ativa). KPIs no topo: 1 ativa, R$ 599,90 receita, 0 canceladas. |
+| 2 | super-admin Bruno | clicar "Nova matrícula" | modal abre; lead picker mostra leads SEM matrícula; selecionar Aline Ferreira; modalidade BarraFit; plano Plano Trimestral (auto-fill 549,90); pix; matricular |
+| 3 | super-admin Bruno | depois do passo 2 | toast "Matrícula criada — lead promovido pra Matriculado"; tabela atualiza; abrir kanban: Aline está na coluna Matriculado |
+| 4 | super-admin Bruno | abrir /matriculas, clicar "Cancelar" na linha de Aline | dialog abre; preencher motivo "teste"; deixar checkbox "Mover para Aluno Perdido" marcado; confirmar |
+| 5 | super-admin Bruno | depois do passo 4 | toast "Matrícula cancelada"; status na tabela vira "canceled"; KPI "ativas" cai pra 1; abrir kanban: Aline foi pra coluna "Aluno Perdido" |
+| 6 | super-admin Bruno | no kanban, arrastar lead "Diego Martins" pra coluna "Matriculado" | NÃO move o card; em vez disso, abre modal de Nova Matrícula com Diego pré-selecionado |
+| 7 | super-admin Bruno | preencher e matricular Diego | toast verde; card aparece na coluna Matriculado; tab Aulas dele ainda mostra a aula que tinha |
+| 8 | super-admin Bruno | tentar criar 2ª matrícula pro Thiago Mendes via /matriculas | dropdown de leads NÃO mostra Thiago (ele já tem) |
+| 9 | super-admin Bruno | abrir lead Thiago no kanban → tab Visão Geral, scroll | seção verde "Matriculado em DD/MM/YYYY · GB1 · Plano Mensal · R$ 599,90/mês · active" no fim do form (botão "Marcar como matriculado" não aparece) |
+| 10 | seller Anna | abrir /matriculas | vê SÓ matrículas dos leads dela (Thiago não é dela; Aline foi dela: aparece) |
+| 11 | seller Anna | tentar cancelar matrícula de outra vendedora via DevTools | servidor recusa: `{ ok: false, error: 'matrícula não encontrada ou sem permissão' }` |
+| 12 | seller Anna | filtros search "Aline" | encontra (combina scope + search no mesmo `lead.where`) |
+
 ## Quando rodar
 
 - Antes de qualquer commit que mexa em `proxy.ts`, `auth.config.ts`,

@@ -1,0 +1,211 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+import { prisma } from "@/lib/prisma";
+import { findEnrollmentInScope } from "@/server/enrollments";
+import { findLeadInScope } from "@/server/leads";
+import { requireTenantUser } from "@/server/tenant";
+
+type ActionResult =
+  | { ok: true; enrollmentId: string }
+  | { ok: false; error: string };
+
+// ──────────────────────────────────────────────────────────────────────────
+// Criar matrícula — também promove o lead pro stage isWon automaticamente
+// ──────────────────────────────────────────────────────────────────────────
+
+const createSchema = z.object({
+  leadId: z.string().min(1),
+  modalityId: z.string().min(1),
+  planId: z.string().min(1),
+  monthlyValue: z.number().positive().max(100_000),
+  paymentMethod: z.enum(["CREDIT_CARD", "PIX", "BOLETO", "CASH", "TRANSFER", "OTHER"]),
+  observations: z.string().max(2000).optional(),
+});
+
+export async function createEnrollment(input: unknown): Promise<ActionResult> {
+  const parsed = createSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+
+  const lead = await findLeadInScope(membership, parsed.data.leadId);
+  if (!lead) return { ok: false, error: "lead não encontrado ou sem permissão" };
+
+  // Lead já tem matrícula? (leadId é unique no schema)
+  const existing = await prisma.enrollment.findUnique({
+    where: { leadId: lead.id },
+    select: { id: true, status: true },
+  });
+  if (existing) {
+    return {
+      ok: false,
+      error:
+        existing.status === "ACTIVE"
+          ? "lead já tem matrícula ativa"
+          : "lead já teve matrícula (cancelada/suspensa) — contate admin",
+    };
+  }
+
+  // Modalidade + plano DO MESMO TENANT (proteção contra tampering)
+  const [modality, plan] = await Promise.all([
+    prisma.modality.findFirst({
+      where: { id: parsed.data.modalityId, tenantId: tenant.id, active: true },
+      select: { id: true },
+    }),
+    prisma.plan.findFirst({
+      where: { id: parsed.data.planId, tenantId: tenant.id, active: true },
+      select: { id: true },
+    }),
+  ]);
+  if (!modality) return { ok: false, error: "modalidade inválida" };
+  if (!plan) return { ok: false, error: "plano inválido" };
+
+  // Stage isWon ativo do tenant (ex: "Matriculado")
+  const wonStage = await prisma.stage.findFirst({
+    where: { tenantId: tenant.id, isWon: true, active: true },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+  if (!wonStage) {
+    return { ok: false, error: "tenant não tem stage 'Matriculado' configurado" };
+  }
+
+  const created = await prisma.$transaction(async (tx) => {
+    const enrollment = await tx.enrollment.create({
+      data: {
+        tenantId: tenant.id,
+        leadId: lead.id,
+        modalityId: parsed.data.modalityId,
+        planId: parsed.data.planId,
+        monthlyValue: parsed.data.monthlyValue,
+        paymentMethod: parsed.data.paymentMethod,
+        observations: parsed.data.observations ?? null,
+        status: "ACTIVE",
+      },
+    });
+
+    // Promove lead pro stage Matriculado se ainda não está nele
+    if (lead.stageId !== wonStage.id) {
+      await tx.lead.update({
+        where: { id: lead.id },
+        data: {
+          stageId: wonStage.id,
+          modalityId: parsed.data.modalityId,
+          lastInteractionAt: new Date(),
+        },
+      });
+      await tx.stageHistory.create({
+        data: {
+          leadId: lead.id,
+          fromStageId: lead.stageId,
+          toStageId: wonStage.id,
+          changedById: user.id,
+          notes: "Matrícula criada automaticamente",
+        },
+      });
+    }
+
+    return enrollment;
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/kanban");
+  return { ok: true, enrollmentId: created.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Cancelar matrícula
+// ──────────────────────────────────────────────────────────────────────────
+
+const cancelSchema = z.object({
+  enrollmentId: z.string().min(1),
+  reason: z.string().max(2000).optional(),
+  /** Se true, move o lead pro stage isLost "Aluno Perdido" automaticamente. */
+  moveToLost: z.boolean().default(false),
+});
+
+export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
+  const parsed = cancelSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  if (enrollment.status === "CANCELED") {
+    return { ok: false, error: "matrícula já cancelada" };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
+        status: "CANCELED",
+        canceledAt: new Date(),
+        observations: parsed.data.reason
+          ? `${enrollment.observations ?? ""}\n[cancelado] ${parsed.data.reason}`.trim()
+          : enrollment.observations,
+      },
+    });
+
+    if (parsed.data.moveToLost) {
+      // Stage isLost com menor order = "Aluno Perdido" (order 9 no seed)
+      const lostStage = await tx.stage.findFirst({
+        where: {
+          tenantId: tenant.id,
+          isLost: true,
+          active: true,
+          name: { contains: "Aluno", mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (lostStage) {
+        await tx.lead.update({
+          where: { id: enrollment.leadId },
+          data: { stageId: lostStage.id, lastInteractionAt: new Date() },
+        });
+        await tx.stageHistory.create({
+          data: {
+            leadId: enrollment.leadId,
+            toStageId: lostStage.id,
+            changedById: user.id,
+            notes: "Matrícula cancelada → aluno perdido",
+          },
+        });
+      }
+    }
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/kanban");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Helpers usados pelos modais
+// ──────────────────────────────────────────────────────────────────────────
+
+export async function getEnrollmentFormOptions() {
+  const { tenant } = await requireTenantUser();
+  const [modalities, plans] = await Promise.all([
+    prisma.modality.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, color: true },
+    }),
+    prisma.plan.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, monthlyValue: true, modalityId: true },
+    }),
+  ]);
+  return {
+    modalities,
+    plans: plans.map((p) => ({
+      ...p,
+      monthlyValue: Number(p.monthlyValue),
+    })),
+  };
+}
