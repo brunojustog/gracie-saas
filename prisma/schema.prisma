@@ -1,9 +1,10 @@
-// Schema MÍNIMO para a fase 1 (setup).
-// O schema completo do domínio (Tenant, Lead, Modality, Plan, Stage, etc)
-// será adicionado na fase 2.
+// Schema completo do domínio (fase 2/12).
 //
-// Os modelos abaixo são os mínimos exigidos pelo @auth/prisma-adapter
-// para Credentials + Email, mais um campo isSuperAdmin já previsto pelo SaaS.
+// Multi-tenant por row-level isolation: toda tabela de domínio carrega
+// `tenantId` e queries SEMPRE filtram por tenant (a checagem fica nos
+// helpers de query da camada server, fase 3).
+//
+// Prisma 7: a `url` do datasource está em `prisma.config.ts`, não aqui.
 
 generator client {
   provider = "prisma-client-js"
@@ -12,6 +13,10 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Auth.js v5 (Adapter)
+// ──────────────────────────────────────────────────────────────────────────
 
 model User {
   id            String    @id @default(cuid())
@@ -24,8 +29,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
+  accounts          Account[]
+  sessions          Session[]
+  tenants           TenantUser[]
+  assignedLeads     Lead[]         @relation("AssignedSeller")
+  movementsHistory  StageHistory[]
 }
 
 model Account {
@@ -62,4 +70,289 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Tenancy
+// ──────────────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  logoUrl      String?
+  primaryColor String   @default("#C8102E")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Plano de subscription (free/pro/enterprise) — irrelevante no MVP, mas
+  // fica reservado para billing futuro.
+  subscriptionPlan String?
+
+  // Configuração da integração Chatwoot (token deve ser cifrado em runtime
+  // antes de persistir — TODO fase 5).
+  chatwootUrl       String?
+  chatwootAccountId Int?
+  chatwootApiToken  String?
+
+  users               TenantUser[]
+  leads               Lead[]
+  modalities          Modality[]
+  plans               Plan[]
+  stages              Stage[]
+  experimentalClasses ExperimentalClass[]
+  enrollments         Enrollment[]
+  webhookLogs         WebhookLog[]
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  SELLER
+}
+
+model TenantUser {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      Role
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Catálogo (Stage / Modality / Plan)
+// ──────────────────────────────────────────────────────────────────────────
+
+model Stage {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  color    String  @default("#6B7280")
+  order    Int
+  isWon    Boolean @default(false)
+  isLost   Boolean @default(false)
+  active   Boolean @default(true)
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leads   Lead[]
+  history StageHistory[]
+
+  @@unique([tenantId, order])
+  @@index([tenantId])
+}
+
+model Modality {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  ageRange    String?
+  active      Boolean  @default(true)
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plans               Plan[]
+  leads               Lead[]
+  experimentalClasses ExperimentalClass[]
+  enrollments         Enrollment[]
+
+  @@index([tenantId])
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  tenantId     String
+  modalityId   String?
+  name         String
+  monthlyValue Decimal  @db.Decimal(10, 2)
+  setupFee     Decimal? @db.Decimal(10, 2)
+  description  String?
+  active       Boolean  @default(true)
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  modality    Modality?    @relation(fields: [modalityId], references: [id])
+  enrollments Enrollment[]
+
+  @@index([tenantId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Lead + Histórico de funil
+// ──────────────────────────────────────────────────────────────────────────
+
+enum LeadOrigin {
+  WHATSAPP
+  INSTAGRAM_DIRECT
+  FACEBOOK
+  WEBSITE
+  REFERRAL
+  WALK_IN
+  PHONE
+  GOOGLE_ADS
+  OTHER
+}
+
+model Lead {
+  id           String     @id @default(cuid())
+  tenantId     String
+
+  name         String
+  phone        String?
+  email        String?
+  origin       LeadOrigin @default(OTHER)
+  originDetail String?
+
+  // Chatwoot integration
+  chatwootContactId      String?
+  chatwootConversationId String?
+  chatwootInboxId        Int?
+
+  // Comercial
+  stageId          String
+  modalityId       String?
+  assignedSellerId String?
+  potentialValue   Decimal? @db.Decimal(10, 2)
+  notes            String?  @db.Text
+
+  // Datas
+  firstInteractionAt DateTime  @default(now())
+  lastInteractionAt  DateTime  @default(now())
+  nextActionAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stage               Stage               @relation(fields: [stageId], references: [id])
+  modality            Modality?           @relation(fields: [modalityId], references: [id])
+  assignedSeller      User?               @relation("AssignedSeller", fields: [assignedSellerId], references: [id])
+  history             StageHistory[]
+  experimentalClasses ExperimentalClass[]
+  enrollment          Enrollment?
+
+  @@index([tenantId])
+  @@index([tenantId, stageId])
+  @@index([tenantId, assignedSellerId])
+  @@index([chatwootContactId])
+}
+
+model StageHistory {
+  id          String   @id @default(cuid())
+  leadId      String
+  fromStageId String?
+  toStageId   String
+  changedById String?
+  notes       String?
+  changedAt   DateTime @default(now())
+
+  lead      Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  toStage   Stage @relation(fields: [toStageId], references: [id])
+  changedBy User? @relation(fields: [changedById], references: [id])
+
+  @@index([leadId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Aulas Experimentais
+// ──────────────────────────────────────────────────────────────────────────
+
+enum ExperimentalClassStatus {
+  SCHEDULED
+  CONFIRMED
+  ATTENDED
+  NO_SHOW
+  RESCHEDULED
+  CANCELED
+}
+
+model ExperimentalClass {
+  id            String                  @id @default(cuid())
+  tenantId      String
+  leadId        String
+  modalityId    String
+  scheduledDate DateTime
+  status        ExperimentalClassStatus @default(SCHEDULED)
+  notes         String?
+  attendedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  modality Modality @relation(fields: [modalityId], references: [id])
+
+  @@index([tenantId, scheduledDate])
+  @@index([leadId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Matrículas
+// ──────────────────────────────────────────────────────────────────────────
+
+enum PaymentMethod {
+  CREDIT_CARD
+  PIX
+  BOLETO
+  CASH
+  TRANSFER
+  OTHER
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  CANCELED
+  SUSPENDED
+}
+
+model Enrollment {
+  id            String           @id @default(cuid())
+  tenantId      String
+  leadId        String           @unique
+  modalityId    String
+  planId        String
+  status        EnrollmentStatus @default(ACTIVE)
+  enrolledAt    DateTime         @default(now())
+  canceledAt    DateTime?
+  monthlyValue  Decimal          @db.Decimal(10, 2)
+  paymentMethod PaymentMethod
+  observations  String?          @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id])
+  modality Modality @relation(fields: [modalityId], references: [id])
+  plan     Plan     @relation(fields: [planId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Integrações
+// ──────────────────────────────────────────────────────────────────────────
+
+model WebhookLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  source    String
+  eventType String
+  payload   Json
+  processed Boolean  @default(false)
+  error     String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, processed])
+  @@index([createdAt])
 }
