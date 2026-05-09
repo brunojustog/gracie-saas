@@ -21,6 +21,7 @@ import type { Role, Tenant, TenantUser, User } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/server/auth";
+import { roleAtLeast } from "@/server/rbac";
 import {
   TENANT_HEADER,
   type TenantContext,
@@ -109,20 +110,12 @@ export async function requireTenantUser(): Promise<TenantSession> {
 }
 
 /**
- * Hierarquia de roles (mais permissivo → menos):
- *   ADMIN > MANAGER > SELLER
- *
- * `requireRole("MANAGER")` aceita ADMIN e MANAGER, recusa SELLER.
+ * Exige role >= minRole. Hierarquia em `rbac.ts`.
+ * Quem não atender, volta pro /dashboard (não 403 — é UI, não API).
  */
-const ROLE_RANK: Record<Role, number> = {
-  ADMIN: 3,
-  MANAGER: 2,
-  SELLER: 1,
-};
-
 export async function requireRole(minRole: Role): Promise<TenantSession> {
   const session = await requireTenantUser();
-  if (ROLE_RANK[session.membership.role] < ROLE_RANK[minRole]) {
+  if (!roleAtLeast(session.membership.role, minRole)) {
     redirect("/dashboard");
   }
   return session;

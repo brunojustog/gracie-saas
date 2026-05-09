@@ -28,7 +28,11 @@ export function buildTenantUrl(params: {
 
   const newHostname = isRootHost ? `${slug}.${hostname}` : [slug, ...segments.slice(1)].join(".");
 
-  const proto = forwardedProto ?? (hostname === "localhost" ? "http" : "https");
+  // Localhost com OU sem subdomínio: `localhost`, `gracie.localhost`, etc.
+  // Sem essa checagem ampla, gerar link de outro tenant a partir de
+  // `admin.localhost:3000` produziria `https://...` e quebraria em dev.
+  const isLocalhost = hostname === "localhost" || hostname.endsWith(".localhost");
+  const proto = forwardedProto ?? (isLocalhost ? "http" : "https");
   const portSuffix = port ? `:${port}` : "";
 
   return `${proto}://${newHostname}${portSuffix}${path}`;

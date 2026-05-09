@@ -2,9 +2,12 @@
 
 SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-> **Status: Fase 3/12 — Multi-tenancy ativa.**
-> Setup ✓, schema completo ✓, roteamento por subdomínio + helpers de tenant ✓.
-> Próximas: RBAC (4), webhook Chatwoot (5), kanban (6), etc.
+> **Status: Fase 4/12 — RBAC validado + test infra.**
+> Fases anteriores: setup ✓, schema completo ✓, multi-tenancy via subdomínio ✓.
+> Fase 4 entregou Vitest + 38 testes cobrindo parser/URL/ROLE_RANK e checklist
+> de smoke manual em [`docs/manual-smoke.md`](docs/manual-smoke.md).
+> Convites/signup ficaram pra Fase 11 (junto com /settings/users).
+> Próxima: webhook Chatwoot (5).
 
 ## Stack
 
@@ -88,6 +91,9 @@ npm run build        # build de produção
 npm run start        # serve build de produção
 npm run lint         # ESLint
 npm run typecheck    # tsc --noEmit
+npm test             # Vitest (run mode, sai com código)
+npm run test:watch   # Vitest watch
+npm run test:ui      # Vitest UI (browser)
 
 npm run db:push      # aplica schema sem migration file (dev)
 npm run db:migrate   # cria + aplica nova migration
@@ -136,11 +142,23 @@ Auth.js v5 + Edge runtime (proxy.ts) **não** suporta Prisma nem bcrypt. Por iss
 
 Mesmo padrão usado em `casa-roxa-gestao` — funciona bem.
 
+## Testes
+
+```bash
+npm test              # roda tudo (38 testes em 3 arquivos)
+npm run test:watch    # watch mode
+```
+
+Testes unitários cobrem o que dá pra cobrir sem rodar Next: parser de
+host, builder de URL, hierarquia de roles. **Para o fluxo end-to-end com
+sessão real**, siga o checklist em [`docs/manual-smoke.md`](docs/manual-smoke.md)
+— 7 cenários manuais no navegador (~5 min).
+
 ## Próximas fases
 
-- **Fase 4:** RBAC (Admin/Manager/Seller) — `requireRole(role)` já existe; falta gating de UI e Server Actions.
 - **Fase 5:** Webhook Chatwoot → cria Lead.
 - **Fase 6+:** Kanban, Lead detail, Aulas experimentais, Matrículas, Dashboard, Configs.
+- **Fase 11:** Configurações + convites de usuário + integração Resend.
 - **Deploy:** Docker + Hetzner + GitHub Actions + SSL.
 
 ## Deploy
