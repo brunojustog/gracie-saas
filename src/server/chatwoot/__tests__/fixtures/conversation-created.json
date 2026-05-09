@@ -1,0 +1,36 @@
+{
+  "event": "conversation_created",
+  "id": 142,
+  "additional_attributes": {},
+  "agent_last_seen_at": 0,
+  "assignee_last_seen_at": 0,
+  "can_reply": true,
+  "channel": "Channel::Whatsapp",
+  "contact_inbox": {
+    "id": 88,
+    "contact_id": 71,
+    "inbox_id": 3,
+    "source_id": "5511987654321",
+    "created_at": "2026-05-09T13:00:00.000Z",
+    "updated_at": "2026-05-09T13:00:00.000Z"
+  },
+  "created_at": 1746795600,
+  "inbox_id": 3,
+  "messages": [],
+  "meta": {
+    "sender": {
+      "id": 71,
+      "name": "Maria Silva",
+      "email": "maria@gmail.com",
+      "phone_number": "+5511987654321",
+      "identifier": null,
+      "additional_attributes": {},
+      "type": "contact"
+    },
+    "channel": "Channel::Whatsapp"
+  },
+  "status": "open",
+  "timestamp": 1746795600,
+  "unread_count": 1,
+  "uuid": "11111111-2222-3333-4444-555555555555"
+}

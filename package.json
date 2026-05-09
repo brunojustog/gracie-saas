@@ -17,6 +17,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset",
+    "db:inspect": "tsx scripts/inspect-leads.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

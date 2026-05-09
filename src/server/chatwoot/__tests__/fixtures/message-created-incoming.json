@@ -1,0 +1,30 @@
+{
+  "event": "message_created",
+  "id": 9871,
+  "content": "Oi, queria saber sobre as aulas",
+  "message_type": 0,
+  "content_type": "text",
+  "created_at": 1746795700,
+  "private": false,
+  "source_id": "wamid.HBgMNTUx...",
+  "sender": {
+    "id": 71,
+    "name": "Maria Silva",
+    "email": "maria@gmail.com",
+    "phone_number": "+5511987654321",
+    "type": "contact"
+  },
+  "conversation": {
+    "id": 142,
+    "inbox_id": 3,
+    "channel": "Channel::Whatsapp",
+    "status": "open",
+    "meta": {
+      "sender": {
+        "id": 71,
+        "name": "Maria Silva",
+        "phone_number": "+5511987654321"
+      }
+    }
+  }
+}

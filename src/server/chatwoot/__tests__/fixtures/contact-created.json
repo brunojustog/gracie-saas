@@ -1,0 +1,16 @@
+{
+  "event": "contact_created",
+  "id": 72,
+  "name": "João Pereira",
+  "email": "",
+  "phone_number": "+5511912345678",
+  "identifier": null,
+  "additional_attributes": {
+    "company_name": null,
+    "city": null
+  },
+  "created_at": "2026-05-09T13:05:00.000Z",
+  "updated_at": "2026-05-09T13:05:00.000Z",
+  "thumbnail": null,
+  "availability_status": "offline"
+}

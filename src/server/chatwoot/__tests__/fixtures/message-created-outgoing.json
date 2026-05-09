@@ -1,0 +1,21 @@
+{
+  "event": "message_created",
+  "id": 9872,
+  "content": "Olá Maria, posso te ajudar?",
+  "message_type": 1,
+  "content_type": "text",
+  "created_at": 1746795750,
+  "private": false,
+  "sender": {
+    "id": 4,
+    "name": "Anna",
+    "email": "anna@gracie.com",
+    "type": "user"
+  },
+  "conversation": {
+    "id": 142,
+    "inbox_id": 3,
+    "channel": "Channel::Whatsapp",
+    "status": "open"
+  }
+}

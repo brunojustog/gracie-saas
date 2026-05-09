@@ -90,11 +90,15 @@ model Tenant {
   // fica reservado para billing futuro.
   subscriptionPlan String?
 
-  // Configuração da integração Chatwoot (token deve ser cifrado em runtime
-  // antes de persistir — TODO fase 5).
-  chatwootUrl       String?
-  chatwootAccountId Int?
-  chatwootApiToken  String?
+  // Configuração da integração Chatwoot.
+  //   - chatwootApiToken: outgoing (chamadas DA app PRA API do Chatwoot)
+  //   - chatwootWebhookSecret: incoming (Chatwoot → app, validado via header
+  //     X-Chatwoot-Webhook-Secret com timingSafeEqual)
+  // Ambos devem ser cifrados em runtime antes de persistir. TODO antes do prod.
+  chatwootUrl           String?
+  chatwootAccountId     Int?
+  chatwootApiToken      String?
+  chatwootWebhookSecret String?
 
   users               TenantUser[]
   leads               Lead[]
