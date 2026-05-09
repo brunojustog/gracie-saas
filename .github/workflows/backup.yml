@@ -1,0 +1,95 @@
+name: Daily Postgres backup
+
+# Roda 1x por dia às 03:00 UTC (00:00 BRT). Conecta no manager via SSH,
+# faz pg_dump dentro do container postgres do swarm, transfere o dump
+# pro runner e sobe pro Cloudflare R2 (S3-compatible).
+#
+# Pré-requisitos (secrets do GitHub):
+#   MANAGER_HOST, MANAGER_USER, MANAGER_SSH_KEY  — SSH no manager
+#   PG_DB_NAME, PG_DB_USER                        — credenciais do DB
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY  — Cloudflare R2
+#   R2_BUCKET                                     — nome do bucket (ex: gracie-saas-backups)
+#
+# Retenção: nenhuma automática neste workflow. Configure lifecycle rule
+# no painel do R2 (ex: "expirar após 30 dias").
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: backup-prod
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate filename
+        id: name
+        run: |
+          DATE=$(date -u +"%Y-%m-%d_%H%M%S")
+          echo "file=gracie-saas_${DATE}.sql.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Dump database via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          PG_DB_NAME: ${{ secrets.PG_DB_NAME }}
+          PG_DB_USER: ${{ secrets.PG_DB_USER }}
+          BACKUP_FILE: ${{ steps.name.outputs.file }}
+        with:
+          host: ${{ secrets.MANAGER_HOST }}
+          username: ${{ secrets.MANAGER_USER }}
+          key: ${{ secrets.MANAGER_SSH_KEY }}
+          envs: PG_DB_NAME,PG_DB_USER,BACKUP_FILE
+          script: |
+            set -e
+            POSTGRES_CID=$(docker ps --filter "label=com.docker.swarm.service.name=postgres_postgres" -q | head -1)
+            if [ -z "$POSTGRES_CID" ]; then
+              echo "Container postgres do swarm não encontrado"
+              exit 1
+            fi
+            docker exec "$POSTGRES_CID" pg_dump -U "$PG_DB_USER" -d "$PG_DB_NAME" --no-owner --no-acl \
+              | gzip -9 > "/tmp/$BACKUP_FILE"
+            ls -lh "/tmp/$BACKUP_FILE"
+
+      - name: Pull dump from manager
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.MANAGER_HOST }}
+          username: ${{ secrets.MANAGER_USER }}
+          key: ${{ secrets.MANAGER_SSH_KEY }}
+          source: "/tmp/${{ steps.name.outputs.file }}"
+          target: "."
+          # `target` no scp-action recebe pelo runner — atual cwd
+          rm: false
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          BACKUP_FILE: ${{ steps.name.outputs.file }}
+        run: |
+          set -e
+          aws --version
+          # R2 = S3 endpoint custom + region auto
+          aws s3 cp "tmp/$BACKUP_FILE" "s3://$R2_BUCKET/postgres/$BACKUP_FILE" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --region auto
+
+          echo "✓ Backup uploaded: s3://$R2_BUCKET/postgres/$BACKUP_FILE"
+
+      - name: Cleanup remote dump
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          BACKUP_FILE: ${{ steps.name.outputs.file }}
+        with:
+          host: ${{ secrets.MANAGER_HOST }}
+          username: ${{ secrets.MANAGER_USER }}
+          key: ${{ secrets.MANAGER_SSH_KEY }}
+          envs: BACKUP_FILE
+          script: |
+            rm -f "/tmp/$BACKUP_FILE"

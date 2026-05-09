@@ -17,7 +17,10 @@ import bcrypt from "bcryptjs";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-const TENANT_SLUG = "gracie";
+// Em dev, default = "gracie" (URLs `gracie.localhost:3000`).
+// Em prod, defina TENANT_SLUG=bgaf via env pra alinhar com `bgaf.simplificaonline.site`.
+const TENANT_SLUG = process.env.TENANT_SLUG ?? "gracie";
+const TENANT_NAME = process.env.TENANT_NAME ?? "Gracie Barra Anália Franco";
 
 /**
  * Modalidades da grade da Gracie Barra Anália Franco.
@@ -183,10 +186,10 @@ async function upsertSuperAdmin() {
 async function upsertTenant() {
   return prisma.tenant.upsert({
     where: { slug: TENANT_SLUG },
-    update: { active: true },
+    update: { active: true, name: TENANT_NAME },
     create: {
       slug: TENANT_SLUG,
-      name: "Gracie Barra Anália Franco",
+      name: TENANT_NAME,
       primaryColor: "#C8102E",
       active: true,
     },

@@ -12,6 +12,7 @@ describe("parseTenantFromHost", () => {
     ["localhost:3000", { kind: "root" }],
     ["localhost", { kind: "root" }],
     ["app.simplifica.com.br", { kind: "root" }],
+    ["simplificaonline.site", { kind: "root" }],
     ["", { kind: "root" }],
     [null, { kind: "root" }],
     [undefined, { kind: "root" }],
@@ -25,6 +26,7 @@ describe("parseTenantFromHost", () => {
     ["gracie.app.simplifica.com.br", "gracie"],
     ["albanos.app.simplifica.com.br", "albanos"],
     ["amare.app.simplifica.com.br", "amare"],
+    ["bgaf.simplificaonline.site", "bgaf"],
   ])("%s → tenant=%s", (host, slug) => {
     expect(parseTenantFromHost(host)).toEqual({ kind: "tenant", slug });
   });

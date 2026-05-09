@@ -17,7 +17,11 @@ export const TENANT_HEADER = "x-tenant-slug";
 export const ADMIN_SLUG = "__admin__";
 
 /** Hostnames que NÃO carregam tenant (raiz da plataforma). */
-const ROOT_HOSTS = new Set(["localhost", "app.simplifica.com.br"]);
+const ROOT_HOSTS = new Set([
+  "localhost",
+  "app.simplifica.com.br",
+  "simplificaonline.site",
+]);
 
 /** Subdomínios reservados para super-admin (escopo agregado). */
 const ADMIN_SUBDOMAINS = new Set(["admin"]);

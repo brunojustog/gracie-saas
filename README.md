@@ -2,15 +2,10 @@
 
 SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-> **Status: Fase 11/12 — Configurações + convites.**
-> Fases anteriores: tudo do funil + dashboard ✓.
-> Fase 11 entregou `/settings` (ADMIN-only) com sidebar e CRUDs para
-> Modalidades, Planos, Estágios (com drag-to-reorder via dnd-kit),
-> Usuários (listing + convites por email via Resend) e integração Chatwoot.
-> Convite gera VerificationToken (7 dias), envia email com Resend (ou
-> loga no console se RESEND_API_KEY ausente). Aceitar convite em `/invite/[token]`
-> ativa membership e define senha.
-> Próxima: deploy (12).
+> **Status: Fase 12/12 — MVP completo, pronto pra produção.**
+> Stack final: Next 16 standalone Docker → Docker Swarm com Traefik (Let's
+> Encrypt) → Postgres no swarm → Cloudflare R2 (backup). Deploy automatizado
+> via GitHub Actions (build → GHCR → SSH manager → `docker stack deploy`).
 
 ## Stack
 
@@ -161,9 +156,94 @@ host, builder de URL, hierarquia de roles. **Para o fluxo end-to-end com
 sessão real**, siga o checklist em [`docs/manual-smoke.md`](docs/manual-smoke.md)
 — 7 cenários manuais no navegador (~5 min).
 
-## Próximas fases
+## Deploy (produção)
 
-- **Fase 12:** Deploy (Hetzner/Nginx/CI/SSL/backup).
+Stack: Docker Swarm + Traefik (Let's Encrypt automático) + Postgres compartilhado na rede `simplificanet`. Mesmo padrão dos outros serviços da Simplifica (Chatwoot, n8n, wuzapi).
+
+### Pré-requisitos no manager (servidor `chatwoot`)
+
+- Docker Swarm inicializado
+- Rede overlay `simplificanet` existente
+- Traefik com `entrypoint=websecure` + `certresolver=letsencryptresolver`
+- Postgres rodando como serviço swarm com nome `postgres` (resolvível pelo DNS interno)
+- Domínio público apontando pro IP do manager: ex. `bgaf.simplificaonline.site`
+
+### Setup único do banco
+
+```bash
+# No manager, copia o SQL pra dentro do container postgres
+docker cp scripts/setup-prod-db.sql \
+  $(docker ps -qf "label=com.docker.swarm.service.name=postgres_postgres"):/tmp/
+
+# Edita a senha no SQL antes (linha CREATE ROLE) e roda
+docker exec -it $(docker ps -qf "label=com.docker.swarm.service.name=postgres_postgres") \
+  psql -U postgres -f /tmp/setup-prod-db.sql
+```
+
+### Secrets do GitHub (Settings → Secrets and variables → Actions)
+
+| Secret | Valor |
+|---|---|
+| `MANAGER_HOST` | IP/hostname do manager |
+| `MANAGER_USER` | usuário SSH (ex: `root` ou `bruno`) |
+| `MANAGER_SSH_KEY` | chave privada SSH (conteúdo, não path) |
+| `AUTH_SECRET` | `openssl rand -base64 32` |
+| `DATABASE_URL` | `postgresql://gracie_saas:SENHA@postgres:5432/gracie_saas?schema=public` |
+| `RESEND_API_KEY` | a chave do Resend |
+| `EMAIL_FROM` | `Gracie SaaS <noreply@simplificaonline.site>` |
+| `TENANT_SLUG` | `bgaf` |
+| `TENANT_NAME` | `Gracie Barra Anália Franco` |
+| `SEED_ADMIN_EMAIL` | seu email |
+| `SEED_ADMIN_PASSWORD` | senha temporária (troque após login) |
+| `PUBLIC_HOST` | `bgaf.simplificaonline.site` |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | pra `backup.yml` (Cloudflare R2 — crie um bucket privado) |
+| `PG_DB_NAME`, `PG_DB_USER` | `gracie_saas` / `gracie_saas` (pra backup script) |
+
+### Primeiro deploy
+
+1. Push pro `main` no GitHub. O workflow `deploy.yml` builda, pusha imagem pro GHCR, copia `stack.yml` pro manager e roda `docker stack deploy`.
+2. **No primeiro deploy apenas**, force `RUN_SEED_ON_BOOT=true` na env do `stack.yml` (ou via Variables do GitHub) pra popular o tenant inicial. Depois remova/seta pra `false` pra evitar re-seed em cada deploy.
+3. Acompanhe os logs: `docker service logs -f gracie-saas_app`.
+4. Acesse `https://bgaf.simplificaonline.site` (Let's Encrypt vai emitir cert automaticamente — pode demorar ~30s na primeira vez).
+5. Logue com `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` e troque a senha em `/settings/usuarios` (ou via Prisma Studio temporariamente).
+
+### Deploys subsequentes
+
+Push pro `main` → CI faz tudo. Migrations Prisma rodam no `entrypoint.sh` antes do `next start` — schema sempre alinhado com código.
+
+### Backup
+
+`backup.yml` roda diariamente às 03:00 UTC (00:00 BRT):
+- SSH no manager, `pg_dump` via `docker exec` no container postgres
+- Transfere pro runner
+- Sobe pro Cloudflare R2 via S3 API (`https://<account>.r2.cloudflarestorage.com`)
+
+Configure retenção via lifecycle rule no painel do R2 (recomendado: 30 dias).
+
+### Restore (em caso de desastre)
+
+```bash
+# Baixa backup do R2 pro manager
+aws s3 cp s3://gracie-saas-backups/postgres/<arquivo>.sql.gz . \
+  --endpoint-url "https://<account>.r2.cloudflarestorage.com"
+
+# Aplica no Postgres do swarm
+gunzip -c <arquivo>.sql.gz | docker exec -i \
+  $(docker ps -qf "label=com.docker.swarm.service.name=postgres_postgres") \
+  psql -U gracie_saas -d gracie_saas
+```
+
+### Migrations
+
+Em desenvolvimento:
+```bash
+# Após mudar prisma/schema.prisma:
+npx prisma migrate dev --name <nome_descritivo>
+# Cria prisma/migrations/<ts>_<nome>/migration.sql, aplica no DB local,
+# e regenera o client.
+```
+
+Em produção, o `entrypoint.sh` roda `prisma migrate deploy` automaticamente no boot do container.
 - **Fase 11:** Configurações + convites de usuário + integração Resend.
 - **Deploy:** Docker + Hetzner + GitHub Actions + SSL.
 
