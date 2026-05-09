@@ -115,6 +115,25 @@ Indicadores visuais no card:
 - Bolinha amarela: 2-4 dias
 - Bolinha vermelha: 5+ dias (lead "frio")
 
+## Lead detail / sheet (Fase 7)
+
+Pré-requisito: `npm run db:demo-leads` e o kanban da Fase 6 já rodou ok.
+
+| # | Persona | Ação | Resultado esperado |
+|---|---|---|---|
+| 1 | super-admin Bruno em `gracie.localhost:3000/kanban` | clicar (sem arrastar) num card | sheet lateral abre da direita; mostra spinner brevemente; depois 4 tabs (Visão geral / Histórico / Aulas / Conversas) |
+| 2 | super-admin Bruno | tab Visão Geral: mudar modalidade no select | toast "Modalidade: GBF"; badge no card por trás reflete imediatamente |
+| 3 | super-admin Bruno | tab Visão Geral: mudar estágio no select | toast "Movido para X"; card pula pra outra coluna sem reload (e sem fechar o sheet) |
+| 4 | super-admin Bruno | tab Visão Geral: editar nome ou observações; clicar "Salvar" | toast "Dados atualizados"; card mostra novo nome |
+| 5 | super-admin Bruno | tab Visão Geral: trocar vendedora no select | toast "Atribuído a Anna"; badge de vendedora no card atualiza |
+| 6 | super-admin Bruno | tab Histórico | linha do tempo com bolinha colorida da cor do stage; mostra ao menos 1 entrada (criação ou movimentação) |
+| 7 | super-admin Bruno | tab Aulas / tab Conversas | placeholders ("vem na fase 8" / "deep-link via /settings") |
+| 8 | super-admin Bruno | clicar fora do sheet OU pressionar Esc | sheet fecha, kanban continua com mudanças aplicadas |
+| 9 | super-admin Bruno | arrastar card SEM passar pelo sheet | drag funciona normal (não abre sheet) — confirma que click vs drag não conflitam |
+| 10 | seller Anna em `gracie.localhost:3000/kanban` | clicar num lead próprio | sheet abre; campo "Vendedora" mostra texto plano (sem dropdown) com legenda "só admin/manager pode reatribuir" |
+| 11 | seller Anna | tab Visão Geral: editar nome dos próprios leads | funciona normal |
+| 12 | seller Anna | tentar acessar lead alheio via DevTools (POST /api/.../actions com leadId de outra) | servidor recusa: action retorna `{ ok: false, error: 'lead não encontrado ou sem permissão' }` (testar no DevTools Network) |
+
 ## Quando rodar
 
 - Antes de qualquer commit que mexa em `proxy.ts`, `auth.config.ts`,

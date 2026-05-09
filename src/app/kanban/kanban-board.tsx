@@ -11,13 +11,14 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 
 import { moveLeadToStage } from "./actions";
 import { LeadCard } from "./lead-card";
+import { LeadSheet } from "./lead-sheet";
 
 type Lead = React.ComponentProps<typeof LeadCard>["lead"] & {
   stageId: string;
@@ -32,21 +33,34 @@ type Stage = {
   isLost: boolean;
 };
 
+type Modality = { id: string; name: string };
+type Seller = { id: string; name: string };
+
 type Props = {
   stages: Stage[];
   leads: Lead[];
+  modalities: Modality[];
+  sellers: Seller[];
+  /** ADMIN/MANAGER pode reatribuir leads e filtrar por vendedora. */
+  canReassign: boolean;
 };
 
-export function KanbanBoard({ stages, leads: initialLeads }: Props) {
-  // Estado local pra optimistic update — reverte se a action falhar.
+export function KanbanBoard({
+  stages,
+  leads: initialLeads,
+  modalities,
+  sellers,
+  canReassign,
+}: Props) {
   const [leads, setLeads] = useState(initialLeads);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      // Click sem arrastar não vira drag até mover 5px — assim o card fica
-      // clicável quando montarmos /leads/[id] na fase 7.
+      // Click sem mover ≥5px NÃO dispara drag, então o click nativo
+      // bubble normal e abre o sheet.
       activationConstraint: { distance: 5 },
     }),
   );
@@ -63,6 +77,11 @@ export function KanbanBoard({ stages, leads: initialLeads }: Props) {
 
   const draggingLead = draggingId ? leads.find((l) => l.id === draggingId) : null;
 
+  /** Patch genérico aplicado pelo sheet quando o user salva alguma coisa. */
+  const patchLead = useCallback((leadId: string, patch: Partial<Lead>) => {
+    setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l)));
+  }, []);
+
   const onDragStart = (event: DragStartEvent) => {
     setDraggingId(String(event.active.id));
   };
@@ -77,8 +96,6 @@ export function KanbanBoard({ stages, leads: initialLeads }: Props) {
     if (!lead || lead.stageId === overId) return;
 
     const previousStageId = lead.stageId;
-
-    // Optimistic
     setLeads((prev) =>
       prev.map((l) => (l.id === leadId ? { ...l, stageId: overId } : l)),
     );
@@ -86,7 +103,6 @@ export function KanbanBoard({ stages, leads: initialLeads }: Props) {
     startTransition(async () => {
       const result = await moveLeadToStage({ leadId, toStageId: overId });
       if (!result.ok) {
-        // Reverte se servidor recusou
         setLeads((prev) =>
           prev.map((l) => (l.id === leadId ? { ...l, stageId: previousStageId } : l)),
         );
@@ -99,24 +115,45 @@ export function KanbanBoard({ stages, leads: initialLeads }: Props) {
   };
 
   return (
-    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <div className="flex gap-3 overflow-x-auto pb-4">
-        {stages.map((stage) => (
-          <StageColumn
-            key={stage.id}
-            stage={stage}
-            leads={leadsByStage.get(stage.id) ?? []}
-          />
-        ))}
-      </div>
-      <DragOverlay>
-        {draggingLead ? <LeadCard lead={draggingLead} isOverlay /> : null}
-      </DragOverlay>
-    </DndContext>
+    <>
+      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {stages.map((stage) => (
+            <StageColumn
+              key={stage.id}
+              stage={stage}
+              leads={leadsByStage.get(stage.id) ?? []}
+              onLeadClick={setSelectedLeadId}
+            />
+          ))}
+        </div>
+        <DragOverlay>
+          {draggingLead ? <LeadCard lead={draggingLead} isOverlay /> : null}
+        </DragOverlay>
+      </DndContext>
+
+      <LeadSheet
+        leadId={selectedLeadId}
+        onClose={() => setSelectedLeadId(null)}
+        canReassign={canReassign}
+        stages={stages}
+        modalities={modalities}
+        sellers={sellers}
+        onLeadPatch={patchLead}
+      />
+    </>
   );
 }
 
-function StageColumn({ stage, leads }: { stage: Stage; leads: Lead[] }) {
+function StageColumn({
+  stage,
+  leads,
+  onLeadClick,
+}: {
+  stage: Stage;
+  leads: Lead[];
+  onLeadClick: (id: string) => void;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
   return (
@@ -154,14 +191,22 @@ function StageColumn({ stage, leads }: { stage: Stage; leads: Lead[] }) {
             (vazio)
           </p>
         ) : (
-          leads.map((lead) => <DraggableCard key={lead.id} lead={lead} />)
+          leads.map((lead) => (
+            <DraggableCard key={lead.id} lead={lead} onClick={onLeadClick} />
+          ))
         )}
       </div>
     </div>
   );
 }
 
-function DraggableCard({ lead }: { lead: Lead }) {
+function DraggableCard({
+  lead,
+  onClick,
+}: {
+  lead: Lead;
+  onClick: (id: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: lead.id,
   });
@@ -171,7 +216,7 @@ function DraggableCard({ lead }: { lead: Lead }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      // Card original some quando o overlay tá ativo
+      onClick={() => onClick(lead.id)}
       className={cn(isDragging && "opacity-30")}
     >
       <LeadCard lead={lead} />

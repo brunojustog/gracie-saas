@@ -2,13 +2,13 @@
 
 SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-> **Status: Fase 6/12 — Kanban operacional.**
-> Fases anteriores: setup ✓, schema ✓, multi-tenancy ✓, RBAC + tests ✓, webhook Chatwoot ✓.
-> Fase 6 entregou `/kanban` com drag-and-drop (dnd-kit), filtros por modalidade
-> + vendedora + busca por nome/telefone, optimistic UI com revert em erro, toast
-> via sonner, indicador "frio" baseado em `lastInteractionAt`, e RBAC honrado:
-> SELLER vê SÓ leads atribuídos a si.
-> Próxima: detalhes do lead em sheet/página (7).
+> **Status: Fase 7/12 — Lead detail.**
+> Fases anteriores: setup ✓, schema ✓, multi-tenancy ✓, RBAC + tests ✓, webhook Chatwoot ✓, kanban ✓.
+> Fase 7 entregou sheet lateral abrindo do card do kanban, com 4 tabs (Visão geral
+> editável + estágio + modalidade + vendedora; Histórico com timeline; Aulas e
+> Conversas como stubs pra fases 8/integração futura). Optimistic update reflete
+> mudanças no card do board sem reload. RBAC: SELLER edita só os próprios; reatribuição só ADMIN/MANAGER.
+> Próxima: aulas experimentais com calendário (8).
 
 ## Stack
 
@@ -159,8 +159,8 @@ sessão real**, siga o checklist em [`docs/manual-smoke.md`](docs/manual-smoke.m
 
 ## Próximas fases
 
-- **Fase 7:** Lead detail (sheet/página) — visão geral, histórico de stages, conversas.
-- **Fase 8+:** Aulas experimentais (calendário), Matrículas, Dashboard de KPIs, Configs.
+- **Fase 8:** Aulas experimentais (calendário) — `ExperimentalClass`, agendamento, check-in.
+- **Fase 9+:** Matrículas, Dashboard de KPIs, Configs.
 - **Fase 11:** Configurações + convites de usuário + integração Resend.
 - **Deploy:** Docker + Hetzner + GitHub Actions + SSL.
 

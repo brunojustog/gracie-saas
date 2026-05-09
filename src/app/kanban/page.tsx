@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getLeadsForKanban } from "@/server/leads";
+import { roleAtLeast } from "@/server/rbac";
 import { requireTenantUser } from "@/server/tenant";
 
 import { KanbanBoard } from "./kanban-board";
@@ -103,7 +104,13 @@ export default async function KanbanPage({
         initial={filters}
       />
 
-      <KanbanBoard stages={stages} leads={leads} />
+      <KanbanBoard
+        stages={stages}
+        leads={leads}
+        modalities={modalities}
+        sellers={sellers}
+        canReassign={roleAtLeast(membership.role, "MANAGER")}
+      />
     </main>
   );
 }
