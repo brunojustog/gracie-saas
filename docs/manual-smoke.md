@@ -188,6 +188,44 @@ Pré-requisito: `npm run db:demo-leads && npm run db:demo-classes && npm run db:
 | 9 | super-admin Bruno | mudar de Bruno → ?period=last_7_days e voltar pra ?period=this_month | KPI "Conversão" pode aparecer "—" se não houve lead no período anterior (divisão por zero) |
 | 10 | super-admin Bruno | botões topo (Kanban / Aulas / Matrículas) | linkam pras outras páginas |
 
+## Configurações (Fase 11)
+
+Pré-requisito: estar logado como ADMIN (`bruno@simplificaonline.site`). SELLER ou MANAGER tentando `/settings` é redirecionado pra `/dashboard`.
+
+### Modalidades / Planos / Estágios
+
+| # | Ação | Resultado esperado |
+|---|---|---|
+| 1 | abrir `/settings` | redireciona pra `/settings/modalidades` |
+| 2 | clicar "Nova modalidade", preencher e salvar | toast verde, modalidade aparece na lista |
+| 3 | editar modalidade existente, alterar cor | refletir em `/aulas` (background events) e `/kanban` (cards) |
+| 4 | desativar modalidade | aparece com "inativa", some do select de matrícula nova |
+| 5 | em Planos, criar plano vinculado a modalidade GBA, R$ 599,90 | aparece na lista; em /matriculas, ao escolher modalidade GBA, plano novo aparece no select |
+| 6 | em Estágios, arrastar "Negociação" pra cima de "Compareceu" | toast "Ordem atualizada"; refletir em `/kanban` (ordem das colunas) |
+| 7 | criar estágio "Aguardando documentos" antes de "Matriculado" | aparece no kanban depois do refresh |
+| 8 | tentar marcar isWon e isLost simultâneos | servidor recusa: erro |
+
+### Usuários + convites
+
+| # | Ação | Resultado esperado |
+|---|---|---|
+| 9 | em `/settings/usuarios`, clicar "Convidar usuário" → email "teste@example.com" / role SELLER | se RESEND_API_KEY presente: email enviado de fato; senão: toast "Resend não configurado", link visível no painel + console |
+| 10 | abrir o link `http://gracie.localhost:3000/invite/<token>` em janela anônima | mostra form "Defina sua senha" com email pré-preenchido |
+| 11 | preencher senha + confirmar (mín. 8 chars) | redireciona pra `/login?email=...`; logar com a senha definida funciona |
+| 12 | tentar abrir o mesmo link de convite uma 2ª vez | mostra "Convite inválido" (token foi consumido) |
+| 13 | tentar acessar `/invite/<token-aleatório-inexistente>` | "Convite inválido" |
+| 14 | em `/settings/usuarios`, alterar role do user via select | mudança aplicada na próxima request do convidado |
+| 15 | toggle "ativo" off num user | user perde acesso (próxima request cai em /tenants) |
+| 16 | tentar alterar a própria membership | dropdown e switch desabilitados (badge "você") |
+
+### Chatwoot
+
+| # | Ação | Resultado esperado |
+|---|---|---|
+| 17 | em `/settings/chatwoot`, copiar o "Webhook URL deste tenant" | clipboard com `https://gracie.localhost:3000/api/webhooks/chatwoot/gracie` |
+| 18 | preencher URL + accountId + apiToken + webhookSecret e salvar | toast "Configuração salva"; campos password mostram "(armazenado)" no próximo carregamento |
+| 19 | testar webhook com `X-Chatwoot-Webhook-Secret` correto vs ausente | sem header retorna 401 (cobertura já existia na fase 5; agora secret vem do tenant editado aqui) |
+
 ## Quando rodar
 
 - Antes de qualquer commit que mexa em `proxy.ts`, `auth.config.ts`,

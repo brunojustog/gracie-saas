@@ -21,7 +21,8 @@ export const authConfig = {
       const isPublic =
         pathname === "/login" ||
         pathname.startsWith("/api/auth") ||
-        pathname.startsWith("/api/webhooks");
+        pathname.startsWith("/api/webhooks") ||
+        pathname.startsWith("/invite/");
 
       if (isPublic) return true;
       return isLoggedIn;

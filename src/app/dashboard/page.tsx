@@ -1,4 +1,4 @@
-import { Calendar, GraduationCap, Kanban } from "lucide-react";
+import { Calendar, GraduationCap, Kanban, Settings } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -69,6 +69,13 @@ export default async function DashboardPage({
               <GraduationCap className="mr-1.5 h-4 w-4" /> Matrículas
             </Button>
           </Link>
+          {membership.role === "ADMIN" ? (
+            <Link href="/settings">
+              <Button variant="outline" size="sm">
+                <Settings className="mr-1.5 h-4 w-4" /> Config
+              </Button>
+            </Link>
+          ) : null}
           <form
             action={async () => {
               "use server";

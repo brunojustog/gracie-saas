@@ -2,17 +2,15 @@
 
 SaaS multi-tenant para gestão comercial de academias. Primeiro cliente: **Gracie Barra Anália Franco**. Construído pela Simplifica Online.
 
-> **Status: Fase 10/12 — Dashboard de KPIs.**
-> Fases anteriores: tudo do funil (setup→matrículas) ✓.
-> Fase 10 entregou `/dashboard` com 6 KPI cards (leads, aulas, comparecimentos,
-> matrículas, receita, conversão) com variação % vs período anterior,
-> filtro de período por preset (mês atual/anterior/7d/30d), funil bar chart
-> ordenado por stage.order, linha de novos leads por dia, pie de matrículas
-> ativas por modalidade, e ranking de vendedoras (ADMIN/MANAGER only — SELLER
-> vê só os próprios números).
-> Recharts 3.8 + queries agregadas no server (`groupBy`, `$queryRaw` pra
-> leads-por-dia com `Prisma.sql` + scope condicional).
-> Próxima: configurações + convites com Resend (11).
+> **Status: Fase 11/12 — Configurações + convites.**
+> Fases anteriores: tudo do funil + dashboard ✓.
+> Fase 11 entregou `/settings` (ADMIN-only) com sidebar e CRUDs para
+> Modalidades, Planos, Estágios (com drag-to-reorder via dnd-kit),
+> Usuários (listing + convites por email via Resend) e integração Chatwoot.
+> Convite gera VerificationToken (7 dias), envia email com Resend (ou
+> loga no console se RESEND_API_KEY ausente). Aceitar convite em `/invite/[token]`
+> ativa membership e define senha.
+> Próxima: deploy (12).
 
 ## Stack
 
@@ -165,8 +163,7 @@ sessão real**, siga o checklist em [`docs/manual-smoke.md`](docs/manual-smoke.m
 
 ## Próximas fases
 
-- **Fase 11:** Configurações (CRUDs admin de modalidades/planos/estágios/usuários) + convites de usuário (Resend).
-- **Fase 12:** Deploy (Hetzner/Nginx/CI).
+- **Fase 12:** Deploy (Hetzner/Nginx/CI/SSL/backup).
 - **Fase 11:** Configurações + convites de usuário + integração Resend.
 - **Deploy:** Docker + Hetzner + GitHub Actions + SSL.
 
