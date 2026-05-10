@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage Dockerfile pra Next.js 16 standalone + Prisma 7.
-# Resultado: imagem ~250 MB (node 22-alpine + .next/standalone + prisma engine).
 
 ARG NODE_VERSION=22-alpine
 
@@ -36,7 +35,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # ──────────────────────────────────────────────────────────────────────────
-# Stage 3: runtime — imagem final mínima
+# Stage 3: runtime
 # ──────────────────────────────────────────────────────────────────────────
 FROM node:${NODE_VERSION} AS runtime
 WORKDIR /app
@@ -47,24 +46,22 @@ RUN apk add --no-cache libc6-compat openssl tini && \
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# Prisma precisa do query engine + binário SSL configurado pro Alpine
-ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/@prisma/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node
 
-# Copia build standalone (já inclui node_modules trimados pelo Next)
+# Build standalone do Next: server.js + node_modules trimados.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Prisma client + engine binário (standalone NÃO copia automaticamente)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+# SUBSTITUI o node_modules trimmed pelo completo do builder.
+# Necessário pro Prisma 7 CLI ter @prisma/config + dependências transitivas
+# (effect, etc) em runtime, e pro tsx rodar o seed quando RUN_SEED_ON_BOOT=true.
+# Trade-off: imagem ~150 MB maior, mas previne caça a deps transitivas
+# que mudam entre versões do Prisma.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# Schema Prisma + config (necessários pra `prisma migrate deploy`)
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.mjs ./prisma.config.mjs
-
-# tsx pra rodar prisma migrate deploy + seed se necessário (Prisma 7 + ESM
-# config exige um runtime TS). Via npx temporário no entrypoint.
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tsx ./node_modules/tsx
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 
 COPY --chown=nextjs:nodejs entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
