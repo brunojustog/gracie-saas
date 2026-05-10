@@ -1,25 +1,5 @@
 version: "3.8"
 
-# Stack do Gracie SaaS pra Docker Swarm via Portainer.
-#
-# Deploy:
-#   1. Cole o conteúdo deste arquivo numa nova stack do Portainer
-#   2. Preencha as env vars no formulário do Portainer (campos com "" abaixo)
-#   3. "Deploy the stack"
-#
-# Update (após push de novo código no main):
-#   - Aguarda o GitHub Actions buildar a imagem (~3-5 min)
-#   - No Portainer: stack > Editor > "Update the stack" + marca
-#     "Re-pull image and redeploy"
-#
-# Variáveis a preencher (via formulário do Portainer):
-#   POSTGRES_PASSWORD       — senha do role/banco (gere com `openssl rand -hex 24`)
-#   AUTH_SECRET             — `openssl rand -base64 32`
-#   RESEND_API_KEY          — chave do Resend (re_...)
-#   SEED_ADMIN_PASSWORD     — senha temporária do super-admin (trocar após login)
-#   RUN_SEED_ON_BOOT        — "true" SÓ no primeiro deploy; mude pra "false" depois
-#                             (evita re-seedar a cada redeploy)
-
 services:
   app:
     image: ghcr.io/brunojustog/gracie-saas:latest
@@ -27,21 +7,23 @@ services:
       - traefik-public
       - gracie-saas-internal
     environment:
-      DATABASE_URL: "postgresql://gracie_saas:${POSTGRES_PASSWORD}@postgres:5432/gracie_saas?schema=public"
+      DATABASE_URL: "postgresql://gracie_saas:@postgres:5432/gracie_saas?schema=public"
 
-      AUTH_SECRET: "${AUTH_SECRET}"
+      AUTH_SECRET: ""
       AUTH_TRUST_HOST: "true"
       NEXTAUTH_URL: "https://bgaf.simplificaonline.site"
 
-      RESEND_API_KEY: "${RESEND_API_KEY}"
+      RESEND_API_KEY: ""
       EMAIL_FROM: "Gracie SaaS <noreply@simplificaonline.site>"
 
       TENANT_SLUG: "bgaf"
       TENANT_NAME: "Gracie Barra Anália Franco"
 
       SEED_ADMIN_EMAIL: "bruno@simplificaonline.site"
-      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD}"
-      RUN_SEED_ON_BOOT: "${RUN_SEED_ON_BOOT:-false}"
+      SEED_ADMIN_PASSWORD: ""
+      SEED_ADMIN_NAME: "Bruno"
+
+      RUN_SEED_ON_BOOT: "true"
 
       NODE_ENV: "production"
       TZ: "America/Sao_Paulo"
@@ -76,7 +58,7 @@ services:
       - gracie-saas-internal
     environment:
       POSTGRES_USER: "gracie_saas"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_PASSWORD: ""
       POSTGRES_DB: "gracie_saas"
     volumes:
       - gracie_saas_postgres_data:/var/lib/postgresql/data
