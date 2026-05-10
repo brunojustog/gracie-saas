@@ -1,18 +1,39 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
+import {
+  GraduationCap,
+  LayoutGrid,
+  MessageCircle,
+  Tag,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; label: string; icon: LucideIcon };
+/**
+ * Navegação do /settings.
+ *
+ * O array `NAV_ITEMS` mora aqui (e não no Server Component pai) porque
+ * cada item tem um componente React (`icon`) — passar componentes através
+ * da fronteira RSC → client viola "Functions cannot be passed directly to
+ * Client Components". Manter tudo client-side resolve.
+ */
+const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
+  { href: "/settings/modalidades", label: "Modalidades", icon: Tag },
+  { href: "/settings/planos", label: "Planos", icon: GraduationCap },
+  { href: "/settings/estagios", label: "Estágios do funil", icon: LayoutGrid },
+  { href: "/settings/usuarios", label: "Usuários", icon: Users },
+  { href: "/settings/chatwoot", label: "Integração Chatwoot", icon: MessageCircle },
+];
 
-export function SettingsNav({ items }: { items: NavItem[] }) {
+export function SettingsNav() {
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-0.5 text-sm">
-      {items.map((item) => {
+      {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
         const active = pathname?.startsWith(item.href);
         return (

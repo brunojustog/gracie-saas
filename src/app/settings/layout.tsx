@@ -1,13 +1,4 @@
-import {
-  Calendar,
-  GraduationCap,
-  Kanban,
-  LayoutGrid,
-  MessageCircle,
-  Settings,
-  Tag,
-  Users,
-} from "lucide-react";
+import { Calendar, Kanban, Settings } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -15,14 +6,6 @@ import { signOut } from "@/server/auth";
 import { requireRole } from "@/server/tenant";
 
 import { SettingsNav } from "./nav";
-
-const NAV = [
-  { href: "/settings/modalidades", label: "Modalidades", icon: Tag },
-  { href: "/settings/planos", label: "Planos", icon: GraduationCap },
-  { href: "/settings/estagios", label: "Estágios do funil", icon: LayoutGrid },
-  { href: "/settings/usuarios", label: "Usuários", icon: Users },
-  { href: "/settings/chatwoot", label: "Integração Chatwoot", icon: MessageCircle },
-];
 
 export default async function SettingsLayout({
   children,
@@ -72,7 +55,7 @@ export default async function SettingsLayout({
       </header>
 
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-        <SettingsNav items={NAV} />
+        <SettingsNav />
         <section>{children}</section>
       </div>
     </main>
