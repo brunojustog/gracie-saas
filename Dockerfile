@@ -46,6 +46,13 @@ RUN apk add --no-cache libc6-compat openssl tini && \
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Next standalone usa HOSTNAME pra decidir interface de bind. Docker
+# default seta HOSTNAME=<container-id>, que faz o server bindar num
+# nome resolvível só dentro do próprio container — wget de fora falha
+# com "Connection refused". Forçar 0.0.0.0 pra escutar em todas as
+# interfaces.
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
 # Build standalone do Next: server.js + node_modules trimados.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
