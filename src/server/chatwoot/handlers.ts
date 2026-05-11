@@ -11,6 +11,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/followup";
 
 import {
   channelToOrigin,
@@ -116,6 +117,16 @@ async function upsertLeadFromContact(params: {
     return lead;
   });
 
+  // Lead novo → dispara a cadência de follow-up de Novo Lead (8 mensagens em
+  // 7 dias). Isolado em try/catch pra não derrubar o webhook se Wuzapi/schedule
+  // tiver problema — o cron sobe os jobs de qualquer jeito quando os credenciais
+  // estiverem configurados.
+  try {
+    await enqueueWelcomeSequence(created.id, now);
+  } catch (err) {
+    console.error("[followup] enqueueWelcomeSequence falhou", err);
+  }
+
   return { kind: "created", leadId: created.id };
 }
 
@@ -209,6 +220,13 @@ export async function handleMessageCreated(
       where: { id: existing.id },
       data: { lastInteractionAt: new Date() },
     });
+    // Lead respondeu → pausa o follow-up (M2..M8 que ainda não dispararam).
+    // Isolado em try/catch pra não bloquear o webhook se algo der errado.
+    try {
+      await pauseLeadJobs(existing.id, "lead respondeu via Chatwoot");
+    } catch (err) {
+      console.error("[followup] pauseLeadJobs falhou", err);
+    }
     return { kind: "updated", leadId: existing.id };
   }
 

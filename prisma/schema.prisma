@@ -100,6 +100,16 @@ model Tenant {
   chatwootApiToken      String?
   chatwootWebhookSecret String?
 
+  // Wuzapi (WhatsApp custom API) — usado pra disparar follow-up automatizado.
+  //   - wuzapiUrl: URL base (ex: https://wuzapi.brunojusto.com.br)
+  //   - wuzapiToken: token da INSTÂNCIA (header puro `token: <valor>` — não Bearer).
+  //     Deve ser cifrado em runtime antes de persistir. TODO antes do prod.
+  //   - followUpEnabled: master switch. Desligado, nenhum job dispara mesmo
+  //     que existam no banco — útil pra pausar campanhas globalmente.
+  wuzapiUrl             String?
+  wuzapiToken           String?
+  followUpEnabled       Boolean  @default(false)
+
   users               TenantUser[]
   leads               Lead[]
   modalities          Modality[]
@@ -109,6 +119,7 @@ model Tenant {
   enrollments         Enrollment[]
   webhookLogs         WebhookLog[]
   classSchedules      ClassSchedule[]
+  followUpJobs        FollowUpJob[]
 }
 
 enum Role {
@@ -282,6 +293,7 @@ model Lead {
   history             StageHistory[]
   experimentalClasses ExperimentalClass[]
   enrollment          Enrollment?
+  followUpJobs        FollowUpJob[]
 
   @@index([tenantId])
   @@index([tenantId, stageId])
@@ -386,6 +398,47 @@ model Enrollment {
 // ──────────────────────────────────────────────────────────────────────────
 // Integrações
 // ──────────────────────────────────────────────────────────────────────────
+
+// ──────────────────────────────────────────────────────────────────────────
+// Follow-up automatizado (v1.1)
+// ──────────────────────────────────────────────────────────────────────────
+
+enum FollowUpStatus {
+  PENDING   // agendado, ainda não disparou
+  SENT      // enviado com sucesso
+  SKIPPED   // cancelado (lead respondeu / mudou de stage / tenant desativou)
+  FAILED    // erro permanente no envio (Wuzapi 4xx/5xx — retry manual)
+}
+
+/**
+ * 1 row por mensagem agendada (cadência de 8 mensagens da Etapa Novo Lead).
+ * Idempotência: (leadId, sequenceStep) é unique — não enfileira 2x.
+ *
+ * O cron de hora em hora busca `status=PENDING AND scheduledAt <= now()`,
+ * envia via Wuzapi, marca SENT. Pausa = setar todos pendentes do lead pra SKIPPED.
+ */
+model FollowUpJob {
+  id            String         @id @default(cuid())
+  tenantId      String
+  leadId        String
+  sequenceStep  Int            // 1..8 — qual mensagem da cadência
+  scheduledAt   DateTime       // quando deveria disparar (respeitando 08-21h)
+  status        FollowUpStatus @default(PENDING)
+  sentAt        DateTime?
+  errorMessage  String?        @db.Text
+  /** Snapshot do texto renderizado no momento do envio — útil pra auditoria. */
+  renderedBody  String?        @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, sequenceStep])
+  @@index([tenantId, status, scheduledAt])
+  @@index([leadId])
+}
 
 model WebhookLog {
   id        String   @id @default(cuid())

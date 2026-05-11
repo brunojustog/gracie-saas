@@ -4,6 +4,7 @@ import {
   GraduationCap,
   LayoutGrid,
   MessageCircle,
+  Smartphone,
   Tag,
   Users,
   type LucideIcon,
@@ -27,6 +28,7 @@ const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/settings/estagios", label: "Estágios do funil", icon: LayoutGrid },
   { href: "/settings/usuarios", label: "Usuários", icon: Users },
   { href: "/settings/chatwoot", label: "Integração Chatwoot", icon: MessageCircle },
+  { href: "/settings/wuzapi", label: "WhatsApp (Wuzapi)", icon: Smartphone },
 ];
 
 export function SettingsNav() {
