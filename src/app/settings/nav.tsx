@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Download,
   GraduationCap,
   LayoutGrid,
   MessageCircle,
@@ -28,6 +29,7 @@ const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/settings/estagios", label: "Estágios do funil", icon: LayoutGrid },
   { href: "/settings/usuarios", label: "Usuários", icon: Users },
   { href: "/settings/chatwoot", label: "Integração Chatwoot", icon: MessageCircle },
+  { href: "/settings/chatwoot/import", label: "Importar do Chatwoot", icon: Download },
   { href: "/settings/wuzapi", label: "WhatsApp (Wuzapi)", icon: Smartphone },
 ];
 
@@ -37,7 +39,14 @@ export function SettingsNav() {
     <nav className="flex flex-col gap-0.5 text-sm">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
-        const active = pathname?.startsWith(item.href);
+        // Match exato pra rotas-mãe que têm sub-rotas (ex: /settings/chatwoot
+        // vs /settings/chatwoot/import). Senão a mãe acende junto com a filha.
+        const hasChild = NAV_ITEMS.some(
+          (other) => other !== item && other.href.startsWith(`${item.href}/`),
+        );
+        const active = hasChild
+          ? pathname === item.href
+          : pathname?.startsWith(item.href);
         return (
           <Link
             key={item.href}
