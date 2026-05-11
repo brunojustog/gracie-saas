@@ -44,6 +44,11 @@ const ORIGIN_ICON: Record<LeadOrigin, LucideIcon> = {
   WALK_IN: Footprints,
   PHONE: Phone,
   GOOGLE_ADS: Megaphone,
+  // ── v1.1 ──
+  MANYCHAT: MessageSquare,
+  LINK_BIO: Globe,
+  PHONE_CALL: Phone,
+  HOSPITAL_PARTNERSHIP: UserPlus,
   OTHER: MessageSquare,
 };
 
@@ -53,9 +58,14 @@ const ORIGIN_LABEL: Record<LeadOrigin, string> = {
   FACEBOOK: "Facebook",
   WEBSITE: "Site",
   REFERRAL: "Indicação",
-  WALK_IN: "Fachada",
+  WALK_IN: "Rua",
   PHONE: "Telefone",
   GOOGLE_ADS: "Google Ads",
+  // ── v1.1 ──
+  MANYCHAT: "Manychat",
+  LINK_BIO: "Link da bio",
+  PHONE_CALL: "Ligação",
+  HOSPITAL_PARTNERSHIP: "Hospital",
   OTHER: "Outro",
 };
 

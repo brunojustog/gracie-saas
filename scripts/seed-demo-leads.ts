@@ -35,8 +35,10 @@ type DemoLead = {
   email?: string;
   origin: LeadOrigin;
   modalityName?: string;
-  /** Nome do stage (case-sensitive como no seed) */
+  /** Nome do stage (8 do playbook v1.1) */
   stageName: string;
+  /** Tags acumulativas. Ex: "Contatado", "Confirmado", "Remarcou", "VISITANTE GB" */
+  tags?: string[];
   /** Email da vendedora atribuída (deixar undefined pra ficar não-atribuído) */
   sellerEmail?: string;
   /** Dias atrás de lastInteractionAt — controla o indicador de "frio" */
@@ -44,41 +46,41 @@ type DemoLead = {
 };
 
 const DEMO: DemoLead[] = [
-  // Novo Lead (5)
+  // Novo Lead — sem resposta ainda (5)
   { name: "Maria Silva", phone: "+5511987654321", origin: "WHATSAPP", modalityName: "GB1", stageName: "Novo Lead", daysAgo: 0 },
   { name: "João Pereira", phone: "+5511912345678", origin: "WHATSAPP", stageName: "Novo Lead", daysAgo: 0 },
   { name: "Letícia Sousa", phone: "+5511933334444", origin: "INSTAGRAM_DIRECT", modalityName: "GBF", stageName: "Novo Lead", daysAgo: 1 },
   { name: "Bruno Carvalho", phone: "+5511955557777", email: "bruno.carvalho@gmail.com", origin: "WEBSITE", modalityName: "GB1", stageName: "Novo Lead", daysAgo: 1 },
   { name: "Família Tanaka (filho 6 anos)", phone: "+5511988883333", origin: "REFERRAL", modalityName: "GBK - Pequenos Campeões 1", stageName: "Novo Lead", daysAgo: 2 },
 
-  // Contatado (4)
-  { name: "Lucas Almeida", phone: "+5511944442222", origin: "WHATSAPP", modalityName: "GB1", stageName: "Contatado", sellerEmail: "anna@gracie.com", daysAgo: 1 },
-  { name: "Camila Rocha", phone: "+5511922221111", origin: "INSTAGRAM_DIRECT", modalityName: "BarraFit", stageName: "Contatado", sellerEmail: "evelyn@gracie.com", daysAgo: 2 },
-  { name: "Roberto Lima", phone: "+5511933332222", origin: "FACEBOOK", modalityName: "GB2", stageName: "Contatado", sellerEmail: "rafaela@gracie.com", daysAgo: 3 },
-  { name: "Fernanda Costa", phone: "+5511955554444", origin: "GOOGLE_ADS", modalityName: "GBF", stageName: "Contatado", sellerEmail: "anna@gracie.com", daysAgo: 4 },
+  // Novo Lead com tag "Contatado" — atendente já mandou mensagem mas sem resposta (4)
+  { name: "Lucas Almeida", phone: "+5511944442222", origin: "WHATSAPP", modalityName: "GB1", stageName: "Novo Lead", tags: ["Contatado"], sellerEmail: "anna@gracie.com", daysAgo: 1 },
+  { name: "Camila Rocha", phone: "+5511922221111", origin: "INSTAGRAM_DIRECT", modalityName: "BarraFit", stageName: "Novo Lead", tags: ["Contatado"], sellerEmail: "evelyn@gracie.com", daysAgo: 2 },
+  { name: "Roberto Lima", phone: "+5511933332222", origin: "FACEBOOK", modalityName: "GB2", stageName: "Novo Lead", tags: ["Contatado"], sellerEmail: "rafaela@gracie.com", daysAgo: 3 },
+  { name: "Fernanda Costa", phone: "+5511955554444", origin: "GOOGLE_ADS", modalityName: "GBF", stageName: "Novo Lead", tags: ["Contatado"], sellerEmail: "anna@gracie.com", daysAgo: 4 },
 
-  // Agendado (3)
-  { name: "Diego Martins", phone: "+5511966666666", origin: "WHATSAPP", modalityName: "GB1", stageName: "Agendado", sellerEmail: "anna@gracie.com", daysAgo: 0 },
-  { name: "Patrícia Nunes", phone: "+5511977777777", origin: "WHATSAPP", modalityName: "GBF", stageName: "Agendado", sellerEmail: "evelyn@gracie.com", daysAgo: 1 },
-  { name: "Henrique Souza", phone: "+5511988888888", origin: "WALK_IN", modalityName: "GB2", stageName: "Agendado", sellerEmail: "rafaela@gracie.com", daysAgo: 2 },
+  // Potencial — respondeu, demonstrou interesse, ainda não agendou (2)
+  { name: "Diego Martins", phone: "+5511966666666", origin: "WHATSAPP", modalityName: "GB1", stageName: "Potencial", sellerEmail: "anna@gracie.com", daysAgo: 0 },
+  { name: "Patrícia Nunes", phone: "+5511977777777", origin: "WHATSAPP", modalityName: "GBF", stageName: "Potencial", sellerEmail: "evelyn@gracie.com", daysAgo: 1 },
 
-  // Confirmado (2)
-  { name: "Aline Ferreira", phone: "+5511911112222", origin: "WHATSAPP", modalityName: "BarraFit", stageName: "Confirmado", sellerEmail: "evelyn@gracie.com", daysAgo: 0 },
-  { name: "Família Oliveira (filha 11 anos)", phone: "+5511922223333", origin: "REFERRAL", modalityName: "GBK - Juniors", stageName: "Confirmado", sellerEmail: "rafaela@gracie.com", daysAgo: 1 },
+  // Agendamento — visita marcada (3)
+  { name: "Henrique Souza", phone: "+5511988888888", origin: "WALK_IN", modalityName: "GB2", stageName: "Agendamento", sellerEmail: "rafaela@gracie.com", daysAgo: 2 },
+  { name: "Aline Ferreira", phone: "+5511911112222", origin: "WHATSAPP", modalityName: "BarraFit", stageName: "Agendamento", tags: ["Confirmado"], sellerEmail: "evelyn@gracie.com", daysAgo: 0 },
+  { name: "Família Oliveira (filha 11 anos)", phone: "+5511922223333", origin: "REFERRAL", modalityName: "GBK - Juniors", stageName: "Agendamento", tags: ["Confirmado"], sellerEmail: "rafaela@gracie.com", daysAgo: 1 },
 
-  // Compareceu (2)
-  { name: "Rodrigo Castro", phone: "+5511933334444", origin: "WHATSAPP", modalityName: "GB1", stageName: "Compareceu", sellerEmail: "anna@gracie.com", daysAgo: 0 },
-  { name: "Juliana Pires", phone: "+5511944445555", origin: "INSTAGRAM_DIRECT", modalityName: "GBF", stageName: "Compareceu", sellerEmail: "evelyn@gracie.com", daysAgo: 1 },
+  // Comparecimento (2)
+  { name: "Rodrigo Castro", phone: "+5511933334444", origin: "WHATSAPP", modalityName: "GB1", stageName: "Comparecimento", sellerEmail: "anna@gracie.com", daysAgo: 0 },
+  { name: "Juliana Pires", phone: "+5511944445555", origin: "INSTAGRAM_DIRECT", modalityName: "GBF", stageName: "Comparecimento", sellerEmail: "evelyn@gracie.com", daysAgo: 1 },
 
   // Negociação (2)
   { name: "Marcelo Andrade", phone: "+5511955556666", origin: "REFERRAL", modalityName: "GB1", stageName: "Negociação", sellerEmail: "rafaela@gracie.com", daysAgo: 2 },
   { name: "Família Vieira (2 filhos)", phone: "+5511966667777", origin: "WALK_IN", modalityName: "GBK - Pequenos Campeões 2", stageName: "Negociação", sellerEmail: "anna@gracie.com", daysAgo: 5 },
 
-  // Matriculado (1) — futuramente vira Enrollment
-  { name: "Thiago Mendes", phone: "+5511977778888", origin: "WHATSAPP", modalityName: "GB1", stageName: "Matriculado", sellerEmail: "evelyn@gracie.com", daysAgo: 7 },
+  // Ganho (1) — vai virar Enrollment via db:demo-enrollments
+  { name: "Thiago Mendes", phone: "+5511977778888", origin: "WHATSAPP", modalityName: "GB1", stageName: "Ganho", sellerEmail: "evelyn@gracie.com", daysAgo: 7 },
 
-  // Não Fechou (1)
-  { name: "Sandra Ribeiro", phone: "+5511988889999", origin: "WHATSAPP", modalityName: "GBF", stageName: "Não Fechou", sellerEmail: "rafaela@gracie.com", daysAgo: 10 },
+  // Perda — fechou em outro lugar / não tinha interesse (1)
+  { name: "Sandra Ribeiro", phone: "+5511988889999", origin: "WHATSAPP", modalityName: "GBF", stageName: "Perda", tags: ["Não Fechou"], sellerEmail: "rafaela@gracie.com", daysAgo: 10 },
 ];
 
 async function main() {
@@ -121,6 +123,7 @@ async function main() {
       stageId: stage.id,
       modalityId: modality?.id ?? null,
       assignedSellerId: seller?.id ?? null,
+      tags: d.tags ?? [],
       lastInteractionAt,
     } satisfies Partial<Lead>;
 

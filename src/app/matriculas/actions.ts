@@ -123,7 +123,7 @@ export async function createEnrollment(input: unknown): Promise<ActionResult> {
 const cancelSchema = z.object({
   enrollmentId: z.string().min(1),
   reason: z.string().max(2000).optional(),
-  /** Se true, move o lead pro stage isLost "Aluno Perdido" automaticamente. */
+  /** Se true, move o lead pro stage isLost ("Perda") + tag "Aluno Perdido" automaticamente. */
   moveToLost: z.boolean().default(false),
 });
 
@@ -151,27 +151,33 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
     });
 
     if (parsed.data.moveToLost) {
-      // Stage isLost com menor order = "Aluno Perdido" (order 9 no seed)
+      // v1.1: existe um único stage isLost ("Perda") por tenant. Tag
+      // "Aluno Perdido" é adicionada acumulativamente pra distinguir
+      // de outros tipos de perda (Não fechou, Sem interesse, etc.).
       const lostStage = await tx.stage.findFirst({
-        where: {
-          tenantId: tenant.id,
-          isLost: true,
-          active: true,
-          name: { contains: "Aluno", mode: "insensitive" },
-        },
+        where: { tenantId: tenant.id, isLost: true, active: true },
+        orderBy: { order: "asc" },
         select: { id: true },
       });
       if (lostStage) {
+        const leadCurrent = await tx.lead.findUnique({
+          where: { id: enrollment.leadId },
+          select: { tags: true },
+        });
+        const ALUNO_PERDIDO_TAG = "Aluno Perdido";
+        const newTags = leadCurrent && !leadCurrent.tags.includes(ALUNO_PERDIDO_TAG)
+          ? [...leadCurrent.tags, ALUNO_PERDIDO_TAG]
+          : leadCurrent?.tags ?? [];
         await tx.lead.update({
           where: { id: enrollment.leadId },
-          data: { stageId: lostStage.id, lastInteractionAt: new Date() },
+          data: { stageId: lostStage.id, tags: newTags, lastInteractionAt: new Date() },
         });
         await tx.stageHistory.create({
           data: {
             leadId: enrollment.leadId,
             toStageId: lostStage.id,
             changedById: user.id,
-            notes: "Matrícula cancelada → aluno perdido",
+            notes: "Matrícula cancelada → aluno perdido (tag adicionada)",
           },
         });
       }

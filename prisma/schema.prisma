@@ -226,6 +226,11 @@ enum LeadOrigin {
   WALK_IN
   PHONE
   GOOGLE_ADS
+  // ── adicionados na v1.1 (canais que apareceram nas planilhas) ──
+  MANYCHAT
+  LINK_BIO
+  PHONE_CALL
+  HOSPITAL_PARTNERSHIP
   OTHER
 }
 
@@ -250,6 +255,17 @@ model Lead {
   assignedSellerId String?
   potentialValue   Decimal? @db.Decimal(10, 2)
   notes            String?  @db.Text
+
+  /**
+   * Tags acumuláveis (orthogonais ao stage). Exemplos do playbook:
+   *   "Contatado"      — primeira mensagem enviada mas sem resposta
+   *   "Confirmado"     — confirmou comparecimento da aula
+   *   "Remarcou"       — reagendou
+   *   "VISITANTE GB"   — visitante de outra unidade GB
+   *   "AVULSO"         — paga aula avulsa em vez de matrícula
+   * Tags são strings livres pra permitir customização por tenant.
+   */
+  tags             String[] @default([])
 
   // Datas
   firstInteractionAt DateTime  @default(now())

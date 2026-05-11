@@ -138,6 +138,16 @@ const PLANS: Array<{ name: string; monthlyValue: number; description?: string }>
   { name: "Plano Anual", monthlyValue: 449.9 },
 ];
 
+/**
+ * Estágios do funil — alinhados ao Playbook Oficial Comercial GB Anália Franco.
+ *
+ * 8 estágios canônicos. Sub-estados antigos ("Contatado", "Confirmado",
+ * "Visitante GB", "Avulso") viraram tags acumuláveis no `Lead.tags` (não
+ * são mais estágios mutuamente exclusivos).
+ *
+ * Migração de dados antigos: a migration `20260510_v11_*` mapeia leads em
+ * stages legados pros novos + adiciona tag correspondente (ver SQL).
+ */
 const STAGES: Array<{
   name: string;
   color: string;
@@ -145,17 +155,14 @@ const STAGES: Array<{
   isWon?: boolean;
   isLost?: boolean;
 }> = [
-  { name: "Novo Lead", color: "#9CA3AF", order: 1 },
-  { name: "Contatado", color: "#93C5FD", order: 2 },
-  { name: "Agendado", color: "#3B82F6", order: 3 },
-  { name: "Confirmado", color: "#1E40AF", order: 4 },
-  { name: "Compareceu", color: "#FBBF24", order: 5 },
-  { name: "Negociação", color: "#F97316", order: 6 },
-  { name: "Matriculado", color: "#10B981", order: 7, isWon: true },
-  { name: "Não Fechou", color: "#EF4444", order: 8, isLost: true },
-  { name: "Aluno Perdido", color: "#7F1D1D", order: 9, isLost: true },
-  { name: "Visitante GB", color: "#4B5563", order: 10 },
-  { name: "Avulso", color: "#A855F7", order: 11 },
+  { name: "Novo Lead",      color: "#9CA3AF", order: 1 },
+  { name: "Potencial",      color: "#93C5FD", order: 2 },
+  { name: "Agendamento",    color: "#3B82F6", order: 3 },
+  { name: "Comparecimento", color: "#FBBF24", order: 4 },
+  { name: "Negociação",     color: "#F97316", order: 5 },
+  { name: "Ganho",          color: "#10B981", order: 6, isWon: true },
+  { name: "Perda",          color: "#EF4444", order: 7, isLost: true },
+  { name: "Nutrição",       color: "#6B7280", order: 8 },
 ];
 
 const TENANT_USERS: Array<{ email: string; name: string; role: Role }> = [
@@ -264,25 +271,99 @@ async function upsertCatalog(tenantId: string) {
     }
   }
 
-  for (const s of STAGES) {
-    await prisma.stage.upsert({
-      where: { tenantId_order: { tenantId, order: s.order } },
-      update: {
-        name: s.name,
-        color: s.color,
-        isWon: s.isWon ?? false,
-        isLost: s.isLost ?? false,
-        active: true,
-      },
-      create: {
-        tenantId,
-        name: s.name,
-        color: s.color,
-        order: s.order,
-        isWon: s.isWon ?? false,
-        isLost: s.isLost ?? false,
-      },
+  await upsertStagesWithLegacyMigration(tenantId);
+}
+
+/**
+ * Mapeamento legacy v1.0 → v1.1.
+ * Quando um lead está num stage legado, é movido pro stage novo + ganha
+ * a tag correspondente (se houver). Stages legados não são deletados —
+ * apenas marcados inactive — pra preservar referências de StageHistory.
+ */
+const LEGACY_STAGE_MAP: Record<string, { newName: string; tag?: string }> = {
+  "Contatado":     { newName: "Novo Lead",      tag: "Contatado" },
+  "Agendado":      { newName: "Agendamento" },
+  "Confirmado":    { newName: "Agendamento",    tag: "Confirmado" },
+  "Compareceu":    { newName: "Comparecimento" },
+  "Matriculado":   { newName: "Ganho" },
+  "Não Fechou":    { newName: "Perda",          tag: "Não Fechou" },
+  "Aluno Perdido": { newName: "Perda",          tag: "Aluno Perdido" },
+  "Visitante GB":  { newName: "Novo Lead",      tag: "VISITANTE GB" },
+  "Avulso":        { newName: "Novo Lead",      tag: "AVULSO" },
+};
+
+async function upsertStagesWithLegacyMigration(tenantId: string) {
+  // Snapshot do estado atual
+  const existing = await prisma.stage.findMany({ where: { tenantId } });
+  const legacyStages = existing.filter((s) => s.name in LEGACY_STAGE_MAP);
+
+  // Step 1: deslocar legacies pra orders negativas (não vão mais aparecer
+  // na UI por causa do `active=false`, e ficam fora do unique(tenantId, order))
+  for (let i = 0; i < legacyStages.length; i++) {
+    await prisma.stage.update({
+      where: { id: legacyStages[i]!.id },
+      data: { order: -(100 + i), active: false },
     });
+  }
+
+  // Step 2: upsert dos 8 stages novos por nome (mais estável que order)
+  for (const s of STAGES) {
+    const found = existing.find((x) => x.name === s.name);
+    if (found) {
+      await prisma.stage.update({
+        where: { id: found.id },
+        data: {
+          color: s.color,
+          order: s.order,
+          isWon: s.isWon ?? false,
+          isLost: s.isLost ?? false,
+          active: true,
+        },
+      });
+    } else {
+      await prisma.stage.create({
+        data: {
+          tenantId,
+          name: s.name,
+          color: s.color,
+          order: s.order,
+          isWon: s.isWon ?? false,
+          isLost: s.isLost ?? false,
+        },
+      });
+    }
+  }
+
+  // Step 3: migrar leads dos stages legados pros novos + adicionar tag
+  let migratedLeads = 0;
+  for (const legacy of legacyStages) {
+    const mapping = LEGACY_STAGE_MAP[legacy.name]!;
+    const target = await prisma.stage.findFirst({
+      where: { tenantId, name: mapping.newName },
+    });
+    if (!target) continue;
+
+    const leadsInLegacy = await prisma.lead.findMany({
+      where: { stageId: legacy.id },
+      select: { id: true, tags: true },
+    });
+    for (const lead of leadsInLegacy) {
+      const tags =
+        mapping.tag && !lead.tags.includes(mapping.tag)
+          ? [...lead.tags, mapping.tag]
+          : lead.tags;
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { stageId: target.id, tags },
+      });
+      migratedLeads++;
+    }
+  }
+
+  if (legacyStages.length > 0) {
+    console.log(
+      `  · migração legacy: ${legacyStages.length} stages → inactive, ${migratedLeads} leads movidos`,
+    );
   }
 }
 
