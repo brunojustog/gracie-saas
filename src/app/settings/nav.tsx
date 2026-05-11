@@ -2,6 +2,7 @@
 
 import {
   Download,
+  FileSpreadsheet,
   GraduationCap,
   LayoutGrid,
   MessageCircle,
@@ -31,6 +32,7 @@ const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/settings/chatwoot", label: "Integração Chatwoot", icon: MessageCircle },
   { href: "/settings/chatwoot/import", label: "Importar do Chatwoot", icon: Download },
   { href: "/settings/wuzapi", label: "WhatsApp (Wuzapi)", icon: Smartphone },
+  { href: "/settings/import-csv", label: "Importar planilhas (CSV)", icon: FileSpreadsheet },
 ];
 
 export function SettingsNav() {
