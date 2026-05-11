@@ -119,7 +119,7 @@ model Tenant {
   enrollments         Enrollment[]
   webhookLogs         WebhookLog[]
   classSchedules      ClassSchedule[]
-  followUpJobs        FollowUpJob[]
+  messageJobs         MessageJob[]
 }
 
 enum Role {
@@ -293,7 +293,7 @@ model Lead {
   history             StageHistory[]
   experimentalClasses ExperimentalClass[]
   enrollment          Enrollment?
-  followUpJobs        FollowUpJob[]
+  messageJobs         MessageJob[]
 
   @@index([tenantId])
   @@index([tenantId, stageId])
@@ -343,9 +343,10 @@ model ExperimentalClass {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  modality Modality @relation(fields: [modalityId], references: [id])
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  modality    Modality     @relation(fields: [modalityId], references: [id])
+  messageJobs MessageJob[]
 
   @@index([tenantId, scheduledDate])
   @@index([leadId])
@@ -400,10 +401,10 @@ model Enrollment {
 // ──────────────────────────────────────────────────────────────────────────
 
 // ──────────────────────────────────────────────────────────────────────────
-// Follow-up automatizado (v1.1)
+// Mensagens automáticas (v1.1)
 // ──────────────────────────────────────────────────────────────────────────
 
-enum FollowUpStatus {
+enum MessageJobStatus {
   PENDING   // agendado, ainda não disparou
   SENT      // enviado com sucesso
   SKIPPED   // cancelado (lead respondeu / mudou de stage / tenant desativou)
@@ -411,33 +412,48 @@ enum FollowUpStatus {
 }
 
 /**
- * 1 row por mensagem agendada (cadência de 8 mensagens da Etapa Novo Lead).
- * Idempotência: (leadId, sequenceStep) é unique — não enfileira 2x.
+ * 1 row por mensagem agendada (Etapa Novo Lead M1..M8, lembretes de
+ * agendamento, mensagem pós-comparecimento, etc).
  *
- * O cron de hora em hora busca `status=PENDING AND scheduledAt <= now()`,
- * envia via Wuzapi, marca SENT. Pausa = setar todos pendentes do lead pra SKIPPED.
+ * `templateKey` é o slug semântico ("welcome.m1", "appointment.confirm",
+ * "appointment.d-1", "appointment.no-show-1", "attendance.post").
+ *
+ * `experimentalClassId` opcional: jobs ligados a uma AE específica (lembretes
+ * de agendamento) referenciam aqui — quando a AE é cancelada/reagendada, esses
+ * jobs caem em cascade. Welcome (etapa Novo Lead) não tem AE, fica null.
+ *
+ * Cron horário busca `status=PENDING AND scheduledAt <= now()`, envia via
+ * Wuzapi, marca SENT.
  */
-model FollowUpJob {
-  id            String         @id @default(cuid())
-  tenantId      String
-  leadId        String
-  sequenceStep  Int            // 1..8 — qual mensagem da cadência
-  scheduledAt   DateTime       // quando deveria disparar (respeitando 08-21h)
-  status        FollowUpStatus @default(PENDING)
-  sentAt        DateTime?
-  errorMessage  String?        @db.Text
+model MessageJob {
+  id                  String           @id @default(cuid())
+  tenantId            String
+  leadId              String
+  experimentalClassId String?          // null pra jobs não ligados a uma AE
+  templateKey         String           // ex: "welcome.m1", "appointment.confirm"
+  scheduledAt         DateTime
+  status              MessageJobStatus @default(PENDING)
+  sentAt              DateTime?
+  errorMessage        String?          @db.Text
   /** Snapshot do texto renderizado no momento do envio — útil pra auditoria. */
-  renderedBody  String?        @db.Text
+  renderedBody        String?          @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead              Lead               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  experimentalClass ExperimentalClass? @relation(fields: [experimentalClassId], references: [id], onDelete: Cascade)
 
-  @@unique([leadId, sequenceStep])
+  /**
+   * Idempotência: pra um mesmo lead, mesma key e mesma AE só pode existir 1
+   * row. NULL não match NULL em PG — pra welcome (sem AE) o enqueue checa
+   * manualmente antes de inserir.
+   */
+  @@unique([leadId, templateKey, experimentalClassId])
   @@index([tenantId, status, scheduledAt])
   @@index([leadId])
+  @@index([experimentalClassId])
 }
 
 model WebhookLog {

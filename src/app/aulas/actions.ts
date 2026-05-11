@@ -6,6 +6,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { findClassInScope } from "@/server/experimental-classes";
 import { findLeadInScope } from "@/server/leads";
+import {
+  cancelAppointmentJobs,
+  enqueueAppointmentReminders,
+  enqueueImmediate,
+  enqueueNoShowSequence,
+} from "@/server/messaging";
 import { requireTenantUser } from "@/server/tenant";
 
 type ActionResult =
@@ -38,12 +44,13 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
   });
   if (!modality) return { ok: false, error: "modalidade inválida" };
 
+  const scheduledFor = new Date(parsed.data.scheduledDate);
   const created = await prisma.experimentalClass.create({
     data: {
       tenantId: tenant.id,
       leadId: lead.id,
       modalityId: modality.id,
-      scheduledDate: new Date(parsed.data.scheduledDate),
+      scheduledDate: scheduledFor,
       status: "SCHEDULED",
       notes: parsed.data.notes ?? null,
     },
@@ -54,6 +61,18 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
     where: { id: lead.id },
     data: { lastInteractionAt: new Date() },
   });
+
+  // Enfileira os lembretes de agendamento (confirm + D-1 + D-0 + 1h-before).
+  // Isolado em try/catch — falha aqui não deve impedir a AE de ser criada.
+  try {
+    await enqueueAppointmentReminders({
+      leadId: lead.id,
+      classId: created.id,
+      scheduledFor,
+    });
+  } catch (err) {
+    console.error("[messaging] enqueueAppointmentReminders falhou", err);
+  }
 
   revalidatePath("/aulas");
   revalidatePath("/kanban");
@@ -85,6 +104,31 @@ export async function updateClassStatus(input: unknown): Promise<ActionResult> {
     },
   });
 
+  // Triggers de mensagens conforme o novo status:
+  //   ATTENDED  → mensagem pós-aula imediata
+  //   NO_SHOW   → cadência de no-show (mesmo dia + D+2 + D+5)
+  //   CANCELED  → cancela lembretes pendentes da AE
+  //   CONFIRMED → sem trigger (lembretes já foram criados no scheduleClass)
+  try {
+    if (parsed.data.status === "ATTENDED") {
+      await enqueueImmediate({
+        leadId: cls.leadId,
+        classId: cls.id,
+        templateKey: "attendance.post",
+      });
+    } else if (parsed.data.status === "NO_SHOW") {
+      await enqueueNoShowSequence({
+        leadId: cls.leadId,
+        classId: cls.id,
+        scheduledFor: cls.scheduledDate,
+      });
+    } else if (parsed.data.status === "CANCELED") {
+      await cancelAppointmentJobs(cls.id, "AE cancelada");
+    }
+  } catch (err) {
+    console.error("[messaging] trigger de updateClassStatus falhou", err);
+  }
+
   revalidatePath("/aulas");
   revalidatePath("/kanban");
   return { ok: true, classId: cls.id };
@@ -107,13 +151,27 @@ export async function rescheduleClass(input: unknown): Promise<ActionResult> {
   const cls = await findClassInScope(membership, parsed.data.classId);
   if (!cls) return { ok: false, error: "aula não encontrada ou sem permissão" };
 
+  const newScheduledFor = new Date(parsed.data.scheduledDate);
   await prisma.experimentalClass.update({
     where: { id: cls.id },
     data: {
-      scheduledDate: new Date(parsed.data.scheduledDate),
+      scheduledDate: newScheduledFor,
       status: "RESCHEDULED",
     },
   });
+
+  // Lembretes antigos (calculados pro horário velho) viraram lixo. Cancela
+  // os PENDING e re-enfileira pro novo horário.
+  try {
+    await cancelAppointmentJobs(cls.id, "AE reagendada — relembrar pro novo horário");
+    await enqueueAppointmentReminders({
+      leadId: cls.leadId,
+      classId: cls.id,
+      scheduledFor: newScheduledFor,
+    });
+  } catch (err) {
+    console.error("[messaging] re-enqueue de reschedule falhou", err);
+  }
 
   revalidatePath("/aulas");
   revalidatePath("/kanban");

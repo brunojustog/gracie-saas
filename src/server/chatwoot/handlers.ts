@@ -11,7 +11,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/followup";
+import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/messaging";
 
 import {
   channelToOrigin,

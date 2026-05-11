@@ -15,7 +15,7 @@
  */
 import { type NextRequest, NextResponse } from "next/server";
 
-import { processDueJobs } from "@/server/followup";
+import { processDueJobs } from "@/server/messaging";
 
 export const dynamic = "force-dynamic";
 
