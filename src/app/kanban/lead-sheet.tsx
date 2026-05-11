@@ -33,10 +33,12 @@ import {
   type LeadDetails,
   assignSeller,
   getLeadDetails,
+  setLeadTags,
   setModality,
   updateLeadInfo,
 } from "./lead-actions";
 import { moveLeadToStage } from "./actions";
+import { TagEditor } from "./tag-editor";
 
 const UNASSIGNED = "__unassigned__";
 const NO_MODALITY = "__none__";
@@ -61,6 +63,7 @@ export type LeadCardPatch = {
   modality?: { id: string; name: string } | null;
   assignedSellerId?: string | null;
   assignedSeller?: { id: string; name: string | null; email: string } | null;
+  tags?: string[];
   lastInteractionAt?: Date;
 };
 
@@ -334,6 +337,21 @@ function OverviewTab({
     });
   };
 
+  const handleTagsChange = (next: string[]) => {
+    // Otimista: atualiza local + board imediatamente, depois persiste.
+    onLeadChange({ ...lead, tags: next });
+    onLeadPatch(lead.id, { tags: next });
+    startTransition(async () => {
+      const result = await setLeadTags({ leadId: lead.id, tags: next });
+      if (!result.ok) {
+        toast.error(result.error);
+        // Reverte
+        onLeadChange({ ...lead });
+        onLeadPatch(lead.id, { tags: lead.tags ?? [] });
+      }
+    });
+  };
+
   const handleModality = (modalityId: string) => {
     const value = modalityId === NO_MODALITY ? null : modalityId;
     startTransition(async () => {
@@ -470,6 +488,15 @@ function OverviewTab({
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
           placeholder="Notas internas (não enviadas ao lead)…"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label>Tags</Label>
+        <TagEditor
+          value={lead.tags ?? []}
+          onChange={(next) => handleTagsChange(next)}
+          disabled={pending}
         />
       </div>
 

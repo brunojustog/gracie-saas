@@ -88,6 +88,7 @@ export async function getLeadsForKanban(
       stageId: true,
       modalityId: true,
       assignedSellerId: true,
+      tags: true,
       lastInteractionAt: true,
       createdAt: true,
       modality: { select: { id: true, name: true } },

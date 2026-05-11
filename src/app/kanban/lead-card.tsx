@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+import { TagPill } from "./tag-editor";
+
 type Props = {
   lead: {
     id: string;
@@ -28,6 +30,7 @@ type Props = {
     lastInteractionAt: Date | string;
     modality: { id: string; name: string } | null;
     assignedSeller: { id: string; name: string | null; email: string } | null;
+    tags?: string[];
   };
   /** Quando renderizado dentro do <DragOverlay/> do dnd-kit; tira sombras/handles. */
   isOverlay?: boolean;
@@ -159,6 +162,18 @@ export function LeadCard({ lead, isOverlay = false }: Props) {
               </Badge>
             )}
           </div>
+          {lead.tags && lead.tags.length > 0 ? (
+            <div className="mt-1 flex flex-wrap gap-0.5">
+              {lead.tags.slice(0, 3).map((tag) => (
+                <TagPill key={tag} tag={tag} size="sm" />
+              ))}
+              {lead.tags.length > 3 ? (
+                <span className="text-[10px] text-muted-foreground">
+                  +{lead.tags.length - 3}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </Card>

@@ -34,6 +34,7 @@ export async function getLeadDetails(leadId: string) {
       modalityId: true,
       assignedSellerId: true,
       notes: true,
+      tags: true,
       potentialValue: true,
       chatwootConversationId: true,
       chatwootContactId: true,
@@ -157,6 +158,37 @@ const setModalitySchema = z.object({
   leadId: z.string().min(1),
   modalityId: z.string().min(1).nullable(),
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Tags acumulativas (v1.1)
+// ──────────────────────────────────────────────────────────────────────────
+
+const setTagsSchema = z.object({
+  leadId: z.string().min(1),
+  tags: z.array(z.string().min(1).max(50)).max(20),
+});
+
+export async function setLeadTags(input: unknown): Promise<ActionResult> {
+  const parsed = setTagsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { membership } = await requireTenantUser();
+  const lead = await findLeadInScope(membership, parsed.data.leadId);
+  if (!lead) return { ok: false, error: "lead não encontrado ou sem permissão" };
+
+  // Deduplicate + trim (defesa contra UI buggada)
+  const cleanedTags = Array.from(
+    new Set(parsed.data.tags.map((t) => t.trim()).filter(Boolean)),
+  );
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { tags: cleanedTags },
+  });
+
+  revalidatePath("/kanban");
+  return { ok: true };
+}
 
 export async function setModality(input: unknown): Promise<ActionResult> {
   const parsed = setModalitySchema.safeParse(input);
