@@ -101,6 +101,69 @@ export function LeadsByDayChart({ data }: { data: LeadDayEntry[] }) {
   );
 }
 
+type ConversionStep = {
+  label: string;
+  count: number;
+  /** % da etapa anterior. Null pra primeira (Leads). */
+  fromPreviousPct: number | null;
+};
+
+/**
+ * Funil de conversão "cascata": Leads → Agendaram → Compareceram → Matricularam.
+ * Cada nível tem:
+ *   - Barra horizontal proporcional ao topo (cohort total) → vê quão fundo
+ *     o funil afunila comparado à entrada
+ *   - Label "▼ X%" entre níveis → taxa de conversão do anterior pro atual
+ */
+export function ConversionFunnelChart({ data }: { data: ConversionStep[] }) {
+  const top = data[0]?.count ?? 0;
+  if (top === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Sem leads no período.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-1.5">
+      {data.map((step, i) => {
+        const overallPct = top > 0 ? (step.count / top) * 100 : 0;
+        return (
+          <div key={step.label}>
+            {i > 0 ? (
+              <div className="flex items-center justify-center py-0.5 text-[11px] text-muted-foreground">
+                <span className="inline-block">▼</span>
+                <span className="ml-1">
+                  {step.fromPreviousPct === null
+                    ? "—"
+                    : `${step.fromPreviousPct.toFixed(0)}% ${step.label.toLowerCase()}`}
+                </span>
+              </div>
+            ) : null}
+            <div className="rounded-md border bg-card p-2.5">
+              <div className="mb-1 flex items-baseline justify-between">
+                <span className="text-xs font-medium">{step.label}</span>
+                <span className="font-mono text-lg font-semibold tabular-nums">
+                  {step.count.toLocaleString("pt-BR")}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${overallPct}%` }}
+                />
+              </div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">
+                {overallPct.toFixed(1)}% do topo
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ModalityPie({ data }: { data: ModalityEntry[] }) {
   if (data.length === 0) {
     return (

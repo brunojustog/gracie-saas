@@ -43,10 +43,10 @@ export async function getDashboardData(
   ] = await Promise.all([
     // KPIs do período atual
     prisma.lead.count({
-      where: { ...scope, createdAt: { gte: period.from, lte: period.to } },
+      where: { ...scope, firstInteractionAt: { gte: period.from, lte: period.to } },
     }),
     prisma.lead.count({
-      where: { ...scope, createdAt: { gte: prev.from, lte: prev.to } },
+      where: { ...scope, firstInteractionAt: { gte: prev.from, lte: prev.to } },
     }),
 
     prisma.experimentalClass.count({
@@ -111,18 +111,18 @@ export async function getDashboardData(
     // Funil: quantos leads em cada stage (criados no período)
     prisma.lead.groupBy({
       by: ["stageId"],
-      where: { ...scope, createdAt: { gte: period.from, lte: period.to } },
+      where: { ...scope, firstInteractionAt: { gte: period.from, lte: period.to } },
       _count: { _all: true },
     }),
 
     // Leads por dia: $queryRaw porque Prisma não suporta groupBy(date_trunc(...))
     // Limita a 31 dias máx — o range já vem cap de presets.
     prisma.$queryRaw<Array<{ day: Date; count: bigint }>>(Prisma.sql`
-      SELECT date_trunc('day', "createdAt")::date AS day, COUNT(*)::bigint AS count
+      SELECT date_trunc('day', "firstInteractionAt")::date AS day, COUNT(*)::bigint AS count
       FROM "Lead"
       WHERE "tenantId" = ${tenantId}
-        AND "createdAt" >= ${period.from}
-        AND "createdAt" <= ${period.to}
+        AND "firstInteractionAt" >= ${period.from}
+        AND "firstInteractionAt" <= ${period.to}
         ${
           isSeller
             ? Prisma.sql`AND "assignedSellerId" = ${membership.userId}`
@@ -145,7 +145,7 @@ export async function getDashboardData(
       ? Promise.resolve([])
       : prisma.lead.groupBy({
           by: ["assignedSellerId"],
-          where: { tenantId, createdAt: { gte: period.from, lte: period.to } },
+          where: { tenantId, firstInteractionAt: { gte: period.from, lte: period.to } },
           _count: { _all: true },
         }),
   ]);
@@ -230,6 +230,60 @@ export async function getDashboardData(
         funnelGroups.find((g) => g.stageId === s.id)?._count?._all ?? 0,
     }));
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Funil de conversão: jornada da coorte de leads que ENTROU no período.
+  //
+  // Critério "passou pelo menos por X" = stage atual está em X ou além no
+  // playbook (Agendamento → Comparecimento → Negociação → Ganho). Não usamos
+  // StageHistory pra evitar custo de join; é uma aproximação razoável porque
+  // o lead "atualmente em Ganho" passou implicitamente pelos níveis anteriores.
+  //
+  // Leads importados via CSV não têm ExperimentalClass row, então contar AEs
+  // diretamente subestimaria o funil real — por isso usamos o stage do lead.
+  // ──────────────────────────────────────────────────────────────────────────
+  const cohortFilter = {
+    ...scope,
+    firstInteractionAt: { gte: period.from, lte: period.to },
+  };
+  const POST_AGENDAMENTO = ["Agendamento", "Comparecimento", "Negociação", "Ganho"];
+  const POST_COMPARECIMENTO = ["Comparecimento", "Negociação", "Ganho"];
+
+  const [cohortTotal, cohortAgendaram, cohortCompareceram, cohortMatricularam] =
+    await Promise.all([
+      prisma.lead.count({ where: cohortFilter }),
+      prisma.lead.count({
+        where: { ...cohortFilter, stage: { name: { in: POST_AGENDAMENTO } } },
+      }),
+      prisma.lead.count({
+        where: { ...cohortFilter, stage: { name: { in: POST_COMPARECIMENTO } } },
+      }),
+      prisma.lead.count({
+        where: { ...cohortFilter, stage: { isWon: true } },
+      }),
+    ]);
+
+  const rate = (numerator: number, denominator: number) =>
+    denominator > 0 ? (numerator / denominator) * 100 : null;
+
+  const conversionFunnel = [
+    { label: "Leads novos", count: cohortTotal, fromPreviousPct: null as number | null },
+    {
+      label: "Agendaram",
+      count: cohortAgendaram,
+      fromPreviousPct: rate(cohortAgendaram, cohortTotal),
+    },
+    {
+      label: "Compareceram",
+      count: cohortCompareceram,
+      fromPreviousPct: rate(cohortCompareceram, cohortAgendaram),
+    },
+    {
+      label: "Matricularam",
+      count: cohortMatricularam,
+      fromPreviousPct: rate(cohortMatricularam, cohortCompareceram),
+    },
+  ];
+
   // Modalidades: name + color resolvidos
   const byModality = enrollmentsByModality.map((g) => {
     const m = modalities.find((x) => x.id === g.modalityId);
@@ -263,6 +317,7 @@ export async function getDashboardData(
         leadsPrev > 0 ? (enrollmentsPrev / leadsPrev) * 100 : null,
     },
     funnel,
+    conversionFunnel,
     leadsByDay,
     byModality,
     ranking,

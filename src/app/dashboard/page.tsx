@@ -2,12 +2,22 @@ import { Calendar, GraduationCap, Kanban, Settings } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { type PeriodPreset, resolvePreset, variationPct } from "@/lib/period";
+import {
+  type PeriodPreset,
+  resolveCustom,
+  resolvePreset,
+  variationPct,
+} from "@/lib/period";
 import { signOut } from "@/server/auth";
 import { getDashboardData } from "@/server/analytics";
 import { requireTenantUser } from "@/server/tenant";
 
-import { FunnelChart, LeadsByDayChart, ModalityPie } from "./charts";
+import {
+  ConversionFunnelChart,
+  FunnelChart,
+  LeadsByDayChart,
+  ModalityPie,
+} from "./charts";
 import { PeriodFilter } from "./period-filter";
 
 const VALID_PRESETS: PeriodPreset[] = [
@@ -17,7 +27,7 @@ const VALID_PRESETS: PeriodPreset[] = [
   "last_30_days",
 ];
 
-type SearchParams = Promise<{ period?: string }>;
+type SearchParams = Promise<{ period?: string; from?: string; to?: string }>;
 
 export default async function DashboardPage({
   searchParams,
@@ -27,10 +37,14 @@ export default async function DashboardPage({
   const { tenant, user, membership } = await requireTenantUser();
   const sp = await searchParams;
 
+  // Custom range (from + to) tem prioridade sobre preset. Se vier malformado,
+  // cai pra preset.
+  const customPeriod = sp.from && sp.to ? resolveCustom(sp.from, sp.to) : null;
   const preset: PeriodPreset = VALID_PRESETS.includes(sp.period as PeriodPreset)
     ? (sp.period as PeriodPreset)
     : "this_month";
-  const period = resolvePreset(preset);
+  const period = customPeriod ?? resolvePreset(preset);
+  const currentSelector: PeriodPreset | "custom" = customPeriod ? "custom" : preset;
 
   const data = await getDashboardData(membership, period);
 
@@ -91,14 +105,17 @@ export default async function DashboardPage({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-medium text-muted-foreground">{period.label}</h2>
-        <PeriodFilter current={preset} />
+        <PeriodFilter current={currentSelector} from={sp.from} to={sp.to} />
       </div>
 
       <KPICards data={data} />
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Funil de leads" subtitle="Leads novos no período por estágio">
-          <FunnelChart data={data.funnel} />
+        <Panel
+          title="Funil de conversão"
+          subtitle="Jornada da coorte de leads que entrou no período"
+        >
+          <ConversionFunnelChart data={data.conversionFunnel} />
         </Panel>
         <Panel title="Novos leads por dia" subtitle="Volume de captação no período">
           <LeadsByDayChart data={data.leadsByDay} />
@@ -106,9 +123,18 @@ export default async function DashboardPage({
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
+        <Panel
+          title="Distribuição por estágio"
+          subtitle="Onde os leads do período estão atualmente"
+        >
+          <FunnelChart data={data.funnel} />
+        </Panel>
         <Panel title="Matrículas ativas por modalidade">
           <ModalityPie data={data.byModality} />
         </Panel>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
         {!data.isSeller && data.ranking.length > 0 ? (
           <Panel title="Ranking de vendedoras (período)">
             <SellerRanking ranking={data.ranking} />
