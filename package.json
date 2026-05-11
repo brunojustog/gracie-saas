@@ -21,6 +21,7 @@
     "db:demo-leads": "tsx scripts/seed-demo-leads.ts",
     "db:demo-classes": "tsx scripts/seed-demo-classes.ts",
     "db:demo-enrollments": "tsx scripts/seed-demo-enrollments.ts",
+    "db:import-csv": "tsx scripts/import-csv.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -66,6 +67,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/ui": "^4.1.5",
+    "csv-parse": "^6.2.1",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
