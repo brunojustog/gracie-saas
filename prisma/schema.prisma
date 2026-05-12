@@ -34,6 +34,7 @@ model User {
   tenants           TenantUser[]
   assignedLeads     Lead[]         @relation("AssignedSeller")
   movementsHistory  StageHistory[]
+  salesAsSeller     Sale[]         @relation("SaleSeller")
 }
 
 model Account {
@@ -120,6 +121,8 @@ model Tenant {
   webhookLogs         WebhookLog[]
   classSchedules      ClassSchedule[]
   messageJobs         MessageJob[]
+  products            Product[]
+  sales               Sale[]
 }
 
 enum Role {
@@ -294,6 +297,7 @@ model Lead {
   experimentalClasses ExperimentalClass[]
   enrollment          Enrollment?
   messageJobs         MessageJob[]
+  sales               Sale[]
 
   @@index([tenantId])
   @@index([tenantId, stageId])
@@ -470,4 +474,129 @@ model WebhookLog {
 
   @@index([tenantId, processed])
   @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Lojinha / PDV (v1.1-I)
+// ──────────────────────────────────────────────────────────────────────────
+
+enum ProductCategory {
+  BEBIDA
+  SUPLEMENTO
+  KIMONO
+  FAIXA
+  CAMISETA
+  RASHGUARD
+  BERMUDA_SHORT
+  ACESSORIO
+  OUTRO
+}
+
+/**
+ * Produto-pai. Sempre tem >=1 ProductVariant. Quando o produto não tem
+ * variação real (ex: lata de Red Bull), uma variant única "Padrão" é criada
+ * pra manter o modelo uniforme — assim a venda sempre referencia uma variant
+ * (com preço + estoque próprios).
+ */
+model Product {
+  id          String          @id @default(cuid())
+  tenantId    String
+  name        String
+  category    ProductCategory @default(OUTRO)
+  description String?
+  active      Boolean         @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants ProductVariant[]
+
+  @@index([tenantId, active])
+  @@index([tenantId, category])
+}
+
+/**
+ * Variant é a unidade vendável: tem preço, estoque e SKU próprios.
+ *
+ * `stock` nullable = ilimitado (vende sempre, não decrementa). Útil pra
+ * cortesia ou itens que o tenant não quer controlar saldo.
+ *
+ * `label` é o discriminador humano dentro do produto: "A2" (faixa), "M"
+ * (camiseta), "GB1 - G" (kimono), "Padrão" (sem variação real).
+ */
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  label     String
+  sku       String?
+  price     Decimal  @db.Decimal(10, 2)
+  /** null = estoque ilimitado; integer = saldo controlado (decrementa por venda). */
+  stock     Int?
+  active    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  saleItems SaleItem[]
+
+  @@unique([productId, label])
+  @@index([productId, active])
+}
+
+enum SalePaymentMethod {
+  PIX
+  DINHEIRO
+  CARTAO_DEBITO
+  CARTAO_CREDITO
+  CORTESIA
+  OUTRO
+}
+
+/**
+ * 1 venda na lojinha. Quem vendeu (sellerUserId) é o User logado no momento;
+ * customerLeadId é opcional (venda avulsa = visitante / cliente sem cadastro).
+ *
+ * `total` é o snapshot do total no momento do fechamento — soma dos
+ * SaleItem.subtotal (que por sua vez tem `unitPrice` congelado). Reajustar
+ * preço do produto depois NÃO altera vendas antigas.
+ */
+model Sale {
+  id             String            @id @default(cuid())
+  tenantId       String
+  sellerUserId   String
+  customerLeadId String?
+  total          Decimal           @db.Decimal(10, 2)
+  paymentMethod  SalePaymentMethod
+  paidAt         DateTime          @default(now())
+  notes          String?           @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sellerUser   User       @relation("SaleSeller", fields: [sellerUserId], references: [id])
+  customerLead Lead?      @relation(fields: [customerLeadId], references: [id])
+  items        SaleItem[]
+
+  @@index([tenantId, paidAt])
+  @@index([tenantId, sellerUserId])
+  @@index([customerLeadId])
+}
+
+model SaleItem {
+  id               String  @id @default(cuid())
+  saleId           String
+  productVariantId String
+  quantity         Int
+  /** Preço unitário congelado no momento da venda (snapshot pra histórico imutável). */
+  unitPrice        Decimal @db.Decimal(10, 2)
+  subtotal         Decimal @db.Decimal(10, 2)
+
+  sale           Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+
+  @@index([saleId])
+  @@index([productVariantId])
 }

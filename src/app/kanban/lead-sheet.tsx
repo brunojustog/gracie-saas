@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { getClassesForLead } from "./../aulas/actions";
 import { EnrollmentModal } from "./../matriculas/enrollment-modal";
+import { getSalesForLeadAction } from "./../pdv/actions";
 
 import {
   type LeadDetails,
@@ -187,10 +188,11 @@ function LeadSheetContent({
       </SheetHeader>
 
       <Tabs defaultValue="overview" className="mt-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
           <TabsTrigger value="history">Histórico</TabsTrigger>
           <TabsTrigger value="classes">Aulas</TabsTrigger>
+          <TabsTrigger value="purchases">Compras</TabsTrigger>
           <TabsTrigger value="conversations">Conversas</TabsTrigger>
         </TabsList>
 
@@ -212,6 +214,10 @@ function LeadSheetContent({
 
         <TabsContent value="classes" className="pt-4">
           <ClassesTab leadId={lead.id} leadName={lead.name} />
+        </TabsContent>
+
+        <TabsContent value="purchases" className="pt-4">
+          <PurchasesTab leadId={lead.id} leadName={lead.name} />
         </TabsContent>
 
         <TabsContent value="conversations" className="space-y-2 pt-4">
@@ -642,6 +648,93 @@ function ClassesTab({ leadId, leadName }: { leadId: string; leadName: string }) 
         </li>
       ))}
     </ol>
+  );
+}
+
+type LeadSale = NonNullable<
+  Awaited<ReturnType<typeof getSalesForLeadAction>>
+>[number];
+
+function PurchasesTab({ leadId, leadName }: { leadId: string; leadName: string }) {
+  const [sales, setSales] = useState<LeadSale[] | null>(null);
+
+  useEffect(() => {
+    let aborted = false;
+    getSalesForLeadAction(leadId).then((data) => {
+      if (!aborted) setSales(data ?? []);
+    });
+    return () => {
+      aborted = true;
+    };
+  }, [leadId]);
+
+  if (sales === null) {
+    return (
+      <div className="flex items-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Carregando…
+      </div>
+    );
+  }
+
+  if (sales.length === 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">
+          {leadName} ainda não tem compras registradas.
+        </p>
+        <a
+          href="/pdv"
+          className="inline-block text-sm font-medium text-primary hover:underline"
+        >
+          Abrir PDV →
+        </a>
+      </div>
+    );
+  }
+
+  const totalLifetime = sales.reduce((s, sale) => s + sale.total, 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded border bg-muted/40 p-2 text-xs">
+        <span className="font-medium">Total comprado:</span>{" "}
+        {totalLifetime.toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        })}{" "}
+        em {sales.length} venda{sales.length === 1 ? "" : "s"}
+      </div>
+      <ol className="space-y-2">
+        {sales.map((sale) => (
+          <li key={sale.id} className="rounded border bg-card p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-xs text-muted-foreground">
+                {format(new Date(sale.paidAt), "dd/MM/yyyy HH:mm", {
+                  locale: ptBR,
+                })}{" "}
+                · {sale.paymentMethod.toLowerCase().replace("_", " ")}
+              </div>
+              <span className="text-sm font-semibold">
+                {sale.total.toLocaleString("pt-BR", {
+                  style: "currency",
+                  currency: "BRL",
+                })}
+              </span>
+            </div>
+            <ul className="mt-1 space-y-0.5 text-xs">
+              {sale.items.map((i) => (
+                <li key={i.id}>
+                  {i.quantity}× {i.productVariant.product.name}
+                  {i.productVariant.label !== "Padrão"
+                    ? ` (${i.productVariant.label})`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 

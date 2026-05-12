@@ -21,6 +21,7 @@
     "db:demo-leads": "tsx scripts/seed-demo-leads.ts",
     "db:demo-classes": "tsx scripts/seed-demo-classes.ts",
     "db:demo-enrollments": "tsx scripts/seed-demo-enrollments.ts",
+    "db:demo-products": "tsx scripts/seed-demo-products.ts",
     "db:import-csv": "tsx scripts/import-csv.ts",
     "postinstall": "prisma generate"
   },

@@ -1,4 +1,4 @@
-import { Calendar, GraduationCap, Kanban, Settings } from "lucide-react";
+import { Calendar, GraduationCap, Kanban, Settings, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
 } from "@/lib/period";
 import { signOut } from "@/server/auth";
 import { getDashboardData } from "@/server/analytics";
+import { getPdvKpis } from "@/server/pdv";
 import { requireTenantUser } from "@/server/tenant";
 
 import {
@@ -46,7 +47,10 @@ export default async function DashboardPage({
   const period = customPeriod ?? resolvePreset(preset);
   const currentSelector: PeriodPreset | "custom" = customPeriod ? "custom" : preset;
 
-  const data = await getDashboardData(membership, period);
+  const [data, pdv] = await Promise.all([
+    getDashboardData(membership, period),
+    getPdvKpis(membership, { start: period.from, end: period.to }),
+  ]);
 
   return (
     <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-6">
@@ -81,6 +85,11 @@ export default async function DashboardPage({
           <Link href="/matriculas">
             <Button variant="outline" size="sm">
               <GraduationCap className="mr-1.5 h-4 w-4" /> Matrículas
+            </Button>
+          </Link>
+          <Link href="/pdv">
+            <Button variant="outline" size="sm">
+              <ShoppingBag className="mr-1.5 h-4 w-4" /> Lojinha
             </Button>
           </Link>
           {membership.role === "ADMIN" ? (
@@ -144,6 +153,16 @@ export default async function DashboardPage({
             <PeriodSummary data={data} />
           </Panel>
         )}
+        <Panel
+          title="Lojinha (período)"
+          subtitle={
+            data.isSeller
+              ? "Apenas as suas vendas"
+              : "Receita e ranking de vendas no PDV"
+          }
+        >
+          <PdvSummary kpis={pdv} />
+        </Panel>
       </section>
     </main>
   );
@@ -311,6 +330,60 @@ function SellerRanking({
         ))}
       </tbody>
     </table>
+  );
+}
+
+function PdvSummary({
+  kpis,
+}: {
+  kpis: Awaited<ReturnType<typeof getPdvKpis>>;
+}) {
+  const fmtBRL = (n: number) =>
+    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded border bg-muted/40 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Receita
+          </div>
+          <div className="mt-0.5 text-xl font-semibold">{fmtBRL(kpis.revenue)}</div>
+        </div>
+        <div className="rounded border bg-muted/40 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Vendas
+          </div>
+          <div className="mt-0.5 text-xl font-semibold">{kpis.salesCount}</div>
+        </div>
+      </div>
+
+      {kpis.sellerRanking.length > 0 ? (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b text-[10px] uppercase text-muted-foreground">
+              <th className="px-1 py-1.5 text-left font-medium">Vendedora</th>
+              <th className="px-1 py-1.5 text-right font-medium">Vendas</th>
+              <th className="px-1 py-1.5 text-right font-medium">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {kpis.sellerRanking.map((r) => (
+              <tr key={r.sellerUserId} className="border-b last:border-0">
+                <td className="px-1 py-1.5 font-medium">{r.sellerName}</td>
+                <td className="px-1 py-1.5 text-right">{r.count}</td>
+                <td className="px-1 py-1.5 text-right font-mono">
+                  {fmtBRL(r.total)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Nenhuma venda no período.
+        </p>
+      )}
+    </div>
   );
 }
 
