@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -26,12 +27,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { cancelEnrollment } from "./actions";
+import { cancelEnrollment, reactivateEnrollment, suspendEnrollment } from "./actions";
 
 type Row = {
   id: string;
   enrolledAt: Date | string;
   canceledAt: Date | string | null;
+  suspendedAt: Date | string | null;
+  suspensionReason: string | null;
+  expectedReturnAt: Date | string | null;
   monthlyValue: number | string | { toString(): string };
   paymentMethod: PaymentMethod;
   status: EnrollmentStatus;
@@ -61,8 +65,29 @@ const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   OTHER: "Outro",
 };
 
+const STATUS_LABEL: Record<EnrollmentStatus, string> = {
+  ACTIVE: "ativa",
+  CANCELED: "cancelada",
+  SUSPENDED: "congelada",
+};
+
 export function EnrollmentsTable({ rows }: { rows: Row[] }) {
+  const router = useRouter();
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
+  const [freezeTarget, setFreezeTarget] = useState<Row | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleReactivate = (row: Row) => {
+    startTransition(async () => {
+      const result = await reactivateEnrollment({ enrollmentId: row.id });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Matrícula reativada");
+      router.refresh();
+    });
+  };
 
   if (rows.length === 0) {
     return (
@@ -122,18 +147,51 @@ export function EnrollmentsTable({ rows }: { rows: Row[] }) {
                     {format(new Date(r.enrolledAt), "dd/MM/yyyy")}
                   </TableCell>
                   <TableCell>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[r.status]}`}>
-                      {r.status.toLowerCase()}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[r.status]}`}>
+                        {STATUS_LABEL[r.status]}
+                      </span>
+                      {r.status === "SUSPENDED" && r.expectedReturnAt ? (
+                        <span className="text-[10px] text-muted-foreground" title={r.suspensionReason ?? undefined}>
+                          retorna {format(new Date(r.expectedReturnAt), "dd/MM/yyyy")}
+                        </span>
+                      ) : null}
+                      {r.status === "SUSPENDED" && !r.expectedReturnAt ? (
+                        <span className="text-[10px] text-muted-foreground" title={r.suspensionReason ?? undefined}>
+                          sem prazo de retorno
+                        </span>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {r.status === "ACTIVE" ? (
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFreezeTarget(r)}
+                          disabled={pending}
+                        >
+                          Congelar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setCancelTarget(r)}
+                          disabled={pending}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    ) : null}
+                    {r.status === "SUSPENDED" ? (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setCancelTarget(r)}
+                        onClick={() => handleReactivate(r)}
+                        disabled={pending}
                       >
-                        Cancelar
+                        Reativar
                       </Button>
                     ) : null}
                   </TableCell>
@@ -147,6 +205,10 @@ export function EnrollmentsTable({ rows }: { rows: Row[] }) {
       <CancelDialog
         target={cancelTarget}
         onClose={() => setCancelTarget(null)}
+      />
+      <FreezeDialog
+        target={freezeTarget}
+        onClose={() => setFreezeTarget(null)}
       />
     </>
   );
@@ -235,6 +297,102 @@ function CancelBody({ target, onClose }: { target: Row; onClose: () => void }) {
           disabled={pending}
         >
           {pending ? "Cancelando…" : "Confirmar cancelamento"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+function FreezeDialog({
+  target,
+  onClose,
+}: {
+  target: Row | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {target ? <FreezeBody key={target.id} target={target} onClose={onClose} /> : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
+  // key={target.id} no wrapper força remount entre alvos diferentes, então
+  // useState inicia natural a cada novo congelamento. Sem useEffect.
+  const router = useRouter();
+  const [reason, setReason] = useState("");
+  const [expectedReturnAt, setExpectedReturnAt] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const handleConfirm = () => {
+    if (!reason.trim()) {
+      toast.error("Informe o motivo do congelamento");
+      return;
+    }
+    startTransition(async () => {
+      const result = await suspendEnrollment({
+        enrollmentId: target.id,
+        reason: reason.trim(),
+        expectedReturnAt: expectedReturnAt || null,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Matrícula congelada");
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Congelar matrícula</DialogTitle>
+        <DialogDescription>
+          {target.lead.name} — {target.modality.name} ({target.plan.name})
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="freeze-reason">
+            Motivo <span className="text-red-500">*</span>
+          </Label>
+          <Textarea
+            id="freeze-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder="ex: lesão no joelho, viagem 3 meses, problemas financeiros…"
+            disabled={pending}
+            autoFocus
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="freeze-return">Data prevista de retorno (opcional)</Label>
+          <Input
+            id="freeze-return"
+            type="date"
+            value={expectedReturnAt}
+            onChange={(e) => setExpectedReturnAt(e.target.value)}
+            disabled={pending}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Sem data, fica como &quot;congelado sem prazo&quot;.
+          </p>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={pending}>
+          Voltar
+        </Button>
+        <Button onClick={handleConfirm} disabled={pending}>
+          {pending ? "Congelando…" : "Confirmar congelamento"}
         </Button>
       </DialogFooter>
     </>

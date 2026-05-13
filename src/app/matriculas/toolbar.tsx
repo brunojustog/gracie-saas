@@ -87,7 +87,7 @@ export function EnrollmentsToolbar({ modalities, leads, initial }: Props) {
             <SelectItem value={ALL}>Todos status</SelectItem>
             <SelectItem value="ACTIVE">Ativa</SelectItem>
             <SelectItem value="CANCELED">Cancelada</SelectItem>
-            <SelectItem value="SUSPENDED">Suspensa</SelectItem>
+            <SelectItem value="SUSPENDED">Congelada</SelectItem>
           </SelectContent>
         </Select>
 
