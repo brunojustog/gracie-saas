@@ -31,6 +31,11 @@ const TAG_STYLES: Record<string, string> = {
   "AVULSO":         "bg-pink-100 text-pink-900 dark:bg-pink-900/40 dark:text-pink-200",
   "Aluno Perdido":  "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200",
   "Não Fechou":     "bg-orange-100 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200",
+  "Congelado":      "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  // Alerta — adicionada automaticamente quando lead responde no Chatwoot,
+  // removida quando o agente responde de volta. Ring chamativo pra puxar
+  // o olho no kanban.
+  "Nova resposta":  "bg-emerald-500 text-white ring-2 ring-emerald-300 dark:bg-emerald-600 dark:ring-emerald-700",
 };
 const DEFAULT_TAG_STYLE = "bg-gray-100 text-gray-900 dark:bg-gray-900/40 dark:text-gray-200";
 

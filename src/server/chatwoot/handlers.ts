@@ -188,14 +188,33 @@ export async function handleContactCreated(
   });
 }
 
+/** Tag adicionada ao lead quando ele responde no WhatsApp; removida quando o agente responde de volta. */
+const NEW_REPLY_TAG = "Nova resposta";
+
 export async function handleMessageCreated(
   tenantId: string,
   event: Extract<HandledChatwootEvent, { event: "message_created" }>,
 ): Promise<HandlerResult> {
-  // Apenas mensagens de entrada (do contato) atualizam interação. Mensagens
-  // do agente não significam nova interação do lead.
   const isIncoming = String(event.message_type ?? "0") === "0";
+
+  // Outgoing (mensagem do agente) → não conta como interação do lead, mas
+  // serve pra LIMPAR a tag "Nova resposta" se estiver presente. Assim o
+  // alerta visual no kanban some quando alguém efetivamente atendeu.
   if (!isIncoming) {
+    const sender = event.conversation?.meta?.sender;
+    const contactId = normalizeId(sender?.id);
+    if (contactId) {
+      const lead = await prisma.lead.findFirst({
+        where: { tenantId, chatwootContactId: contactId },
+        select: { id: true, tags: true },
+      });
+      if (lead?.tags.includes(NEW_REPLY_TAG)) {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { tags: lead.tags.filter((t) => t !== NEW_REPLY_TAG) },
+        });
+      }
+    }
     return { kind: "skipped", reason: "outgoing message (do agente)" };
   }
 
@@ -213,22 +232,88 @@ export async function handleMessageCreated(
   // (cobre o caso onde conversation_created não chegou — webhook fora de ordem).
   const existing = await prisma.lead.findFirst({
     where: { tenantId, chatwootContactId: contactId },
-    select: { id: true },
+    select: {
+      id: true,
+      tags: true,
+      stageId: true,
+      stage: { select: { name: true } },
+    },
   });
 
   if (existing) {
-    await prisma.lead.update({
-      where: { id: existing.id },
-      data: { lastInteractionAt: new Date() },
-    });
-    // Lead respondeu → pausa o follow-up (M2..M8 que ainda não dispararam).
-    // Isolado em try/catch pra não bloquear o webhook se algo der errado.
+    const now = new Date();
+
+    // Pausa SÓ a cadência welcome — lembretes de aula experimental e mensagem
+    // pós-aula continuam disparando (são transacionais, não devem ser
+    // canceladas só porque o lead mandou um "ok").
     try {
-      await pauseLeadJobs(existing.id, "lead respondeu via Chatwoot");
+      await pauseLeadJobs(existing.id, "lead respondeu via Chatwoot", { kind: "welcome" });
     } catch (err) {
       console.error("[followup] pauseLeadJobs falhou", err);
     }
-    // Registra no diário — useful pra reconstruir timeline depois.
+
+    // Auto-promove "Novo Lead" → "Potencial" quando a resposta chega na fase
+    // inicial. Se já está em qualquer outro stage, mantém (não regredir nem
+    // pular etapas — o atendente decide o próximo passo).
+    let movedToPotential = false;
+    if (existing.stage.name === "Novo Lead") {
+      const potential = await prisma.stage.findFirst({
+        where: { tenantId, name: "Potencial", active: true },
+        select: { id: true },
+      });
+      if (potential) {
+        await prisma.$transaction(async (tx) => {
+          await tx.lead.update({
+            where: { id: existing.id },
+            data: { stageId: potential.id, lastInteractionAt: now },
+          });
+          await tx.stageHistory.create({
+            data: {
+              leadId: existing.id,
+              fromStageId: existing.stageId,
+              toStageId: potential.id,
+              notes: "Auto-promovido: lead respondeu via Chatwoot",
+            },
+          });
+          await appendLeadNote(
+            {
+              tenantId,
+              leadId: existing.id,
+              kind: "STAGE_CHANGED",
+              body: `Movido de "Novo Lead" → "Potencial" (auto, resposta do lead)`,
+              metadata: {
+                fromStageName: "Novo Lead",
+                toStageName: "Potencial",
+                automatic: true,
+              },
+            },
+            tx,
+          );
+        });
+        movedToPotential = true;
+      }
+    }
+
+    // Se não auto-moveu, só atualiza lastInteractionAt (a transação acima já
+    // cuida disso quando move).
+    if (!movedToPotential) {
+      await prisma.lead.update({
+        where: { id: existing.id },
+        data: { lastInteractionAt: now },
+      });
+    }
+
+    // Tag "Nova resposta" — alerta visual no card. Some quando o agente
+    // responde via Chatwoot (branch outgoing acima) ou quando alguém remove
+    // manualmente no editor de tags.
+    if (!existing.tags.includes(NEW_REPLY_TAG)) {
+      await prisma.lead.update({
+        where: { id: existing.id },
+        data: { tags: [...existing.tags, NEW_REPLY_TAG] },
+      });
+    }
+
+    // Registra no diário.
     await appendLeadNote({
       tenantId,
       leadId: existing.id,
