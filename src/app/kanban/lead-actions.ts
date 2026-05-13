@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { appendLeadNote, listLeadNotes, type LeadNoteFilter, type LeadNoteRow } from "@/server/lead-notes";
 import { findLeadInScope, scopedLeadWhere } from "@/server/leads";
 import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/messaging";
 import { getLeadFollowUpStatus, type FollowUpStatus } from "@/server/messaging/status";
@@ -248,7 +249,7 @@ export async function toggleLeadFollowUp(input: unknown): Promise<ActionResult> 
   const parsed = toggleFollowUpSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
-  const { membership } = await requireTenantUser();
+  const { tenant, user, membership } = await requireTenantUser();
   const lead = await findLeadInScope(membership, parsed.data.leadId);
   if (!lead) return { ok: false, error: "lead não encontrado ou sem permissão" };
 
@@ -261,6 +262,16 @@ export async function toggleLeadFollowUp(input: unknown): Promise<ActionResult> 
     await pauseLeadJobs(lead.id, "follow-up desligado manualmente no lead");
   }
 
+  await appendLeadNote({
+    tenantId: tenant.id,
+    leadId: lead.id,
+    authorId: user.id,
+    kind: parsed.data.enabled ? "FOLLOWUP_RESUMED" : "FOLLOWUP_PAUSED",
+    body: parsed.data.enabled
+      ? "Follow-up automático reativado"
+      : "Follow-up automático pausado neste lead",
+  });
+
   revalidatePath("/kanban");
   return { ok: true };
 }
@@ -270,6 +281,43 @@ export async function getLeadFollowUp(leadId: string): Promise<FollowUpStatus | 
   const lead = await findLeadInScope(membership, leadId);
   if (!lead) return null;
   return getLeadFollowUpStatus(leadId);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Diário do lead (LeadNote)
+// ──────────────────────────────────────────────────────────────────────────
+
+const addNoteSchema = z.object({
+  leadId: z.string().min(1),
+  body: z.string().min(1).max(5000),
+});
+
+export async function addLeadNote(input: unknown): Promise<ActionResult> {
+  const parsed = addNoteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const lead = await findLeadInScope(membership, parsed.data.leadId);
+  if (!lead) return { ok: false, error: "lead não encontrado ou sem permissão" };
+
+  await appendLeadNote({
+    tenantId: tenant.id,
+    leadId: lead.id,
+    authorId: user.id,
+    kind: "MANUAL",
+    body: parsed.data.body.trim(),
+  });
+
+  revalidatePath("/kanban");
+  return { ok: true };
+}
+
+export async function getLeadNotes(
+  leadId: string,
+  filter: LeadNoteFilter = "all",
+): Promise<LeadNoteRow[] | null> {
+  const { membership } = await requireTenantUser();
+  return listLeadNotes(membership, leadId, filter);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -385,6 +433,17 @@ export async function createManualLead(input: unknown): Promise<CreateLeadResult
         notes: "Lead criado manualmente",
       },
     });
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: created.id,
+        authorId: membership.userId,
+        kind: "LEAD_CREATED",
+        body: `Lead criado manualmente — origem: ${parsed.data.origin.toLowerCase()}`,
+        metadata: { origin: parsed.data.origin },
+      },
+      tx,
+    );
     return created;
   });
 

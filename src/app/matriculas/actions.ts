@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { findEnrollmentInScope } from "@/server/enrollments";
+import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
 import { requireTenantUser } from "@/server/tenant";
 
@@ -108,6 +109,23 @@ export async function createEnrollment(input: unknown): Promise<ActionResult> {
       });
     }
 
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: lead.id,
+        authorId: user.id,
+        kind: "ENROLLMENT_CREATED",
+        body: `Matrícula criada — R$ ${parsed.data.monthlyValue.toFixed(2)}/mês via ${parsed.data.paymentMethod.toLowerCase()}`,
+        metadata: {
+          enrollmentId: enrollment.id,
+          modalityId: parsed.data.modalityId,
+          planId: parsed.data.planId,
+          monthlyValue: parsed.data.monthlyValue,
+        },
+      },
+      tx,
+    );
+
     return enrollment;
   });
 
@@ -149,6 +167,20 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
           : enrollment.observations,
       },
     });
+
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "ENROLLMENT_CANCELED",
+        body: parsed.data.reason
+          ? `Matrícula cancelada — ${parsed.data.reason}`
+          : "Matrícula cancelada",
+        metadata: { enrollmentId: enrollment.id, reason: parsed.data.reason ?? null },
+      },
+      tx,
+    );
 
     if (parsed.data.moveToLost) {
       // v1.1: existe um único stage isLost ("Perda") por tenant. Tag
@@ -206,7 +238,7 @@ export async function suspendEnrollment(input: unknown): Promise<ActionResult> {
   const parsed = suspendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
-  const { membership } = await requireTenantUser();
+  const { tenant, user, membership } = await requireTenantUser();
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
   if (enrollment.status !== "ACTIVE") {
@@ -245,6 +277,25 @@ export async function suspendEnrollment(input: unknown): Promise<ActionResult> {
         data: { tags: [...lead.tags, SUSPENDED_TAG] },
       });
     }
+
+    const returnLabel = expectedReturn
+      ? ` (retorno previsto: ${expectedReturn.toLocaleDateString("pt-BR")})`
+      : " (sem prazo de retorno)";
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "ENROLLMENT_SUSPENDED",
+        body: `Matrícula congelada — ${parsed.data.reason}${returnLabel}`,
+        metadata: {
+          enrollmentId: enrollment.id,
+          reason: parsed.data.reason,
+          expectedReturnAt: expectedReturn?.toISOString() ?? null,
+        },
+      },
+      tx,
+    );
   });
 
   revalidatePath("/matriculas");
@@ -264,7 +315,7 @@ export async function reactivateEnrollment(input: unknown): Promise<ActionResult
   const parsed = reactivateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
-  const { membership } = await requireTenantUser();
+  const { tenant, user, membership } = await requireTenantUser();
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
   if (enrollment.status !== "SUSPENDED") {
@@ -299,6 +350,18 @@ export async function reactivateEnrollment(input: unknown): Promise<ActionResult
         data: { tags: lead.tags.filter((t) => t !== SUSPENDED_TAG) },
       });
     }
+
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "ENROLLMENT_REACTIVATED",
+        body: "Matrícula reativada",
+        metadata: { enrollmentId: enrollment.id },
+      },
+      tx,
+    );
   });
 
   revalidatePath("/matriculas");

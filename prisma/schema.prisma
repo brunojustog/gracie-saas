@@ -35,6 +35,7 @@ model User {
   assignedLeads     Lead[]         @relation("AssignedSeller")
   movementsHistory  StageHistory[]
   salesAsSeller     Sale[]         @relation("SaleSeller")
+  authoredLeadNotes LeadNote[]
 }
 
 model Account {
@@ -123,6 +124,7 @@ model Tenant {
   messageJobs         MessageJob[]
   products            Product[]
   sales               Sale[]
+  leadNotes           LeadNote[]
 }
 
 enum Role {
@@ -309,6 +311,7 @@ model Lead {
   enrollment          Enrollment?
   messageJobs         MessageJob[]
   sales               Sale[]
+  leadNotes           LeadNote[]
 
   @@index([tenantId])
   @@index([tenantId, stageId])
@@ -330,6 +333,68 @@ model StageHistory {
   changedBy User? @relation(fields: [changedById], references: [id])
 
   @@index([leadId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Histórico de observações + eventos (v1.1-L) — "diário" do lead/aluno
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tipos de entrada no diário. `MANUAL` = observação escrita pelo
+ * atendente; o resto são eventos automáticos plugados nas server actions
+ * relevantes (matricula, follow-up, aulas, chatwoot, stage change).
+ *
+ * Adicionar novos kinds aqui é seguro — render padrão (kind + body)
+ * funciona pra qualquer um; UI pode customizar ícone/cor opcionalmente.
+ */
+enum LeadNoteKind {
+  MANUAL
+  STAGE_CHANGED
+  ENROLLMENT_CREATED
+  ENROLLMENT_SUSPENDED
+  ENROLLMENT_REACTIVATED
+  ENROLLMENT_CANCELED
+  CLASS_SCHEDULED
+  CLASS_ATTENDED
+  CLASS_NO_SHOW
+  CLASS_RESCHEDULED
+  CLASS_CANCELED
+  WHATSAPP_REPLY
+  FOLLOWUP_PAUSED
+  FOLLOWUP_RESUMED
+  LEAD_CREATED
+}
+
+/**
+ * 1 row por entrada no diário do lead. Cronologia reversa na UI.
+ *
+ * `authorId` é null para eventos do sistema (ex: lead respondeu via
+ * webhook do Chatwoot — não tem usuário humano por trás).
+ *
+ * `body` é o texto renderizado para exibição direta. Pode incluir o nome
+ * do autor original ("Bruno congelou a matrícula") ou só o fato seco
+ * ("Lead respondeu no WhatsApp") — o conteúdo é congelado no momento do
+ * evento, não re-renderiza se o nome mudar depois.
+ *
+ * `metadata` é JSON opcional com dados estruturados que a UI pode usar
+ * pra detalhes (ex: { fromStage: "Novo Lead", toStage: "Potencial" }).
+ */
+model LeadNote {
+  id        String       @id @default(cuid())
+  tenantId  String
+  leadId    String
+  authorId  String?
+  kind      LeadNoteKind
+  body      String       @db.Text
+  metadata  Json?
+  createdAt DateTime     @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author User?  @relation(fields: [authorId], references: [id])
+
+  @@index([leadId, createdAt])
+  @@index([tenantId, kind])
 }
 
 // ──────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
 import { requireTenantUser } from "@/server/tenant";
 
@@ -44,9 +45,15 @@ export async function moveLeadToStage(input: unknown): Promise<MoveResult> {
   // Gracie poderia mover lead pra um stageId de outro tenant via tampering.
   const stage = await prisma.stage.findFirst({
     where: { id: toStageId, tenantId: tenant.id, active: true },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (!stage) return { ok: false, error: "stage de destino inválido" };
+
+  // Pra montar o body do note "X → Y" precisamos do nome do stage origem.
+  const fromStage = await prisma.stage.findUnique({
+    where: { id: lead.stageId },
+    select: { name: true },
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.lead.update({
@@ -61,6 +68,17 @@ export async function moveLeadToStage(input: unknown): Promise<MoveResult> {
         changedById: user.id,
       },
     });
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId,
+        authorId: user.id,
+        kind: "STAGE_CHANGED",
+        body: `Movido de "${fromStage?.name ?? "?"}" → "${stage.name}"`,
+        metadata: { fromStageId: lead.stageId, toStageId, fromStageName: fromStage?.name ?? null, toStageName: stage.name },
+      },
+      tx,
+    );
   });
 
   revalidatePath("/kanban");

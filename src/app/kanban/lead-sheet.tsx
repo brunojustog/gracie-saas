@@ -4,15 +4,27 @@ import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   AlertTriangle,
+  ArrowRightLeft,
+  CalendarCheck,
+  CalendarClock,
+  CalendarX,
   CheckCheck,
   Circle,
   Clock,
   ExternalLink,
+  GraduationCap,
   Loader2,
+  MessageCircle,
+  Pause,
+  PencilLine,
+  Play,
+  Snowflake,
   SkipForward,
+  Sparkles,
+  UserPlus,
   XCircle,
 } from "lucide-react";
-import type { LeadOrigin, MessageJobStatus } from "@prisma/client";
+import type { LeadNoteKind, LeadOrigin, MessageJobStatus } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -60,9 +72,11 @@ import { getSalesForLeadAction } from "./../pdv/actions";
 
 import {
   type LeadDetails,
+  addLeadNote,
   assignSeller,
   getLeadDetails,
   getLeadFollowUp,
+  getLeadNotes,
   setLeadOrigin,
   setLeadTags,
   setModality,
@@ -276,7 +290,7 @@ function LeadSheetContent({
         </TabsContent>
 
         <TabsContent value="history" className="pt-4">
-          <HistoryTab lead={lead} />
+          <HistoryTab leadId={lead.id} />
         </TabsContent>
 
         <TabsContent value="classes" className="pt-4">
@@ -1456,41 +1470,183 @@ function PurchasesTab({ leadId, leadName }: { leadId: string; leadName: string }
   );
 }
 
-function HistoryTab({ lead }: { lead: LeadDetails }) {
-  if (lead.history.length === 0) {
+// ──────────────────────────────────────────────────────────────────────────
+// Diário (aba "Histórico")
+// ──────────────────────────────────────────────────────────────────────────
+
+type LeadNoteView = NonNullable<Awaited<ReturnType<typeof getLeadNotes>>>[number];
+
+const NOTE_ICON: Record<LeadNoteKind, typeof CheckCheck> = {
+  MANUAL: PencilLine,
+  STAGE_CHANGED: ArrowRightLeft,
+  ENROLLMENT_CREATED: GraduationCap,
+  ENROLLMENT_SUSPENDED: Snowflake,
+  ENROLLMENT_REACTIVATED: Play,
+  ENROLLMENT_CANCELED: XCircle,
+  CLASS_SCHEDULED: CalendarClock,
+  CLASS_ATTENDED: CalendarCheck,
+  CLASS_NO_SHOW: CalendarX,
+  CLASS_RESCHEDULED: CalendarClock,
+  CLASS_CANCELED: CalendarX,
+  WHATSAPP_REPLY: MessageCircle,
+  FOLLOWUP_PAUSED: Pause,
+  FOLLOWUP_RESUMED: Play,
+  LEAD_CREATED: UserPlus,
+};
+
+const NOTE_TONE: Record<LeadNoteKind, string> = {
+  MANUAL: "text-violet-600 dark:text-violet-400",
+  STAGE_CHANGED: "text-sky-600 dark:text-sky-400",
+  ENROLLMENT_CREATED: "text-emerald-600 dark:text-emerald-400",
+  ENROLLMENT_SUSPENDED: "text-amber-600 dark:text-amber-400",
+  ENROLLMENT_REACTIVATED: "text-emerald-600 dark:text-emerald-400",
+  ENROLLMENT_CANCELED: "text-red-600 dark:text-red-400",
+  CLASS_SCHEDULED: "text-sky-600 dark:text-sky-400",
+  CLASS_ATTENDED: "text-emerald-600 dark:text-emerald-400",
+  CLASS_NO_SHOW: "text-red-600 dark:text-red-400",
+  CLASS_RESCHEDULED: "text-amber-600 dark:text-amber-400",
+  CLASS_CANCELED: "text-zinc-500",
+  WHATSAPP_REPLY: "text-emerald-600 dark:text-emerald-400",
+  FOLLOWUP_PAUSED: "text-zinc-500",
+  FOLLOWUP_RESUMED: "text-sky-600 dark:text-sky-400",
+  LEAD_CREATED: "text-zinc-500",
+};
+
+function HistoryTab({ leadId }: { leadId: string }) {
+  // refreshKey força remount da lista quando uma observação nova é
+  // adicionada — sem setState-dentro-de-effect (anti-pattern do
+  // react-hooks/set-state-in-effect).
+  const [filter, setFilter] = useState<"all" | "manual">("all");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [body, setBody] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const handleAdd = () => {
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    startTransition(async () => {
+      const result = await addLeadNote({ leadId, body: trimmed });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setBody("");
+      toast.success("Observação salva");
+      setRefreshKey((k) => k + 1);
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2 rounded-lg border bg-card p-3">
+        <Label htmlFor="new-note" className="text-xs font-medium">
+          Nova observação
+        </Label>
+        <Textarea
+          id="new-note"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={3}
+          placeholder="ex: ligou perguntando sobre horário noturno · gosto pelo professor X · …"
+          disabled={pending}
+        />
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            onClick={handleAdd}
+            disabled={pending || body.trim().length === 0}
+          >
+            {pending ? "Salvando…" : "Adicionar"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Diário
+        </h4>
+        <div className="inline-flex rounded-md border bg-muted/40 p-0.5 text-xs">
+          <button
+            type="button"
+            className={cn(
+              "rounded px-2 py-0.5 transition",
+              filter === "all" ? "bg-card shadow-sm" : "text-muted-foreground",
+            )}
+            onClick={() => setFilter("all")}
+          >
+            Tudo
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded px-2 py-0.5 transition",
+              filter === "manual" ? "bg-card shadow-sm" : "text-muted-foreground",
+            )}
+            onClick={() => setFilter("manual")}
+          >
+            Só observações
+          </button>
+        </div>
+      </div>
+
+      <NoteList key={`${leadId}:${filter}:${refreshKey}`} leadId={leadId} filter={filter} />
+    </div>
+  );
+}
+
+function NoteList({
+  leadId,
+  filter,
+}: {
+  leadId: string;
+  filter: "all" | "manual";
+}) {
+  const [notes, setNotes] = useState<LeadNoteView[] | null>(null);
+
+  useEffect(() => {
+    let aborted = false;
+    getLeadNotes(leadId, filter).then((data) => {
+      if (!aborted) setNotes(data ?? []);
+    });
+    return () => {
+      aborted = true;
+    };
+  }, [leadId, filter]);
+
+  if (notes === null) {
+    return (
+      <div className="flex items-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Carregando…
+      </div>
+    );
+  }
+
+  if (notes.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Sem movimentações registradas.
+        {filter === "manual"
+          ? "Nenhuma observação manual registrada ainda."
+          : "Sem registros no diário ainda."}
       </p>
     );
   }
 
   return (
-    <ol className="space-y-3">
-      {lead.history.map((h) => {
-        const who = h.changedBy?.name ?? h.changedBy?.email ?? "sistema";
+    <ol className="space-y-2">
+      {notes.map((n) => {
+        const Icon = NOTE_ICON[n.kind] ?? Sparkles;
+        const who = n.author?.name ?? n.author?.email ?? "sistema";
         return (
-          <li key={h.id} className="flex gap-3">
-            <span
-              className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-              style={{ background: h.toStage.color }}
-              aria-hidden
-            />
+          <li
+            key={n.id}
+            className="flex gap-3 rounded border bg-card p-2.5"
+          >
+            <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", NOTE_TONE[n.kind])} />
             <div className="min-w-0 flex-1">
-              <div className="text-sm">
-                <span className="font-medium">{h.toStage.name}</span>
-                <span className="text-muted-foreground"> · {who}</span>
+              <div className="whitespace-pre-wrap text-sm">{n.body}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {who} · {format(new Date(n.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
               </div>
-              <div className="text-xs text-muted-foreground">
-                {format(new Date(h.changedAt), "dd/MM/yyyy 'às' HH:mm", {
-                  locale: ptBR,
-                })}
-              </div>
-              {h.notes ? (
-                <div className="mt-1 text-xs italic text-muted-foreground">
-                  {h.notes}
-                </div>
-              ) : null}
             </div>
           </li>
         );

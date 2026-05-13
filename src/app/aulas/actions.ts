@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { findClassInScope } from "@/server/experimental-classes";
+import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
 import {
   cancelAppointmentJobs,
@@ -33,14 +34,14 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
   const parsed = scheduleSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
-  const { tenant, membership } = await requireTenantUser();
+  const { tenant, user, membership } = await requireTenantUser();
 
   const lead = await findLeadInScope(membership, parsed.data.leadId);
   if (!lead) return { ok: false, error: "lead não encontrado ou sem permissão" };
 
   const modality = await prisma.modality.findFirst({
     where: { id: parsed.data.modalityId, tenantId: tenant.id, active: true },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (!modality) return { ok: false, error: "modalidade inválida" };
 
@@ -60,6 +61,15 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
   await prisma.lead.update({
     where: { id: lead.id },
     data: { lastInteractionAt: new Date() },
+  });
+
+  await appendLeadNote({
+    tenantId: tenant.id,
+    leadId: lead.id,
+    authorId: user.id,
+    kind: "CLASS_SCHEDULED",
+    body: `Aula experimental agendada — ${modality.name} em ${scheduledFor.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`,
+    metadata: { classId: created.id, modalityId: modality.id, scheduledFor: scheduledFor.toISOString() },
   });
 
   // Enfileira os lembretes de agendamento (confirm + D-1 + D-0 + 1h-before).
@@ -92,7 +102,7 @@ export async function updateClassStatus(input: unknown): Promise<ActionResult> {
   const parsed = updateStatusSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
-  const { membership } = await requireTenantUser();
+  const { tenant, user, membership } = await requireTenantUser();
   const cls = await findClassInScope(membership, parsed.data.classId);
   if (!cls) return { ok: false, error: "aula não encontrada ou sem permissão" };
 
@@ -103,6 +113,30 @@ export async function updateClassStatus(input: unknown): Promise<ActionResult> {
       attendedAt: parsed.data.status === "ATTENDED" ? new Date() : null,
     },
   });
+
+  const NOTE_KIND_BY_STATUS = {
+    ATTENDED: "CLASS_ATTENDED",
+    NO_SHOW: "CLASS_NO_SHOW",
+    CANCELED: "CLASS_CANCELED",
+    CONFIRMED: null, // CONFIRMED não vira nota — é só um passo intermediário
+  } as const;
+  const NOTE_LABEL: Record<typeof parsed.data.status, string> = {
+    ATTENDED: "Aula experimental: aluno compareceu",
+    NO_SHOW: "Aula experimental: no-show (não compareceu)",
+    CANCELED: "Aula experimental cancelada",
+    CONFIRMED: "Aula experimental confirmada",
+  };
+  const kind = NOTE_KIND_BY_STATUS[parsed.data.status];
+  if (kind) {
+    await appendLeadNote({
+      tenantId: tenant.id,
+      leadId: cls.leadId,
+      authorId: user.id,
+      kind,
+      body: NOTE_LABEL[parsed.data.status],
+      metadata: { classId: cls.id, scheduledFor: cls.scheduledDate.toISOString() },
+    });
+  }
 
   // Triggers de mensagens conforme o novo status:
   //   ATTENDED  → mensagem pós-aula imediata
@@ -147,7 +181,7 @@ export async function rescheduleClass(input: unknown): Promise<ActionResult> {
   const parsed = rescheduleSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
-  const { membership } = await requireTenantUser();
+  const { tenant, user, membership } = await requireTenantUser();
   const cls = await findClassInScope(membership, parsed.data.classId);
   if (!cls) return { ok: false, error: "aula não encontrada ou sem permissão" };
 
@@ -157,6 +191,19 @@ export async function rescheduleClass(input: unknown): Promise<ActionResult> {
     data: {
       scheduledDate: newScheduledFor,
       status: "RESCHEDULED",
+    },
+  });
+
+  await appendLeadNote({
+    tenantId: tenant.id,
+    leadId: cls.leadId,
+    authorId: user.id,
+    kind: "CLASS_RESCHEDULED",
+    body: `Aula experimental reagendada — novo horário: ${newScheduledFor.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`,
+    metadata: {
+      classId: cls.id,
+      oldScheduledFor: cls.scheduledDate.toISOString(),
+      newScheduledFor: newScheduledFor.toISOString(),
     },
   });
 

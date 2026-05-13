@@ -11,6 +11,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { appendLeadNote } from "@/server/lead-notes";
 import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/messaging";
 
 import {
@@ -227,6 +228,13 @@ export async function handleMessageCreated(
     } catch (err) {
       console.error("[followup] pauseLeadJobs falhou", err);
     }
+    // Registra no diário — useful pra reconstruir timeline depois.
+    await appendLeadNote({
+      tenantId,
+      leadId: existing.id,
+      kind: "WHATSAPP_REPLY",
+      body: "Lead respondeu no WhatsApp",
+    });
     return { kind: "updated", leadId: existing.id };
   }
 
