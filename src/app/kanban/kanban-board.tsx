@@ -11,10 +11,12 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { EnrollmentModal } from "../matriculas/enrollment-modal";
@@ -22,6 +24,7 @@ import { EnrollmentModal } from "../matriculas/enrollment-modal";
 import { moveLeadToStage } from "./actions";
 import { LeadCard } from "./lead-card";
 import { LeadSheet } from "./lead-sheet";
+import { NewLeadModal } from "./new-lead-modal";
 
 type Lead = React.ComponentProps<typeof LeadCard>["lead"] & {
   stageId: string;
@@ -49,6 +52,11 @@ type Props = {
   sellers: Seller[];
   /** ADMIN/MANAGER pode reatribuir leads e filtrar por vendedora. */
   canReassign: boolean;
+  /** UserId do usuário logado — usado como default sellerId quando SELLER cria lead manual. */
+  currentUserId: string;
+  isSeller: boolean;
+  /** Sellers visíveis no <NewLeadModal>: ADMIN/MANAGER vê todos, SELLER só si mesma. */
+  sellerOptionsForNewLead: Seller[];
 };
 
 export function KanbanBoard({
@@ -57,6 +65,9 @@ export function KanbanBoard({
   modalities,
   sellers,
   canReassign,
+  currentUserId,
+  isSeller,
+  sellerOptionsForNewLead,
 }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
@@ -67,6 +78,7 @@ export function KanbanBoard({
     name: string;
     modalityId: string | null;
   } | null>(null);
+  const [newLeadOpen, setNewLeadOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   const sensors = useSensors(
@@ -138,6 +150,13 @@ export function KanbanBoard({
 
   return (
     <>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => setNewLeadOpen(true)}>
+          <Plus className="mr-1 h-4 w-4" />
+          Novo lead
+        </Button>
+      </div>
+
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-4">
           {stages.map((stage) => (
@@ -174,6 +193,19 @@ export function KanbanBoard({
           setEnrollLead(null);
           // Server action moveu o lead pro stage Matriculado e revalidou
           // o path. Força refresh pra trazer o estado novo.
+          router.refresh();
+        }}
+      />
+
+      <NewLeadModal
+        open={newLeadOpen}
+        onOpenChange={setNewLeadOpen}
+        modalities={modalities}
+        sellers={sellerOptionsForNewLead}
+        defaultSellerId={isSeller ? currentUserId : null}
+        onCreated={() => {
+          // Lead criado no servidor (revalidatePath já chamado) — refresh
+          // pra trazer o card novo pro board.
           router.refresh();
         }}
       />

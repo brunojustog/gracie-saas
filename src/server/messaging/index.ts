@@ -66,10 +66,11 @@ export async function enqueueWelcomeSequence(
 ): Promise<EnqueueResult> {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, tenantId: true, phone: true },
+    select: { id: true, tenantId: true, phone: true, followUpEnabled: true },
   });
   if (!lead) return { kind: "skipped", reason: "lead não encontrado" };
   if (!lead.phone) return { kind: "skipped", reason: "lead sem telefone" };
+  if (!lead.followUpEnabled) return { kind: "skipped", reason: "follow-up desligado no lead" };
 
   // Welcome não tem experimentalClassId → unique constraint não impede 2x.
   // Checagem manual antes de inserir.
@@ -106,10 +107,11 @@ export async function enqueueAppointmentReminders(params: {
 
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, tenantId: true, phone: true },
+    select: { id: true, tenantId: true, phone: true, followUpEnabled: true },
   });
   if (!lead) return { created: 0, skippedSlots: 0 };
   if (!lead.phone) return { created: 0, skippedSlots: 4 };
+  if (!lead.followUpEnabled) return { created: 0, skippedSlots: 4 };
 
   const sched = computeAppointmentSchedule(scheduledFor, now);
 
@@ -159,9 +161,10 @@ export async function enqueueNoShowSequence(params: {
   const { leadId, classId, scheduledFor } = params;
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, tenantId: true, phone: true },
+    select: { id: true, tenantId: true, phone: true, followUpEnabled: true },
   });
   if (!lead || !lead.phone) return { created: 0 };
+  if (!lead.followUpEnabled) return { created: 0 };
 
   const { noShow1, noShow2, noShow3 } = computeNoShowSchedule(scheduledFor);
   const result = await prisma.messageJob.createMany({
@@ -194,10 +197,11 @@ export async function enqueueImmediate(params: {
   const { leadId, classId, templateKey, delayMs = 0 } = params;
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, tenantId: true, phone: true },
+    select: { id: true, tenantId: true, phone: true, followUpEnabled: true },
   });
   if (!lead) return { kind: "skipped", reason: "lead não encontrado" };
   if (!lead.phone) return { kind: "skipped", reason: "lead sem telefone" };
+  if (!lead.followUpEnabled) return { kind: "skipped", reason: "follow-up desligado no lead" };
 
   // Idempotência sem unique (quando classId é null): checagem manual.
   if (!classId) {
@@ -284,6 +288,7 @@ export async function processDueJobs(now: Date = new Date()): Promise<ProcessSum
           name: true,
           phone: true,
           tenantId: true,
+          followUpEnabled: true,
           stage: { select: { name: true } },
           assignedSeller: { select: { name: true } },
         },
@@ -318,7 +323,7 @@ export async function processDueJobs(now: Date = new Date()): Promise<ProcessSum
 }
 
 type JobWithIncludes = Awaited<ReturnType<typeof prisma.messageJob.findMany>>[number] & {
-  lead: { id: string; name: string; phone: string | null; tenantId: string; stage: { name: string }; assignedSeller: { name: string | null } | null };
+  lead: { id: string; name: string; phone: string | null; tenantId: string; followUpEnabled: boolean; stage: { name: string }; assignedSeller: { name: string | null } | null };
   tenant: { id: string; name: string; wuzapiUrl: string | null; wuzapiToken: string | null; followUpEnabled: boolean };
   experimentalClass: { id: string; scheduledDate: Date; status: string; modality: { name: string } } | null;
 };
@@ -332,6 +337,13 @@ async function processSingleJob(job: JobWithIncludes, now: Date): Promise<Outcom
     await prisma.messageJob.update({
       where: { id: job.id },
       data: { status: "SKIPPED", errorMessage: "tenant.followUpEnabled=false" },
+    });
+    return "skipped";
+  }
+  if (!lead.followUpEnabled) {
+    await prisma.messageJob.update({
+      where: { id: job.id },
+      data: { status: "SKIPPED", errorMessage: "lead.followUpEnabled=false" },
     });
     return "skipped";
   }

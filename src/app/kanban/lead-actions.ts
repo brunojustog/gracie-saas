@@ -1,10 +1,13 @@
 "use server";
 
+import { LeadOrigin } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { findLeadInScope, scopedLeadWhere } from "@/server/leads";
+import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/messaging";
+import { getLeadFollowUpStatus, type FollowUpStatus } from "@/server/messaging/status";
 import { roleAtLeast } from "@/server/rbac";
 import { requireTenantUser } from "@/server/tenant";
 
@@ -36,6 +39,7 @@ export async function getLeadDetails(leadId: string) {
       notes: true,
       tags: true,
       potentialValue: true,
+      followUpEnabled: true,
       chatwootConversationId: true,
       chatwootContactId: true,
       firstInteractionAt: true,
@@ -48,6 +52,10 @@ export async function getLeadDetails(leadId: string) {
           id: true,
           status: true,
           enrolledAt: true,
+          canceledAt: true,
+          suspendedAt: true,
+          suspensionReason: true,
+          expectedReturnAt: true,
           monthlyValue: true,
           modality: { select: { id: true, name: true } },
           plan: { select: { id: true, name: true } },
@@ -213,4 +221,185 @@ export async function setModality(input: unknown): Promise<ActionResult> {
 
   revalidatePath("/kanban");
   return { ok: true };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Follow-up: toggle por lead + leitura da timeline
+// ──────────────────────────────────────────────────────────────────────────
+
+const toggleFollowUpSchema = z.object({
+  leadId: z.string().min(1),
+  enabled: z.boolean(),
+});
+
+/**
+ * Liga/desliga a cadência automática neste lead.
+ *
+ * Ao desligar, marca todos os PENDING como SKIPPED (motivo:
+ * "desligado manualmente"). Isso impede que o cron próximo dispare M3, M4,
+ * etc. mesmo que o tenant inteiro esteja ligado.
+ *
+ * Ao religar, NÃO recria jobs automaticamente — o atendente pode usar o
+ * card pra forçar uma sequência se quiser. A regra é: desligar é defensivo
+ * (não derruba histórico já SENT), religar volta ao default (cadências
+ * futuras passam a ser permitidas).
+ */
+export async function toggleLeadFollowUp(input: unknown): Promise<ActionResult> {
+  const parsed = toggleFollowUpSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { membership } = await requireTenantUser();
+  const lead = await findLeadInScope(membership, parsed.data.leadId);
+  if (!lead) return { ok: false, error: "lead não encontrado ou sem permissão" };
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { followUpEnabled: parsed.data.enabled },
+  });
+
+  if (!parsed.data.enabled) {
+    await pauseLeadJobs(lead.id, "follow-up desligado manualmente no lead");
+  }
+
+  revalidatePath("/kanban");
+  return { ok: true };
+}
+
+export async function getLeadFollowUp(leadId: string): Promise<FollowUpStatus | null> {
+  const { membership } = await requireTenantUser();
+  const lead = await findLeadInScope(membership, leadId);
+  if (!lead) return null;
+  return getLeadFollowUpStatus(leadId);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Origem do lead (campo livre, editável depois do cadastro)
+// ──────────────────────────────────────────────────────────────────────────
+
+const setOriginSchema = z.object({
+  leadId: z.string().min(1),
+  origin: z.enum(LeadOrigin),
+});
+
+export async function setLeadOrigin(input: unknown): Promise<ActionResult> {
+  const parsed = setOriginSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { membership } = await requireTenantUser();
+  const lead = await findLeadInScope(membership, parsed.data.leadId);
+  if (!lead) return { ok: false, error: "lead não encontrado ou sem permissão" };
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { origin: parsed.data.origin },
+  });
+
+  revalidatePath("/kanban");
+  return { ok: true };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Criar lead manualmente (walk-in, indicação no balcão, lead que não passou
+// pelo Chatwoot, etc).
+// ──────────────────────────────────────────────────────────────────────────
+
+const createLeadSchema = z.object({
+  name: z.string().min(1).max(200),
+  phone: z.string().max(50).nullable().optional(),
+  email: z.string().email().max(200).nullable().or(z.literal("")).optional(),
+  origin: z.enum(LeadOrigin),
+  modalityId: z.string().min(1).nullable().optional(),
+  assignedSellerId: z.string().min(1).nullable().optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
+export type CreateLeadResult =
+  | { ok: true; leadId: string; welcomeEnqueued: boolean }
+  | { ok: false; error: string };
+
+export async function createManualLead(input: unknown): Promise<CreateLeadResult> {
+  const parsed = createLeadSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, membership } = await requireTenantUser();
+
+  // Validações de FK dentro do tenant (defesa contra IDs forjados).
+  if (parsed.data.modalityId) {
+    const m = await prisma.modality.findFirst({
+      where: { id: parsed.data.modalityId, tenantId: tenant.id, active: true },
+      select: { id: true },
+    });
+    if (!m) return { ok: false, error: "modalidade inválida" };
+  }
+  if (parsed.data.assignedSellerId) {
+    if (!roleAtLeast(membership.role, "MANAGER")) {
+      // SELLER só pode atribuir a si mesma.
+      if (parsed.data.assignedSellerId !== membership.userId) {
+        return { ok: false, error: "vendedora só pode criar leads pra si mesma" };
+      }
+    }
+    const member = await prisma.tenantUser.findUnique({
+      where: {
+        tenantId_userId: { tenantId: tenant.id, userId: parsed.data.assignedSellerId },
+      },
+    });
+    if (!member?.active) return { ok: false, error: "vendedor inválido ou inativo" };
+  }
+
+  // Stage inicial = primeiro stage ativo por order ASC (mesma lógica do
+  // webhook do Chatwoot — ver handlers.ts:getInitialStageId).
+  const initialStage = await prisma.stage.findFirst({
+    where: { tenantId: tenant.id, active: true },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+  if (!initialStage) {
+    return {
+      ok: false,
+      error: "tenant sem stages configurados — rode db:seed ou crie em /settings/estagios",
+    };
+  }
+
+  const now = new Date();
+  const lead = await prisma.$transaction(async (tx) => {
+    const created = await tx.lead.create({
+      data: {
+        tenantId: tenant.id,
+        stageId: initialStage.id,
+        name: parsed.data.name,
+        phone: parsed.data.phone || null,
+        email: parsed.data.email || null,
+        origin: parsed.data.origin,
+        modalityId: parsed.data.modalityId || null,
+        assignedSellerId: parsed.data.assignedSellerId || null,
+        notes: parsed.data.notes || null,
+        firstInteractionAt: now,
+        lastInteractionAt: now,
+      },
+    });
+    await tx.stageHistory.create({
+      data: {
+        leadId: created.id,
+        toStageId: initialStage.id,
+        changedById: membership.userId,
+        notes: "Lead criado manualmente",
+      },
+    });
+    return created;
+  });
+
+  // Enfileira welcome se tiver telefone — mesma regra do Chatwoot. Isolado
+  // em try/catch pra não derrubar a UI se Wuzapi/schedule falhar.
+  let welcomeEnqueued = false;
+  if (lead.phone) {
+    try {
+      const result = await enqueueWelcomeSequence(lead.id, now);
+      welcomeEnqueued = result.kind === "created";
+    } catch (err) {
+      console.error("[createManualLead] enqueueWelcomeSequence falhou", err);
+    }
+  }
+
+  revalidatePath("/kanban");
+  return { ok: true, leadId: lead.id, welcomeEnqueued };
 }

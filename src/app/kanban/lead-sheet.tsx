@@ -2,11 +2,30 @@
 
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ExternalLink, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCheck,
+  Circle,
+  Clock,
+  ExternalLink,
+  Loader2,
+  SkipForward,
+  XCircle,
+} from "lucide-react";
+import type { LeadOrigin, MessageJobStatus } from "@prisma/client";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -23,10 +42,19 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import type { FollowUpStatus } from "@/server/messaging/status";
+import { getTemplate } from "@/server/messaging/templates";
 
 import { getClassesForLead } from "./../aulas/actions";
+import {
+  cancelEnrollment,
+  reactivateEnrollment,
+  suspendEnrollment,
+} from "./../matriculas/actions";
 import { EnrollmentModal } from "./../matriculas/enrollment-modal";
 import { getSalesForLeadAction } from "./../pdv/actions";
 
@@ -34,12 +62,32 @@ import {
   type LeadDetails,
   assignSeller,
   getLeadDetails,
+  getLeadFollowUp,
+  setLeadOrigin,
   setLeadTags,
   setModality,
+  toggleLeadFollowUp,
   updateLeadInfo,
 } from "./lead-actions";
 import { moveLeadToStage } from "./actions";
+import { ORIGIN_LABEL } from "./lead-card";
 import { TagEditor } from "./tag-editor";
+
+const ORIGIN_ORDER: LeadOrigin[] = [
+  "WHATSAPP",
+  "INSTAGRAM_DIRECT",
+  "FACEBOOK",
+  "MANYCHAT",
+  "LINK_BIO",
+  "WEBSITE",
+  "GOOGLE_ADS",
+  "REFERRAL",
+  "WALK_IN",
+  "PHONE",
+  "PHONE_CALL",
+  "HOSPITAL_PARTNERSHIP",
+  "OTHER",
+];
 
 const UNASSIGNED = "__unassigned__";
 const NO_MODALITY = "__none__";
@@ -65,6 +113,20 @@ export type LeadCardPatch = {
   assignedSellerId?: string | null;
   assignedSeller?: { id: string; name: string | null; email: string } | null;
   tags?: string[];
+  origin?: LeadOrigin;
+  followUp?: {
+    enabled: boolean;
+    summary:
+      | "idle"
+      | "running"
+      | "paused"
+      | "tenantOff"
+      | "completed"
+      | "responded"
+      | "failed";
+    currentStep: number | null;
+    totalSteps: number;
+  } | null;
   lastInteractionAt?: Date;
 };
 
@@ -188,8 +250,9 @@ function LeadSheetContent({
       </SheetHeader>
 
       <Tabs defaultValue="overview" className="mt-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
+          <TabsTrigger value="followup">Follow-up</TabsTrigger>
           <TabsTrigger value="history">Histórico</TabsTrigger>
           <TabsTrigger value="classes">Aulas</TabsTrigger>
           <TabsTrigger value="purchases">Compras</TabsTrigger>
@@ -206,6 +269,10 @@ function LeadSheetContent({
             onLeadChange={onLeadChange}
             onLeadPatch={onLeadPatch}
           />
+        </TabsContent>
+
+        <TabsContent value="followup" className="pt-4">
+          <FollowUpTab leadId={lead.id} leadName={lead.name} />
         </TabsContent>
 
         <TabsContent value="history" className="pt-4">
@@ -358,6 +425,36 @@ function OverviewTab({
     });
   };
 
+  const handleOriginChange = (next: string) => {
+    const value = next as LeadOrigin;
+    if (value === lead.origin) return;
+    startTransition(async () => {
+      const result = await setLeadOrigin({ leadId: lead.id, origin: value });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Origem: ${ORIGIN_LABEL[value]}`);
+      onLeadChange({ ...lead, origin: value });
+      onLeadPatch(lead.id, { origin: value });
+    });
+  };
+
+  const handleFollowUpToggle = (next: boolean) => {
+    // Otimista — reverte se falhar.
+    const previousFollowUp = lead.followUpEnabled;
+    onLeadChange({ ...lead, followUpEnabled: next });
+    startTransition(async () => {
+      const result = await toggleLeadFollowUp({ leadId: lead.id, enabled: next });
+      if (!result.ok) {
+        toast.error(result.error);
+        onLeadChange({ ...lead, followUpEnabled: previousFollowUp });
+        return;
+      }
+      toast.success(next ? "Follow-up reativado" : "Follow-up pausado nesse lead");
+    });
+  };
+
   const handleModality = (modalityId: string) => {
     const value = modalityId === NO_MODALITY ? null : modalityId;
     startTransition(async () => {
@@ -506,15 +603,50 @@ function OverviewTab({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 border-t pt-4 text-xs text-muted-foreground">
-        <div>
-          <span className="font-medium text-foreground">Origem:</span>{" "}
-          {lead.origin.toLowerCase().replace("_", " ")}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="origin">Origem</Label>
+          <Select
+            value={lead.origin}
+            onValueChange={handleOriginChange}
+            disabled={pending}
+          >
+            <SelectTrigger id="origin" className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ORIGIN_ORDER.map((o) => (
+                <SelectItem key={o} value={o}>
+                  {ORIGIN_LABEL[o]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div>
-          <span className="font-medium text-foreground">Criado em:</span>{" "}
-          {format(new Date(lead.firstInteractionAt), "dd/MM/yyyy")}
+        <div className="space-y-1">
+          <Label className="text-muted-foreground">Criado em</Label>
+          <div className="flex h-9 items-center text-sm">
+            {format(new Date(lead.firstInteractionAt), "dd/MM/yyyy")}
+          </div>
         </div>
+      </div>
+
+      <div className="flex items-start justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+        <div className="space-y-0.5">
+          <Label htmlFor="overview-followup-toggle" className="cursor-pointer text-sm font-medium">
+            Follow-up automático
+          </Label>
+          <p className="text-[11px] text-muted-foreground">
+            Quando desligado, esse lead para de receber a cadência. Detalhes
+            na aba <strong>Follow-up</strong>.
+          </p>
+        </div>
+        <Switch
+          id="overview-followup-toggle"
+          checked={lead.followUpEnabled}
+          onCheckedChange={handleFollowUpToggle}
+          disabled={pending}
+        />
       </div>
 
       <Button onClick={handleSave} disabled={!dirty || pending} className="w-full">
@@ -526,56 +658,642 @@ function OverviewTab({
   );
 }
 
-function EnrollmentSection({ lead }: { lead: LeadDetails }) {
-  const [open, setOpen] = useState(false);
+// ──────────────────────────────────────────────────────────────────────────
+// Follow-up tab
+// ──────────────────────────────────────────────────────────────────────────
 
-  if (lead.enrollment) {
-    const e = lead.enrollment;
-    const value = Number(e.monthlyValue);
-    const tone =
-      e.status === "ACTIVE"
-        ? "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30"
-        : e.status === "CANCELED"
-          ? "border-red-500/40 bg-red-50 dark:bg-red-950/30"
-          : "border-amber-500/40 bg-amber-50 dark:bg-amber-950/30";
+const SUMMARY_LABEL: Record<FollowUpStatus["summary"], string> = {
+  idle: "Sem cadência ativa",
+  running: "Cadência em andamento",
+  paused: "Pausado neste lead",
+  tenantOff: "Follow-up global desligado",
+  completed: "Cadência concluída sem resposta",
+  responded: "Lead respondeu — cadência pausada",
+  failed: "Falha no envio",
+};
+
+const SUMMARY_TONE: Record<FollowUpStatus["summary"], string> = {
+  idle: "border-zinc-300 bg-zinc-50 text-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300",
+  running: "border-sky-300 bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200",
+  paused: "border-zinc-300 bg-zinc-100 text-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300",
+  tenantOff: "border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  completed: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
+  responded: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
+  failed: "border-red-300 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200",
+};
+
+function StatusIcon({ status }: { status: MessageJobStatus | "EMPTY" }) {
+  switch (status) {
+    case "SENT":
+      return <CheckCheck className="h-4 w-4 text-emerald-600" aria-label="enviada" />;
+    case "PENDING":
+      return <Clock className="h-4 w-4 text-sky-600" aria-label="agendada" />;
+    case "SKIPPED":
+      return <SkipForward className="h-4 w-4 text-zinc-500" aria-label="pulada" />;
+    case "FAILED":
+      return <XCircle className="h-4 w-4 text-red-600" aria-label="falhou" />;
+    case "EMPTY":
+      return <Circle className="h-4 w-4 text-zinc-300" aria-label="não enfileirada" />;
+  }
+}
+
+function formatJobLine(job: {
+  status: MessageJobStatus;
+  scheduledAt: Date | string;
+  sentAt: Date | string | null;
+  errorMessage: string | null;
+}): string {
+  const d = (val: Date | string) => format(new Date(val), "dd/MM HH:mm", { locale: ptBR });
+  switch (job.status) {
+    case "SENT":
+      return job.sentAt ? `enviada em ${d(job.sentAt)}` : "enviada";
+    case "PENDING":
+      return `agendada pra ${d(job.scheduledAt)}`;
+    case "SKIPPED":
+      return job.errorMessage ? `pulada — ${job.errorMessage}` : "pulada";
+    case "FAILED":
+      return job.errorMessage ? `falhou — ${job.errorMessage}` : "falhou";
+  }
+}
+
+type FollowUpState =
+  | { kind: "loading" }
+  | { kind: "loaded"; data: FollowUpStatus }
+  | { kind: "error" };
+
+function FollowUpTab({ leadId, leadName }: { leadId: string; leadName: string }) {
+  const [state, setState] = useState<FollowUpState>({ kind: "loading" });
+  const [toggling, setToggling] = useState(false);
+
+  useEffect(() => {
+    let aborted = false;
+    getLeadFollowUp(leadId).then((data) => {
+      if (aborted) return;
+      setState(data ? { kind: "loaded", data } : { kind: "error" });
+    });
+    return () => {
+      aborted = true;
+    };
+  }, [leadId]);
+
+  if (state.kind === "loading") {
     return (
-      <div className={`rounded-lg border ${tone} p-3 text-sm`}>
-        <div className="font-medium">
-          Matriculado em {format(new Date(e.enrolledAt), "dd/MM/yyyy")}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {e.modality.name} · {e.plan.name} ·{" "}
-          {value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês ·{" "}
-          {e.status.toLowerCase()}
-        </div>
+      <div className="flex items-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Carregando…
       </div>
     );
   }
 
+  if (state.kind === "error") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Não foi possível carregar o status de follow-up.
+      </p>
+    );
+  }
+
+  const status = state.data;
+
+  const handleToggle = async (next: boolean) => {
+    setToggling(true);
+    const previous = status;
+    // Otimista — reverte se falhar.
+    setState({
+      kind: "loaded",
+      data: {
+        ...status,
+        enabledForLead: next,
+        summary: next ? (status.summary === "paused" ? "idle" : status.summary) : "paused",
+      },
+    });
+    const result = await toggleLeadFollowUp({ leadId, enabled: next });
+    setToggling(false);
+    if (!result.ok) {
+      setState({ kind: "loaded", data: previous });
+      toast.error(result.error);
+      return;
+    }
+    toast.success(next ? "Follow-up reativado" : "Follow-up pausado nesse lead");
+    // Recarrega pra refletir o novo estado (jobs SKIPPED em massa quando desliga).
+    const refreshed = await getLeadFollowUp(leadId);
+    if (refreshed) setState({ kind: "loaded", data: refreshed });
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className={cn("flex items-start justify-between gap-3 rounded-lg border p-3", SUMMARY_TONE[status.summary])}>
+        <div className="space-y-0.5">
+          <div className="text-sm font-medium">{SUMMARY_LABEL[status.summary]}</div>
+          <div className="text-xs opacity-80">
+            {status.summary === "running" && status.currentStep
+              ? `Próxima mensagem: M${status.currentStep} de ${status.totalSteps}`
+              : null}
+            {status.summary === "tenantOff"
+              ? "Ative em Settings → WhatsApp pra liberar disparos."
+              : null}
+            {status.nextScheduledAt
+              ? `Próximo disparo: ${format(new Date(status.nextScheduledAt), "dd/MM 'às' HH:mm", { locale: ptBR })}`
+              : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Label htmlFor="followup-toggle" className="text-xs">
+            Automático
+          </Label>
+          <Switch
+            id="followup-toggle"
+            checked={status.enabledForLead}
+            onCheckedChange={handleToggle}
+            disabled={toggling || !status.enabledForTenant}
+          />
+        </div>
+      </div>
+
+      {!status.enabledForTenant ? (
+        <div className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            O follow-up global está desligado em Settings → WhatsApp. Mesmo com
+            o lead ligado, nenhuma mensagem dispara enquanto o master switch
+            estiver off.
+          </span>
+        </div>
+      ) : null}
+
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Etapa Novo Lead — 8 mensagens em ~7 dias
+        </h4>
+        <ol className="space-y-1.5">
+          {status.welcome.map((slot) => {
+            const label = getTemplate(slot.templateKey)?.label ?? slot.templateKey;
+            const jobStatus = slot.job?.status ?? "EMPTY";
+            return (
+              <li
+                key={slot.templateKey}
+                className="flex items-start gap-2 rounded border bg-card px-2.5 py-2"
+              >
+                <StatusIcon status={jobStatus} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xs font-semibold">M{slot.step}</span>
+                    <span className="truncate text-xs text-muted-foreground">{label}</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {slot.job ? formatJobLine(slot.job) : "não enfileirada"}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+        <p className="text-[11px] text-muted-foreground">
+          {leadName.split(/\s+/)[0]} vai pra <strong>Nutrição</strong>{" "}
+          automaticamente quando a M8 disparar sem resposta.
+        </p>
+      </section>
+
+      {status.appointment.length > 0 ? (
+        <section className="space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Lembretes de aula experimental
+          </h4>
+          <ol className="space-y-1.5">
+            {status.appointment.map((job) => {
+              const label = getTemplate(job.templateKey)?.label ?? job.templateKey;
+              return (
+                <li
+                  key={job.id}
+                  className="flex items-start gap-2 rounded border bg-card px-2.5 py-2"
+                >
+                  <StatusIcon status={job.status} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs">{label}</div>
+                    <div className="text-[11px] text-muted-foreground">{formatJobLine(job)}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
+
+      {status.attendance.length > 0 ? (
+        <section className="space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Pós-comparecimento
+          </h4>
+          <ol className="space-y-1.5">
+            {status.attendance.map((job) => {
+              const label = getTemplate(job.templateKey)?.label ?? job.templateKey;
+              return (
+                <li
+                  key={job.id}
+                  className="flex items-start gap-2 rounded border bg-card px-2.5 py-2"
+                >
+                  <StatusIcon status={job.status} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs">{label}</div>
+                    <div className="text-[11px] text-muted-foreground">{formatJobLine(job)}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function EnrollmentSection({ lead }: { lead: LeadDetails }) {
+  const router = useRouter();
+  const [openEnrollment, setOpenEnrollment] = useState(false);
+  const [openFreeze, setOpenFreeze] = useState(false);
+  const [openCancel, setOpenCancel] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  if (!lead.enrollment) {
+    return (
+      <>
+        <Button
+          variant="default"
+          className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+          onClick={() => setOpenEnrollment(true)}
+        >
+          Marcar como matriculado
+        </Button>
+        <EnrollmentModal
+          open={openEnrollment}
+          onOpenChange={setOpenEnrollment}
+          presetLead={{
+            id: lead.id,
+            name: lead.name,
+            modalityId: lead.modalityId,
+          }}
+          onCreated={() => {
+            setOpenEnrollment(false);
+            // Próxima abertura do sheet vai trazer o enrollment via getLeadDetails
+            // (server action revalidatePath('/kanban') invalida o cache)
+            window.location.reload();
+          }}
+        />
+      </>
+    );
+  }
+
+  const e = lead.enrollment;
+  const value = Number(e.monthlyValue);
+  const tone =
+    e.status === "ACTIVE"
+      ? "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30"
+      : e.status === "CANCELED"
+        ? "border-red-500/40 bg-red-50 dark:bg-red-950/30"
+        : "border-amber-500/40 bg-amber-50 dark:bg-amber-950/30";
+
+  const STATUS_LABEL: Record<typeof e.status, string> = {
+    ACTIVE: "ativa",
+    SUSPENDED: "congelada",
+    CANCELED: "cancelada",
+  };
+
+  const handleReactivate = () => {
+    startTransition(async () => {
+      const result = await reactivateEnrollment({ enrollmentId: e.id });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Matrícula reativada");
+      router.refresh();
+    });
+  };
+
   return (
     <>
-      <Button
-        variant="default"
-        className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
-        onClick={() => setOpen(true)}
-      >
-        Marcar como matriculado
-      </Button>
-      <EnrollmentModal
-        open={open}
-        onOpenChange={setOpen}
-        presetLead={{
-          id: lead.id,
-          name: lead.name,
-          modalityId: lead.modalityId,
-        }}
-        onCreated={() => {
-          setOpen(false);
-          // Próxima abertura do sheet vai trazer o enrollment via getLeadDetails
-          // (server action revalidatePath('/kanban') invalida o cache)
-          window.location.reload();
-        }}
+      <div className={cn("space-y-2 rounded-lg border p-3 text-sm", tone)}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="font-medium">
+              Matriculado em {format(new Date(e.enrolledAt), "dd/MM/yyyy")}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {e.modality.name} · {e.plan.name} ·{" "}
+              {value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês
+            </div>
+          </div>
+          <span className="shrink-0 rounded-full bg-card px-2 py-0.5 text-[10px] font-medium uppercase">
+            {STATUS_LABEL[e.status]}
+          </span>
+        </div>
+
+        {e.status === "SUSPENDED" ? (
+          <div className="space-y-0.5 border-t border-current/20 pt-2 text-xs">
+            <div>
+              <span className="text-muted-foreground">Congelada em:</span>{" "}
+              {e.suspendedAt
+                ? format(new Date(e.suspendedAt), "dd/MM/yyyy")
+                : "—"}
+            </div>
+            {e.suspensionReason ? (
+              <div>
+                <span className="text-muted-foreground">Motivo:</span> {e.suspensionReason}
+              </div>
+            ) : null}
+            <div>
+              <span className="text-muted-foreground">Retorno previsto:</span>{" "}
+              {e.expectedReturnAt
+                ? format(new Date(e.expectedReturnAt), "dd/MM/yyyy")
+                : "(sem prazo)"}
+            </div>
+          </div>
+        ) : null}
+
+        {e.status === "CANCELED" && e.canceledAt ? (
+          <div className="border-t border-current/20 pt-2 text-xs text-muted-foreground">
+            Cancelada em {format(new Date(e.canceledAt), "dd/MM/yyyy")}
+          </div>
+        ) : null}
+
+        {e.status !== "CANCELED" ? (
+          <div className="flex flex-wrap gap-2 border-t border-current/20 pt-2">
+            {e.status === "ACTIVE" ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setOpenFreeze(true)}
+                  disabled={pending}
+                >
+                  Congelar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                  onClick={() => setOpenCancel(true)}
+                  disabled={pending}
+                >
+                  Cancelar matrícula
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleReactivate}
+                disabled={pending}
+              >
+                {pending ? "Reativando…" : "Reativar"}
+              </Button>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      <SuspendDialog
+        enrollmentId={e.id}
+        leadName={lead.name}
+        open={openFreeze}
+        onOpenChange={setOpenFreeze}
+        onSuccess={() => router.refresh()}
       />
+      <CancelEnrollmentDialog
+        enrollmentId={e.id}
+        leadName={lead.name}
+        open={openCancel}
+        onOpenChange={setOpenCancel}
+        onSuccess={() => router.refresh()}
+      />
+    </>
+  );
+}
+
+function SuspendDialog({
+  enrollmentId,
+  leadName,
+  open,
+  onOpenChange,
+  onSuccess,
+}: {
+  enrollmentId: string;
+  leadName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        {open ? (
+          <SuspendDialogBody
+            enrollmentId={enrollmentId}
+            leadName={leadName}
+            onCancel={() => onOpenChange(false)}
+            onSuccess={() => {
+              onOpenChange(false);
+              onSuccess();
+            }}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SuspendDialogBody({
+  enrollmentId,
+  leadName,
+  onCancel,
+  onSuccess,
+}: {
+  enrollmentId: string;
+  leadName: string;
+  onCancel: () => void;
+  onSuccess: () => void;
+}) {
+  // Mount-on-open: o pai só renderiza este componente quando `open=true`,
+  // então o state inicial vale a cada abertura sem precisar de useEffect.
+  const [reason, setReason] = useState("");
+  const [expectedReturnAt, setExpectedReturnAt] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const handleConfirm = () => {
+    if (!reason.trim()) {
+      toast.error("Informe o motivo do congelamento");
+      return;
+    }
+    startTransition(async () => {
+      const result = await suspendEnrollment({
+        enrollmentId,
+        reason: reason.trim(),
+        expectedReturnAt: expectedReturnAt || null,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Matrícula congelada");
+      onSuccess();
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Congelar matrícula</DialogTitle>
+        <DialogDescription>
+          {leadName} — fica pausado até reativar manualmente. Lead recebe a tag &quot;Congelado&quot; no kanban.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="freeze-reason">
+            Motivo <span className="text-red-500">*</span>
+          </Label>
+          <Textarea
+            id="freeze-reason"
+            value={reason}
+            onChange={(ev) => setReason(ev.target.value)}
+            rows={3}
+            placeholder="ex: lesão no joelho, viagem 3 meses, problemas financeiros…"
+            disabled={pending}
+            autoFocus
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="freeze-return">Data prevista de retorno (opcional)</Label>
+          <Input
+            id="freeze-return"
+            type="date"
+            value={expectedReturnAt}
+            onChange={(ev) => setExpectedReturnAt(ev.target.value)}
+            disabled={pending}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Sem data, fica como &quot;congelado sem prazo&quot;.
+          </p>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel} disabled={pending}>
+          Voltar
+        </Button>
+        <Button onClick={handleConfirm} disabled={pending}>
+          {pending ? "Congelando…" : "Confirmar congelamento"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+function CancelEnrollmentDialog({
+  enrollmentId,
+  leadName,
+  open,
+  onOpenChange,
+  onSuccess,
+}: {
+  enrollmentId: string;
+  leadName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        {open ? (
+          <CancelEnrollmentDialogBody
+            enrollmentId={enrollmentId}
+            leadName={leadName}
+            onCancel={() => onOpenChange(false)}
+            onSuccess={() => {
+              onOpenChange(false);
+              onSuccess();
+            }}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CancelEnrollmentDialogBody({
+  enrollmentId,
+  leadName,
+  onCancel,
+  onSuccess,
+}: {
+  enrollmentId: string;
+  leadName: string;
+  onCancel: () => void;
+  onSuccess: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [moveToLost, setMoveToLost] = useState(true);
+  const [pending, startTransition] = useTransition();
+
+  const handleConfirm = () => {
+    startTransition(async () => {
+      const result = await cancelEnrollment({
+        enrollmentId,
+        reason: reason || undefined,
+        moveToLost,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Matrícula cancelada");
+      onSuccess();
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Cancelar matrícula</DialogTitle>
+        <DialogDescription>
+          {leadName} — cancelar é definitivo. Pra voltar, terá que criar uma nova matrícula.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="cancel-reason">Motivo (opcional)</Label>
+          <Textarea
+            id="cancel-reason"
+            value={reason}
+            onChange={(ev) => setReason(ev.target.value)}
+            rows={3}
+            placeholder="ex: mudou de cidade, motivo financeiro…"
+            disabled={pending}
+          />
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={moveToLost}
+            onChange={(ev) => setMoveToLost(ev.target.checked)}
+            disabled={pending}
+            className="h-4 w-4"
+          />
+          Mover lead para &quot;Aluno Perdido&quot; no kanban
+        </label>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel} disabled={pending}>
+          Voltar
+        </Button>
+        <Button variant="destructive" onClick={handleConfirm} disabled={pending}>
+          {pending ? "Cancelando…" : "Confirmar cancelamento"}
+        </Button>
+      </DialogFooter>
     </>
   );
 }

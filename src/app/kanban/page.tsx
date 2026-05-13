@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getLeadsForKanban } from "@/server/leads";
+import { getFollowUpSummariesForLeads } from "@/server/messaging/status";
 import { roleAtLeast } from "@/server/rbac";
 import { requireTenantUser } from "@/server/tenant";
 
@@ -30,7 +31,7 @@ export default async function KanbanPage({
     assignedSellerId: sp.seller,
   };
 
-  const [stages, leads, modalities, sellers] = await Promise.all([
+  const [stages, leadsRaw, modalities, sellers] = await Promise.all([
     prisma.stage.findMany({
       where: { tenantId: tenant.id, active: true },
       orderBy: { order: "asc" },
@@ -65,6 +66,17 @@ export default async function KanbanPage({
             })),
           ),
   ]);
+
+  // Hidrata cada card com o estado de follow-up (badge "M3/8", "pausado",
+  // "concluído"…). Query única em batch — ver getFollowUpSummariesForLeads.
+  const followUpByLead = await getFollowUpSummariesForLeads(
+    tenant.id,
+    leadsRaw.map((l) => l.id),
+  );
+  const leads = leadsRaw.map((l) => ({
+    ...l,
+    followUp: followUpByLead.get(l.id) ?? null,
+  }));
 
   return (
     <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-6">
@@ -110,6 +122,15 @@ export default async function KanbanPage({
         modalities={modalities}
         sellers={sellers}
         canReassign={roleAtLeast(membership.role, "MANAGER")}
+        currentUserId={user.id}
+        isSeller={membership.role === "SELLER"}
+        sellerOptionsForNewLead={
+          // SELLER no modal de novo lead só pode atribuir a si mesma; ADMIN/MANAGER
+          // vê todos. Pra SELLER monta uma opção única com o nome do usuário logado.
+          membership.role === "SELLER"
+            ? [{ id: user.id, name: user.name ?? user.email }]
+            : sellers
+        }
       />
     </main>
   );

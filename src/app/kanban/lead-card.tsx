@@ -2,13 +2,17 @@
 
 import { differenceInCalendarDays } from "date-fns";
 import {
+  AlertTriangle,
   Camera,
+  CheckCheck,
   Footprints,
   Globe,
   Megaphone,
   MessageCircle,
   MessageSquare,
+  Pause,
   Phone,
+  Send,
   UserPlus,
   Users,
   type LucideIcon,
@@ -21,6 +25,25 @@ import { cn } from "@/lib/utils";
 
 import { TagPill } from "./tag-editor";
 
+/**
+ * Snapshot mínimo do follow-up que o card precisa pra desenhar o badge.
+ * Mantido aqui (e não importado de @/server/messaging/status) pra evitar
+ * que o bundle do client puxe módulos server-side.
+ */
+export type LeadCardFollowUp = {
+  enabled: boolean;
+  summary:
+    | "idle"
+    | "running"
+    | "paused"
+    | "tenantOff"
+    | "completed"
+    | "responded"
+    | "failed";
+  currentStep: number | null;
+  totalSteps: number;
+};
+
 type Props = {
   lead: {
     id: string;
@@ -31,6 +54,7 @@ type Props = {
     modality: { id: string; name: string } | null;
     assignedSeller: { id: string; name: string | null; email: string } | null;
     tags?: string[];
+    followUp?: LeadCardFollowUp | null;
   };
   /** Quando renderizado dentro do <DragOverlay/> do dnd-kit; tira sombras/handles. */
   isOverlay?: boolean;
@@ -55,7 +79,7 @@ const ORIGIN_ICON: Record<LeadOrigin, LucideIcon> = {
   OTHER: MessageSquare,
 };
 
-const ORIGIN_LABEL: Record<LeadOrigin, string> = {
+export const ORIGIN_LABEL: Record<LeadOrigin, string> = {
   WHATSAPP: "WhatsApp",
   INSTAGRAM_DIRECT: "Instagram",
   FACEBOOK: "Facebook",
@@ -109,12 +133,78 @@ const STALENESS_LABEL: Record<ReturnType<typeof staleness>, string> = {
   cold: "Frio — sem interação há 5+ dias",
 };
 
+type FollowUpBadgeView = {
+  icon: LucideIcon;
+  label: string;
+  title: string;
+  className: string;
+};
+
+function buildFollowUpBadge(fu: LeadCardFollowUp): FollowUpBadgeView | null {
+  switch (fu.summary) {
+    case "idle":
+      // Sem cadência enfileirada — não polui o card.
+      return null;
+    case "running":
+      return {
+        icon: Send,
+        label: fu.currentStep ? `M${fu.currentStep}/${fu.totalSteps}` : "Em andamento",
+        title: fu.currentStep
+          ? `Follow-up em andamento — próxima mensagem: M${fu.currentStep} de ${fu.totalSteps}`
+          : "Follow-up em andamento",
+        className:
+          "border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200",
+      };
+    case "paused":
+      return {
+        icon: Pause,
+        label: "Pausado",
+        title: "Follow-up automático desligado pra esse lead",
+        className:
+          "border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300",
+      };
+    case "tenantOff":
+      return {
+        icon: Pause,
+        label: "Tenant off",
+        title: "Follow-up global da academia está desligado em Settings → WhatsApp",
+        className:
+          "border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300",
+      };
+    case "completed":
+      return {
+        icon: CheckCheck,
+        label: "Concluído",
+        title: "Cadência completa: M1..M8 enviadas sem resposta",
+        className:
+          "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200",
+      };
+    case "responded":
+      return {
+        icon: CheckCheck,
+        label: "Respondeu",
+        title: "Lead respondeu — follow-up pausado automaticamente",
+        className:
+          "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200",
+      };
+    case "failed":
+      return {
+        icon: AlertTriangle,
+        label: "Falhou",
+        title: "Última mensagem falhou no envio — confira a aba Follow-up",
+        className:
+          "border-red-300 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950/40 dark:text-red-200",
+      };
+  }
+}
+
 export function LeadCard({ lead, isOverlay = false }: Props) {
   const Icon = ORIGIN_ICON[lead.origin];
   const lastDate = new Date(lead.lastInteractionAt);
   const stale = staleness(lastDate);
   const phone = maskPhone(lead.phone);
   const sellerName = lead.assignedSeller?.name ?? lead.assignedSeller?.email;
+  const followUpBadge = lead.followUp ? buildFollowUpBadge(lead.followUp) : null;
 
   return (
     <Card
@@ -161,6 +251,20 @@ export function LeadCard({ lead, isOverlay = false }: Props) {
                 sem vendedora
               </Badge>
             )}
+            {followUpBadge ? (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "gap-1 px-1.5 py-0 text-[10px] font-normal",
+                  followUpBadge.className,
+                )}
+                title={followUpBadge.title}
+                aria-label={followUpBadge.title}
+              >
+                <followUpBadge.icon className="h-3 w-3" />
+                {followUpBadge.label}
+              </Badge>
+            ) : null}
           </div>
           {lead.tags && lead.tags.length > 0 ? (
             <div className="mt-1 flex flex-wrap gap-0.5">

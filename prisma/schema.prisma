@@ -286,6 +286,17 @@ model Lead {
   lastInteractionAt  DateTime  @default(now())
   nextActionAt       DateTime?
 
+  /**
+   * Override por-lead do follow-up automático. Independente do master switch
+   * `Tenant.followUpEnabled` — quando false, nenhum job é criado pra esse
+   * lead e os PENDING existentes são skipados.
+   *
+   * Default true: lead novo sempre entra na cadência (a menos que o tenant
+   * inteiro esteja off). UI permite desligar manualmente quando o atendente
+   * quer assumir 100% do follow.
+   */
+  followUpEnabled Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -387,6 +398,23 @@ model Enrollment {
   monthlyValue  Decimal          @db.Decimal(10, 2)
   paymentMethod PaymentMethod
   observations  String?          @db.Text
+
+  /**
+   * Congelamento de matrícula (= "aluno afastado" no vocabulário do tenant).
+   * Ciclo: ACTIVE → SUSPENDED (com motivo + retorno previsto) → ACTIVE de novo
+   *  ou → CANCELED se nunca voltar.
+   *
+   *   - suspendedAt: timestamp da última suspensão (null quando ACTIVE/CANCELED).
+   *   - suspensionReason: motivo livre (lesão, viagem, financeiro, …).
+   *   - expectedReturnAt: data prevista de retorno, opcional. Sem ela o card
+   *     fica "congelado sem prazo".
+   *
+   * Para histórico de múltiplos congelamentos, a sessão de "histórico de
+   * observações" (próxima) vai registrar cada evento separadamente.
+   */
+  suspendedAt      DateTime?
+  suspensionReason String?
+  expectedReturnAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
