@@ -165,11 +165,15 @@ const STAGES: Array<{
   { name: "Nutrição",       color: "#6B7280", order: 8 },
 ];
 
+// Users criados pelo seed quando RUN_SEED_ON_BOOT=true (ou via `npm run db:seed`).
+//
+// Histórico: o seed original criava SELLERs anna/evelyn/rafaela @gracie.com
+// pra testar a UI. Quando o tenant real (@bgaf.local) entrou em produção,
+// essas 3 users viraram duplicatas no dropdown do kanban (mesmo nome,
+// email diferente) -- mantidas só com active=false. Removidas daqui pra
+// não serem re-ativadas pelo seed via `update: { active: true }`.
 const TENANT_USERS: Array<{ email: string; name: string; role: Role }> = [
   { email: "gracie-admin@example.com", name: "Admin Gracie Barra", role: "ADMIN" },
-  { email: "anna@gracie.com", name: "Anna", role: "SELLER" },
-  { email: "evelyn@gracie.com", name: "Evelyn", role: "SELLER" },
-  { email: "rafaela@gracie.com", name: "Rafaela", role: "SELLER" },
 ];
 
 async function upsertSuperAdmin() {
