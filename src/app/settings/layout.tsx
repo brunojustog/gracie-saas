@@ -1,7 +1,7 @@
-import { Calendar, Kanban, Settings } from "lucide-react";
-import Link from "next/link";
+import { Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { TopNav } from "@/components/top-nav";
 import { signOut } from "@/server/auth";
 import { requireRole } from "@/server/tenant";
 
@@ -16,48 +16,36 @@ export default async function SettingsLayout({
   const { tenant, user, membership } = await requireRole("ADMIN");
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-6">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Settings className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-xl font-semibold tracking-tight">Configurações</h1>
-          <span className="text-xs text-muted-foreground">
-            {tenant.name} · {membership.role.toLowerCase()}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard">
-            <Button variant="outline" size="sm">
-              ← Dashboard
-            </Button>
-          </Link>
-          <Link href="/kanban">
-            <Button variant="outline" size="sm">
-              <Kanban className="mr-1.5 h-4 w-4" /> Kanban
-            </Button>
-          </Link>
-          <Link href="/aulas">
-            <Button variant="outline" size="sm">
-              <Calendar className="mr-1.5 h-4 w-4" /> Aulas
-            </Button>
-          </Link>
+    <>
+      <TopNav
+        tenantName={tenant.name}
+        tenantColor={tenant.primaryColor}
+        userEmail={user.email}
+        role={membership.role}
+        signOutSlot={
           <form
             action={async () => {
               "use server";
               await signOut({ redirectTo: "/login" });
             }}
           >
-            <Button type="submit" variant="ghost" size="sm">
-              {user.email} · Sair
+            <Button type="submit" variant="outline" size="sm" className="h-8">
+              Sair
             </Button>
           </form>
+        }
+      />
+      <main className="mx-auto max-w-[1400px] px-4 py-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Settings className="h-4 w-4 text-muted-foreground" />
+          <h1 className="text-lg font-semibold tracking-tight">Configurações</h1>
         </div>
-      </header>
 
-      <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-        <SettingsNav />
-        <section>{children}</section>
-      </div>
-    </main>
+        <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+          <SettingsNav />
+          <section>{children}</section>
+        </div>
+      </main>
+    </>
   );
 }

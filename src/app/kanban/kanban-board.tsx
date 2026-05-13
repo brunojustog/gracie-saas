@@ -157,8 +157,11 @@ export function KanbanBoard({
         </Button>
       </div>
 
+      {/* flex-1 + min-h-0 garante que o board fique limitado a altura
+          disponivel; overflow-x-auto cria scrollbar horizontal colada ao
+          fundo do board (e nao no fundo da pagina). */}
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto overflow-y-hidden pb-2">
           {stages.map((stage) => (
             <StageColumn
               key={stage.id}
@@ -228,11 +231,14 @@ function StageColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30 transition-colors",
+        // h-full + flex column garante que cada coluna ocupe a altura toda
+        // do board, e a area de cards (flex-1 abaixo) tem scroll vertical
+        // proprio quando as cards ultrapassam a altura visivel.
+        "flex h-full w-72 shrink-0 flex-col rounded-lg border bg-muted/30 transition-colors",
         isOver && "bg-muted/60 ring-2 ring-primary/40",
       )}
     >
-      <header className="flex items-center justify-between border-b p-2.5">
+      <header className="flex shrink-0 items-center justify-between border-b p-2.5">
         <div className="flex items-center gap-2">
           <span
             className="h-3 w-3 rounded-full"
@@ -253,7 +259,7 @@ function StageColumn({
         </div>
         <span className="text-xs text-muted-foreground">{leads.length}</span>
       </header>
-      <div className="flex flex-1 flex-col gap-2 p-2 min-h-32">
+      <div className="flex min-h-32 flex-1 flex-col gap-2 overflow-y-auto p-2">
         {leads.length === 0 ? (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
             (vazio)

@@ -1,6 +1,5 @@
-import Link from "next/link";
-
 import { Button } from "@/components/ui/button";
+import { TopNav } from "@/components/top-nav";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getLeadsForKanban } from "@/server/leads";
@@ -79,59 +78,62 @@ export default async function KanbanPage({
   }));
 
   return (
-    <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← {tenant.name}
-          </Link>
-          <h1 className="text-xl font-semibold tracking-tight">Funil comercial</h1>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-            {leads.length} lead{leads.length === 1 ? "" : "s"}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">
-            {user.email} · {membership.role.toLowerCase()}
-          </span>
+    // h-svh + flex column: nav fixo no topo, board ocupa o resto da viewport
+    // com scroll horizontal/vertical interno (em vez de empurrar a barra pro
+    // fim da pagina inteira).
+    <div className="flex h-svh flex-col">
+      <TopNav
+        tenantName={tenant.name}
+        tenantColor={tenant.primaryColor}
+        userEmail={user.email}
+        role={membership.role}
+        signOutSlot={
           <form
             action={async () => {
               "use server";
               await signOut({ redirectTo: "/login" });
             }}
           >
-            <Button type="submit" variant="outline" size="sm">
+            <Button type="submit" variant="outline" size="sm" className="h-8">
               Sair
             </Button>
           </form>
-        </div>
-      </header>
-
-      <KanbanFilters
-        modalities={modalities}
-        sellers={sellers}
-        initial={filters}
-      />
-
-      <KanbanBoard
-        stages={stages}
-        leads={leads}
-        modalities={modalities}
-        sellers={sellers}
-        canReassign={roleAtLeast(membership.role, "MANAGER")}
-        currentUserId={user.id}
-        isSeller={membership.role === "SELLER"}
-        sellerOptionsForNewLead={
-          // SELLER no modal de novo lead só pode atribuir a si mesma; ADMIN/MANAGER
-          // vê todos. Pra SELLER monta uma opção única com o nome do usuário logado.
-          membership.role === "SELLER"
-            ? [{ id: user.id, name: user.name ?? user.email }]
-            : sellers
         }
       />
-    </main>
+
+      <main className="mx-auto flex w-full min-h-0 max-w-[1600px] flex-1 flex-col gap-3 px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold tracking-tight">Funil comercial</h1>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+              {leads.length} lead{leads.length === 1 ? "" : "s"}
+            </span>
+          </div>
+        </div>
+
+        <KanbanFilters
+          modalities={modalities}
+          sellers={sellers}
+          initial={filters}
+        />
+
+        <KanbanBoard
+          stages={stages}
+          leads={leads}
+          modalities={modalities}
+          sellers={sellers}
+          canReassign={roleAtLeast(membership.role, "MANAGER")}
+          currentUserId={user.id}
+          isSeller={membership.role === "SELLER"}
+          sellerOptionsForNewLead={
+            // SELLER no modal de novo lead só pode atribuir a si mesma; ADMIN/MANAGER
+            // vê todos. Pra SELLER monta uma opção única com o nome do usuário logado.
+            membership.role === "SELLER"
+              ? [{ id: user.id, name: user.name ?? user.email }]
+              : sellers
+          }
+        />
+      </main>
+    </div>
   );
 }

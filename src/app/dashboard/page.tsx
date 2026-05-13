@@ -1,7 +1,5 @@
-import { Calendar, GraduationCap, Kanban, Settings, ShoppingBag } from "lucide-react";
-import Link from "next/link";
-
 import { Button } from "@/components/ui/button";
+import { TopNav } from "@/components/top-nav";
 import {
   type PeriodPreset,
   resolveCustom,
@@ -53,66 +51,27 @@ export default async function DashboardPage({
   ]);
 
   return (
-    <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span
-            className="h-10 w-10 rounded-md"
-            style={{ background: tenant.primaryColor }}
-            aria-hidden
-          />
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">{tenant.name}</h1>
-            <p className="text-xs text-muted-foreground">
-              {user.email}
-              <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                {membership.role.toLowerCase()}
-              </span>
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/kanban">
-            <Button variant="outline" size="sm">
-              <Kanban className="mr-1.5 h-4 w-4" /> Kanban
-            </Button>
-          </Link>
-          <Link href="/aulas">
-            <Button variant="outline" size="sm">
-              <Calendar className="mr-1.5 h-4 w-4" /> Aulas
-            </Button>
-          </Link>
-          <Link href="/matriculas">
-            <Button variant="outline" size="sm">
-              <GraduationCap className="mr-1.5 h-4 w-4" /> Matrículas
-            </Button>
-          </Link>
-          <Link href="/pdv">
-            <Button variant="outline" size="sm">
-              <ShoppingBag className="mr-1.5 h-4 w-4" /> Lojinha
-            </Button>
-          </Link>
-          {membership.role === "ADMIN" ? (
-            <Link href="/settings">
-              <Button variant="outline" size="sm">
-                <Settings className="mr-1.5 h-4 w-4" /> Config
-              </Button>
-            </Link>
-          ) : null}
+    <>
+      <TopNav
+        tenantName={tenant.name}
+        tenantColor={tenant.primaryColor}
+        userEmail={user.email}
+        role={membership.role}
+        signOutSlot={
           <form
             action={async () => {
               "use server";
               await signOut({ redirectTo: "/login" });
             }}
           >
-            <Button type="submit" variant="ghost" size="sm">
+            <Button type="submit" variant="outline" size="sm" className="h-8">
               Sair
             </Button>
           </form>
-        </div>
-      </header>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
+        }
+      />
+      <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-medium text-muted-foreground">{period.label}</h2>
         <PeriodFilter current={currentSelector} from={sp.from} to={sp.to} />
       </div>
@@ -164,7 +123,8 @@ export default async function DashboardPage({
           <PdvSummary kpis={pdv} />
         </Panel>
       </section>
-    </main>
+      </main>
+    </>
   );
 }
 

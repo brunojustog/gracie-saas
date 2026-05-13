@@ -1,7 +1,7 @@
 import type { EnrollmentStatus } from "@prisma/client";
-import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { TopNav } from "@/components/top-nav";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getEnrollmentsForList } from "@/server/enrollments";
@@ -57,38 +57,34 @@ export default async function MatriculasPage({
     .reduce((sum, r) => sum + Number(r.monthlyValue), 0);
 
   return (
-    <main className="mx-auto max-w-[1400px] space-y-4 px-4 py-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← {tenant.name}
-          </Link>
-          <h1 className="text-xl font-semibold tracking-tight">Matrículas</h1>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-            {rows.length} no período
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">
-            {user.email} · {membership.role.toLowerCase()}
-          </span>
+    <>
+      <TopNav
+        tenantName={tenant.name}
+        tenantColor={tenant.primaryColor}
+        userEmail={user.email}
+        role={membership.role}
+        signOutSlot={
           <form
             action={async () => {
               "use server";
               await signOut({ redirectTo: "/login" });
             }}
           >
-            <Button type="submit" variant="outline" size="sm">
+            <Button type="submit" variant="outline" size="sm" className="h-8">
               Sair
             </Button>
           </form>
+        }
+      />
+      <main className="mx-auto max-w-[1400px] space-y-4 px-4 py-4">
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold tracking-tight">Matrículas</h1>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+            {rows.length} no período
+          </span>
         </div>
-      </header>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+        <section className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs uppercase text-muted-foreground">Ativas</div>
           <div className="mt-1 text-2xl font-semibold">{totalActive}</div>
@@ -110,13 +106,14 @@ export default async function MatriculasPage({
         </div>
       </section>
 
-      <EnrollmentsToolbar
-        modalities={modalities}
-        leads={leadsForPicker}
-        initial={filters}
-      />
+        <EnrollmentsToolbar
+          modalities={modalities}
+          leads={leadsForPicker}
+          initial={filters}
+        />
 
-      <EnrollmentsTable rows={rows} />
-    </main>
+        <EnrollmentsTable rows={rows} />
+      </main>
+    </>
   );
 }
