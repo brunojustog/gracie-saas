@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Camera,
   CheckCheck,
+  ExternalLink,
   Footprints,
   Globe,
   Megaphone,
@@ -51,6 +52,7 @@ type Props = {
     phone: string | null;
     origin: LeadOrigin;
     lastInteractionAt: Date | string;
+    chatwootConversationId: string | null;
     modality: { id: string; name: string } | null;
     assignedSeller: { id: string; name: string | null; email: string } | null;
     tags?: string[];
@@ -58,6 +60,12 @@ type Props = {
   };
   /** Quando renderizado dentro do <DragOverlay/> do dnd-kit; tira sombras/handles. */
   isOverlay?: boolean;
+  /**
+   * URL base do Chatwoot já com `/app/accounts/<id>/conversations/` no final
+   * (basta concatenar `conversationId`). Null = tenant não tem Chatwoot
+   * configurado → ícone não aparece.
+   */
+  chatwootConversationBaseUrl?: string | null;
 };
 
 // lucide-react v1 não exporta logos de marca (Facebook/Instagram saíram).
@@ -198,13 +206,21 @@ function buildFollowUpBadge(fu: LeadCardFollowUp): FollowUpBadgeView | null {
   }
 }
 
-export function LeadCard({ lead, isOverlay = false }: Props) {
+export function LeadCard({
+  lead,
+  isOverlay = false,
+  chatwootConversationBaseUrl,
+}: Props) {
   const Icon = ORIGIN_ICON[lead.origin];
   const lastDate = new Date(lead.lastInteractionAt);
   const stale = staleness(lastDate);
   const phone = maskPhone(lead.phone);
   const sellerName = lead.assignedSeller?.name ?? lead.assignedSeller?.email;
   const followUpBadge = lead.followUp ? buildFollowUpBadge(lead.followUp) : null;
+  const chatwootHref =
+    chatwootConversationBaseUrl && lead.chatwootConversationId
+      ? `${chatwootConversationBaseUrl}${lead.chatwootConversationId}`
+      : null;
 
   return (
     <Card
@@ -225,6 +241,20 @@ export function LeadCard({ lead, isOverlay = false }: Props) {
               aria-label={STALENESS_LABEL[stale]}
             />
             <h3 className="truncate text-sm font-medium">{lead.name}</h3>
+            {chatwootHref ? (
+              <a
+                href={chatwootHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir conversa no Chatwoot"
+                aria-label="Abrir conversa no Chatwoot"
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : null}
           </div>
           {phone ? (
             <p className="truncate text-xs text-muted-foreground">{phone}</p>

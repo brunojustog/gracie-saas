@@ -29,6 +29,14 @@ export default async function KanbanPage({
     assignedSellerId: sp.seller,
   };
 
+  // URL base do Chatwoot pronta pra concatenar com conversationId (v1.1-T).
+  // null quando o tenant não tem Chatwoot configurado — o card omite o link.
+  // Trim na url pra evitar trailing slash duplicado.
+  const chatwootConversationBaseUrl =
+    tenant.chatwootUrl && tenant.chatwootAccountId
+      ? `${tenant.chatwootUrl.replace(/\/+$/, "")}/app/accounts/${tenant.chatwootAccountId}/conversations/`
+      : null;
+
   const [stages, leadsRaw, modalities, sellers] = await Promise.all([
     prisma.stage.findMany({
       where: { tenantId: tenant.id, active: true },
@@ -122,6 +130,7 @@ export default async function KanbanPage({
           currentUserId={user.id}
           isSeller={membership.role === "SELLER"}
           sellerOptionsForNewLead={sellers}
+          chatwootConversationBaseUrl={chatwootConversationBaseUrl}
         />
       </main>
     </div>

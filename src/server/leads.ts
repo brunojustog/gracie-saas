@@ -80,6 +80,7 @@ export async function getLeadsForKanban(
       tags: true,
       lastInteractionAt: true,
       createdAt: true,
+      chatwootConversationId: true,
       modality: { select: { id: true, name: true } },
       assignedSeller: { select: { id: true, name: true, email: true } },
       enrollment: { select: { id: true, status: true } },

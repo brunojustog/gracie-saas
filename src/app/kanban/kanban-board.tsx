@@ -57,6 +57,12 @@ type Props = {
   isSeller: boolean;
   /** Sellers visíveis no <NewLeadModal>: ADMIN/MANAGER vê todos, SELLER só si mesma. */
   sellerOptionsForNewLead: Seller[];
+  /**
+   * Base URL Chatwoot já com `/app/accounts/<id>/conversations/`. Null quando
+   * tenant não tem Chatwoot configurado. Passada ao LeadCard pra renderizar
+   * o link de abrir conversa em nova aba. (v1.1-T)
+   */
+  chatwootConversationBaseUrl: string | null;
 };
 
 export function KanbanBoard({
@@ -68,6 +74,7 @@ export function KanbanBoard({
   currentUserId,
   isSeller,
   sellerOptionsForNewLead,
+  chatwootConversationBaseUrl,
 }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
@@ -168,11 +175,18 @@ export function KanbanBoard({
               stage={stage}
               leads={leadsByStage.get(stage.id) ?? []}
               onLeadClick={setSelectedLeadId}
+              chatwootConversationBaseUrl={chatwootConversationBaseUrl}
             />
           ))}
         </div>
         <DragOverlay>
-          {draggingLead ? <LeadCard lead={draggingLead} isOverlay /> : null}
+          {draggingLead ? (
+            <LeadCard
+              lead={draggingLead}
+              isOverlay
+              chatwootConversationBaseUrl={chatwootConversationBaseUrl}
+            />
+          ) : null}
         </DragOverlay>
       </DndContext>
 
@@ -220,10 +234,12 @@ function StageColumn({
   stage,
   leads,
   onLeadClick,
+  chatwootConversationBaseUrl,
 }: {
   stage: Stage;
   leads: Lead[];
   onLeadClick: (id: string) => void;
+  chatwootConversationBaseUrl: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
@@ -266,7 +282,12 @@ function StageColumn({
           </p>
         ) : (
           leads.map((lead) => (
-            <DraggableCard key={lead.id} lead={lead} onClick={onLeadClick} />
+            <DraggableCard
+              key={lead.id}
+              lead={lead}
+              onClick={onLeadClick}
+              chatwootConversationBaseUrl={chatwootConversationBaseUrl}
+            />
           ))
         )}
       </div>
@@ -277,9 +298,11 @@ function StageColumn({
 function DraggableCard({
   lead,
   onClick,
+  chatwootConversationBaseUrl,
 }: {
   lead: Lead;
   onClick: (id: string) => void;
+  chatwootConversationBaseUrl: string | null;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: lead.id,
@@ -293,7 +316,10 @@ function DraggableCard({
       onClick={() => onClick(lead.id)}
       className={cn(isDragging && "opacity-30")}
     >
-      <LeadCard lead={lead} />
+      <LeadCard
+        lead={lead}
+        chatwootConversationBaseUrl={chatwootConversationBaseUrl}
+      />
     </div>
   );
 }
