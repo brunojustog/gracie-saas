@@ -78,6 +78,14 @@ export function KanbanBoard({
 }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
+  // Ressincroniza quando o server re-renderiza com lista nova (filtro, refresh,
+  // revalidatePath). Sem isso, o state local "congelava" e a busca não refletia
+  // nos cards. Pattern oficial: https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [prevInitial, setPrevInitial] = useState(initialLeads);
+  if (initialLeads !== prevInitial) {
+    setLeads(initialLeads);
+    setPrevInitial(initialLeads);
+  }
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [enrollLead, setEnrollLead] = useState<{
