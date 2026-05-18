@@ -164,6 +164,134 @@ export function ConversionFunnelChart({ data }: { data: ConversionStep[] }) {
   );
 }
 
+type OriginEntry = {
+  origin: string;
+  total: number;
+  converted: number;
+  rate: number;
+};
+
+const ORIGIN_LABEL: Record<string, string> = {
+  WHATSAPP: "WhatsApp",
+  INSTAGRAM_DIRECT: "Instagram",
+  FACEBOOK: "Facebook",
+  WEBSITE: "Website",
+  REFERRAL: "Indicação",
+  WALK_IN: "Walk-in",
+  PHONE: "Telefone",
+  GOOGLE_ADS: "Google Ads",
+  MANYCHAT: "ManyChat",
+  LINK_BIO: "Link Bio",
+  PHONE_CALL: "Ligação",
+  HOSPITAL_PARTNERSHIP: "Parceria Hospital",
+  OTHER: "Outros",
+};
+
+/**
+ * Conversão por origem (v1.1-R): pra cada canal de entrada do lead,
+ * mostra total + matrículas e a taxa. Útil pra orientar investimento
+ * de marketing — quais origens convertem melhor.
+ */
+export function ConversionByOriginChart({ data }: { data: OriginEntry[] }) {
+  if (data.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Sem leads no período.
+      </p>
+    );
+  }
+  const formatted = data.map((d) => ({
+    origin: ORIGIN_LABEL[d.origin] ?? d.origin,
+    total: d.total,
+    converted: d.converted,
+    rate: d.rate,
+  }));
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(200, data.length * 36)}>
+      <BarChart data={formatted} layout="vertical" margin={{ left: 90, right: 24 }}>
+        <CartesianGrid horizontal={false} stroke="#e5e7eb" />
+        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+        <YAxis
+          dataKey="origin"
+          type="category"
+          tick={{ fontSize: 11 }}
+          width={90}
+        />
+        <Tooltip
+          formatter={(value, name, item) => {
+            const payload = item?.payload as
+              | { total: number; converted: number; rate: number }
+              | undefined;
+            if (name === "total") {
+              return [`${value} leads`, "Total"];
+            }
+            return [
+              `${value} (${payload?.rate.toFixed(0) ?? 0}% conv.)`,
+              "Matrículas",
+            ];
+          }}
+        />
+        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="total" name="Leads" fill="#cbd5e1" radius={[0, 4, 4, 0]} />
+        <Bar dataKey="converted" name="Matrículas" fill="#10b981" radius={[0, 4, 4, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+type StagnatedEntry = {
+  stageId: string;
+  name: string;
+  color: string;
+  count: number;
+};
+
+/**
+ * Leads parados por estágio (v1.1-R): proxy de gargalo no funil sem
+ * histórico de transições. Conta leads em stage ATIVO (não won/lost)
+ * com `lastInteractionAt` mais antigo que `daysThreshold`.
+ */
+export function StagnatedByStageChart({
+  data,
+  daysThreshold,
+}: {
+  data: StagnatedEntry[];
+  daysThreshold: number;
+}) {
+  if (data.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Nenhum lead parado há mais de {daysThreshold} dias.
+      </p>
+    );
+  }
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(200, data.length * 36)}>
+      <BarChart data={data} layout="vertical" margin={{ left: 100, right: 24 }}>
+        <CartesianGrid horizontal={false} stroke="#e5e7eb" />
+        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+        <YAxis
+          dataKey="name"
+          type="category"
+          tick={{ fontSize: 11 }}
+          width={100}
+        />
+        <Tooltip
+          formatter={(v) => {
+            const n = Number(v);
+            return [`${n} lead${n === 1 ? "" : "s"} parado${n === 1 ? "" : "s"}`, "Quantidade"];
+          }}
+        />
+        <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+          {data.map((d) => (
+            <Cell key={d.stageId} fill={d.color} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function ModalityPie({ data }: { data: ModalityEntry[] }) {
   if (data.length === 0) {
     return (

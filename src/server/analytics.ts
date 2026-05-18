@@ -1,30 +1,92 @@
 /**
- * Camada analítica do dashboard de KPIs (fase 10).
+ * Camada analítica do dashboard de KPIs (fase 10, ampliada v1.1-R).
  *
  * Política: tudo escopado via `scopedLeadWhere(membership)` para que SELLER
  * só veja números dos próprios leads. ADMIN/MANAGER vê o tenant inteiro.
+ *
+ * Filtros (v1.1-R): origin, modalityId, sellerId, tag — compostos no `where`
+ * base; aplicam-se a TODOS os agregados pra manter coerência (variação %,
+ * funil, leads/dia, etc. respondem ao mesmo recorte).
  */
 import { Prisma, type TenantUser } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import type { Period } from "@/lib/period";
 import { previousPeriod } from "@/lib/period";
+import type { DashboardFilters } from "@/lib/analytics-filters";
 import { scopedLeadWhere } from "@/server/leads";
 
 export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 
+// Threshold pro KPI "leads parados por estágio" (proxy v1.1-R). Lead sem
+// interação por mais que N dias e em stage ativo (não won/lost) vira parado.
+const STAGNATED_DAYS = 7;
+
 export async function getDashboardData(
   membership: TenantUser,
   period: Period,
+  filters: DashboardFilters = {},
 ) {
   const prev = previousPeriod(period);
-  const scope = scopedLeadWhere(membership);
   const tenantId = membership.tenantId;
-
   const isSeller = membership.role === "SELLER";
-  const sellerLeadFilter = isSeller
-    ? { lead: { assignedSellerId: membership.userId } }
+
+  // Filtros base aplicados em TODAS as queries de Lead. Combina:
+  //   - scope de tenant (e, pra dashboard, scope SELLER do analytics)
+  //   - filtros da toolbar (origem, modalidade, vendedora, tag)
+  const sellerScope: Prisma.LeadWhereInput = isSeller
+    ? { assignedSellerId: membership.userId }
     : {};
+  const filterWhere: Prisma.LeadWhereInput = {};
+  if (filters.origin) filterWhere.origin = filters.origin;
+  if (filters.modalityId) filterWhere.modalityId = filters.modalityId;
+  if (filters.sellerId && !isSeller) {
+    // SELLER já está fixo em si mesma; tampering ignora.
+    filterWhere.assignedSellerId = filters.sellerId;
+  }
+  if (filters.tag) filterWhere.tags = { has: filters.tag };
+
+  const leadWhereBase: Prisma.LeadWhereInput = {
+    ...scopedLeadWhere(membership),
+    ...sellerScope,
+    ...filterWhere,
+  };
+
+  // Filtros equivalentes pra queries que partem de Enrollment/Class
+  // (precisam navegar via `lead: { ... }`).
+  const leadConstraintForEnrollment: Prisma.LeadWhereInput = {
+    ...sellerScope,
+    ...filterWhere,
+  };
+  const hasLeadConstraint = Object.keys(leadConstraintForEnrollment).length > 0;
+  const leadFilter = hasLeadConstraint ? { lead: leadConstraintForEnrollment } : {};
+
+  // Helper: monta um fragmento "AND ..." que espelha sellerScope+filterWhere
+  // em SQL raw, com prefixo opcional pra qualificar colunas (ex: "l.").
+  const buildLeadSqlFilter = (tablePrefix = ""): Prisma.Sql => {
+    const p = Prisma.raw(tablePrefix); // identifier safe (sem aspas)
+    const conds: Prisma.Sql[] = [];
+    if (isSeller) {
+      conds.push(Prisma.sql`${p}"assignedSellerId" = ${membership.userId}`);
+    }
+    if (filters.origin) {
+      conds.push(Prisma.sql`${p}"origin"::text = ${filters.origin}`);
+    }
+    if (filters.modalityId) {
+      conds.push(Prisma.sql`${p}"modalityId" = ${filters.modalityId}`);
+    }
+    if (filters.sellerId && !isSeller) {
+      conds.push(Prisma.sql`${p}"assignedSellerId" = ${filters.sellerId}`);
+    }
+    if (filters.tag) {
+      conds.push(Prisma.sql`${filters.tag} = ANY(${p}"tags")`);
+    }
+    return conds.length > 0
+      ? Prisma.sql` AND ${Prisma.join(conds, ` AND `)}`
+      : Prisma.empty;
+  };
+  const leadSqlFilter = buildLeadSqlFilter(); // sem alias (tabela única)
+  const leadSqlFilterAliased = buildLeadSqlFilter("l."); // com JOIN
 
   const [
     leadsNow,
@@ -40,26 +102,28 @@ export async function getDashboardData(
     leadsByDayRaw,
     enrollmentsByModality,
     sellerStats,
+    conversionByOriginRaw,
+    avgFirstResponseRaw,
+    stagnatedByStageRaw,
   ] = await Promise.all([
-    // KPIs do período atual
     prisma.lead.count({
-      where: { ...scope, firstInteractionAt: { gte: period.from, lte: period.to } },
+      where: { ...leadWhereBase, firstInteractionAt: { gte: period.from, lte: period.to } },
     }),
     prisma.lead.count({
-      where: { ...scope, firstInteractionAt: { gte: prev.from, lte: prev.to } },
+      where: { ...leadWhereBase, firstInteractionAt: { gte: prev.from, lte: prev.to } },
     }),
 
     prisma.experimentalClass.count({
       where: {
         tenantId,
-        ...sellerLeadFilter,
+        ...leadFilter,
         scheduledDate: { gte: period.from, lte: period.to },
       },
     }),
     prisma.experimentalClass.count({
       where: {
         tenantId,
-        ...sellerLeadFilter,
+        ...leadFilter,
         scheduledDate: { gte: prev.from, lte: prev.to },
       },
     }),
@@ -67,7 +131,7 @@ export async function getDashboardData(
     prisma.experimentalClass.count({
       where: {
         tenantId,
-        ...sellerLeadFilter,
+        ...leadFilter,
         status: "ATTENDED",
         attendedAt: { gte: period.from, lte: period.to },
       },
@@ -75,7 +139,7 @@ export async function getDashboardData(
     prisma.experimentalClass.count({
       where: {
         tenantId,
-        ...sellerLeadFilter,
+        ...leadFilter,
         status: "ATTENDED",
         attendedAt: { gte: prev.from, lte: prev.to },
       },
@@ -84,7 +148,7 @@ export async function getDashboardData(
     prisma.enrollment.count({
       where: {
         tenantId,
-        ...sellerLeadFilter,
+        ...leadFilter,
         status: "ACTIVE",
         enrolledAt: { gte: period.from, lte: period.to },
       },
@@ -92,65 +156,116 @@ export async function getDashboardData(
     prisma.enrollment.count({
       where: {
         tenantId,
-        ...sellerLeadFilter,
+        ...leadFilter,
         status: "ACTIVE",
         enrolledAt: { gte: prev.from, lte: prev.to },
       },
     }),
 
-    // Receita mensal corrente (todas matrículas ACTIVE — independe do período)
+    // Receita ACTIVE corrente (independe do período; é a foto do MRR)
     prisma.enrollment.aggregate({
-      where: {
-        tenantId,
-        ...sellerLeadFilter,
-        status: "ACTIVE",
-      },
+      where: { tenantId, ...leadFilter, status: "ACTIVE" },
       _sum: { monthlyValue: true },
     }),
 
-    // Funil: quantos leads em cada stage (criados no período)
     prisma.lead.groupBy({
       by: ["stageId"],
-      where: { ...scope, firstInteractionAt: { gte: period.from, lte: period.to } },
+      where: {
+        ...leadWhereBase,
+        firstInteractionAt: { gte: period.from, lte: period.to },
+      },
       _count: { _all: true },
     }),
 
-    // Leads por dia: $queryRaw porque Prisma não suporta groupBy(date_trunc(...))
-    // Limita a 31 dias máx — o range já vem cap de presets.
     prisma.$queryRaw<Array<{ day: Date; count: bigint }>>(Prisma.sql`
       SELECT date_trunc('day', "firstInteractionAt")::date AS day, COUNT(*)::bigint AS count
       FROM "Lead"
       WHERE "tenantId" = ${tenantId}
         AND "firstInteractionAt" >= ${period.from}
         AND "firstInteractionAt" <= ${period.to}
-        ${
-          isSeller
-            ? Prisma.sql`AND "assignedSellerId" = ${membership.userId}`
-            : Prisma.empty
-        }
+        ${leadSqlFilter}
       GROUP BY day
       ORDER BY day
     `),
 
-    // Distribuição por modalidade (matrículas ACTIVE)
     prisma.enrollment.groupBy({
       by: ["modalityId"],
-      where: { tenantId, ...sellerLeadFilter, status: "ACTIVE" },
+      where: { tenantId, ...leadFilter, status: "ACTIVE" },
       _count: { _all: true },
     }),
 
-    // Ranking de vendedoras: count de leads + matrículas + receita por vendedora
-    // Apenas pra ADMIN/MANAGER. SELLER não vê isso.
     isSeller
       ? Promise.resolve([])
       : prisma.lead.groupBy({
           by: ["assignedSellerId"],
-          where: { tenantId, firstInteractionAt: { gte: period.from, lte: period.to } },
+          where: {
+            tenantId,
+            firstInteractionAt: { gte: period.from, lte: period.to },
+            ...filterWhere,
+          },
           _count: { _all: true },
         }),
+
+    // ── KPIs NOVOS v1.1-R ────────────────────────────────────────────────
+
+    // Conversão por origem: pra cada origem, conta leads no período e
+    // quantos viraram matrícula ACTIVE. ESQUERDA pra direita: origem,
+    // total, matrículas. Computa rate no caller.
+    prisma.$queryRaw<
+      Array<{ origin: string; total: bigint; converted: bigint }>
+    >(Prisma.sql`
+      SELECT
+        l."origin"::text AS origin,
+        COUNT(*)::bigint AS total,
+        COUNT(e.id)::bigint AS converted
+      FROM "Lead" l
+      LEFT JOIN "Enrollment" e
+        ON e."leadId" = l.id AND e."status" = 'ACTIVE'
+      WHERE l."tenantId" = ${tenantId}
+        AND l."firstInteractionAt" >= ${period.from}
+        AND l."firstInteractionAt" <= ${period.to}
+        ${leadSqlFilterAliased}
+      GROUP BY l."origin"
+      ORDER BY total DESC
+    `),
+
+    // Tempo médio até 1ª ação humana: diff em segundos entre createdAt
+    // do lead e createdAt da PRIMEIRA LeadNote com authorId não-nulo
+    // (= humano fez algo). Filtro: leads do período. Exclui leads que
+    // ainda não foram tocados (sem nota humana).
+    prisma.$queryRaw<Array<{ avg_seconds: number | null }>>(Prisma.sql`
+      SELECT AVG(EXTRACT(EPOCH FROM (first_note."createdAt" - l."createdAt")))::float AS avg_seconds
+      FROM "Lead" l
+      JOIN LATERAL (
+        SELECT "createdAt" FROM "LeadNote"
+        WHERE "leadId" = l.id AND "authorId" IS NOT NULL
+        ORDER BY "createdAt" ASC
+        LIMIT 1
+      ) first_note ON true
+      WHERE l."tenantId" = ${tenantId}
+        AND l."firstInteractionAt" >= ${period.from}
+        AND l."firstInteractionAt" <= ${period.to}
+        AND first_note."createdAt" > l."createdAt"
+        ${leadSqlFilterAliased}
+    `),
+
+    // Leads "parados" por estágio: stage ATIVO (não won/lost) + sem
+    // interação há mais que STAGNATED_DAYS dias. Proxy de gargalo no
+    // funil sem precisar de histórico de transições. Não usa período
+    // (sempre olha o "agora" do funil) mas respeita filtros.
+    prisma.lead.groupBy({
+      by: ["stageId"],
+      where: {
+        ...leadWhereBase,
+        lastInteractionAt: {
+          lt: new Date(Date.now() - STAGNATED_DAYS * 24 * 60 * 60 * 1000),
+        },
+        stage: { isWon: false, isLost: false, active: true },
+      },
+      _count: { _all: true },
+    }),
   ]);
 
-  // Resolve nomes de stages, modalidades e users em batches
   const [stages, modalities, sellerEnrollments, sellerUsers] = await Promise.all([
     prisma.stage.findMany({
       where: { tenantId },
@@ -169,6 +284,7 @@ export async function getDashboardData(
             tenantId,
             status: "ACTIVE",
             enrolledAt: { gte: period.from, lte: period.to },
+            ...(hasLeadConstraint ? leadFilter : {}),
           },
           _sum: { monthlyValue: true },
         }),
@@ -182,9 +298,8 @@ export async function getDashboardData(
         }),
   ]);
 
-  // Agrega ranking de vendedoras: leads + matrículas + receita por seller
   const leadsToSeller = isSeller
-    ? new Map<string, string>() // leadId → sellerId, vazio
+    ? new Map<string, string>()
     : await prisma.lead
         .findMany({
           where: {
@@ -217,10 +332,9 @@ export async function getDashboardData(
         })
         .sort((a, b) => b.matriculas - a.matriculas);
 
-  // Funil agregado: stage com count (preserva ordem do stage)
   const stageById = new Map(stages.map((s) => [s.id, s]));
   const funnel = stages
-    .filter((s) => !s.isLost) // estágios "perdidos" são separados; aqui é o funil ativo
+    .filter((s) => !s.isLost)
     .map((s) => ({
       stageId: s.id,
       name: s.name,
@@ -230,19 +344,9 @@ export async function getDashboardData(
         funnelGroups.find((g) => g.stageId === s.id)?._count?._all ?? 0,
     }));
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Funil de conversão: jornada da coorte de leads que ENTROU no período.
-  //
-  // Critério "passou pelo menos por X" = stage atual está em X ou além no
-  // playbook (Agendamento → Comparecimento → Negociação → Ganho). Não usamos
-  // StageHistory pra evitar custo de join; é uma aproximação razoável porque
-  // o lead "atualmente em Ganho" passou implicitamente pelos níveis anteriores.
-  //
-  // Leads importados via CSV não têm ExperimentalClass row, então contar AEs
-  // diretamente subestimaria o funil real — por isso usamos o stage do lead.
-  // ──────────────────────────────────────────────────────────────────────────
+  // Funil de conversão (mesma lógica da v1.1-H — cohort do período)
   const cohortFilter = {
-    ...scope,
+    ...leadWhereBase,
     firstInteractionAt: { gte: period.from, lte: period.to },
   };
   const POST_AGENDAMENTO = ["Agendamento", "Comparecimento", "Negociação", "Ganho"];
@@ -284,7 +388,6 @@ export async function getDashboardData(
     },
   ];
 
-  // Modalidades: name + color resolvidos
   const byModality = enrollmentsByModality.map((g) => {
     const m = modalities.find((x) => x.id === g.modalityId);
     return {
@@ -295,15 +398,39 @@ export async function getDashboardData(
     };
   });
 
-  // Leads por dia: bigint → number (count cabe num int)
   const leadsByDay = leadsByDayRaw.map((row) => ({
     day: row.day,
     count: Number(row.count),
   }));
 
+  // Conversão por origem: serialização BigInt → number
+  const conversionByOrigin = conversionByOriginRaw
+    .map((r) => ({
+      origin: r.origin,
+      total: Number(r.total),
+      converted: Number(r.converted),
+      rate: Number(r.total) > 0 ? (Number(r.converted) / Number(r.total)) * 100 : 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  const avgFirstResponseSeconds = avgFirstResponseRaw[0]?.avg_seconds ?? null;
+
+  // Estágios parados: enriquecer com nome/color do stage (ordem do funil)
+  const stagnatedByStage = stages
+    .filter((s) => !s.isWon && !s.isLost)
+    .map((s) => ({
+      stageId: s.id,
+      name: s.name,
+      color: s.color,
+      count:
+        stagnatedByStageRaw.find((g) => g.stageId === s.id)?._count?._all ?? 0,
+    }))
+    .filter((s) => s.count > 0);
+
   return {
     period,
     previous: prev,
+    filters,
     isSeller,
     kpis: {
       leadsNew: { current: leadsNow, previous: leadsPrev },
@@ -315,9 +442,13 @@ export async function getDashboardData(
         leadsNow > 0 ? (enrollmentsNow / leadsNow) * 100 : null,
       conversionPrevPct:
         leadsPrev > 0 ? (enrollmentsPrev / leadsPrev) * 100 : null,
+      avgFirstResponseSeconds,
     },
     funnel,
     conversionFunnel,
+    conversionByOrigin,
+    stagnatedByStage,
+    stagnatedDays: STAGNATED_DAYS,
     leadsByDay,
     byModality,
     ranking,

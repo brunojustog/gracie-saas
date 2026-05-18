@@ -1,22 +1,27 @@
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/top-nav";
+import { parseDashboardFilters } from "@/lib/analytics-filters";
 import {
   type PeriodPreset,
   resolveCustom,
   resolvePreset,
   variationPct,
 } from "@/lib/period";
+import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getDashboardData } from "@/server/analytics";
 import { getPdvKpis } from "@/server/pdv";
 import { requireTenantUser } from "@/server/tenant";
 
 import {
+  ConversionByOriginChart,
   ConversionFunnelChart,
   FunnelChart,
   LeadsByDayChart,
   ModalityPie,
+  StagnatedByStageChart,
 } from "./charts";
+import { DashboardFilters } from "./dashboard-filters";
 import { PeriodFilter } from "./period-filter";
 
 const VALID_PRESETS: PeriodPreset[] = [
@@ -26,7 +31,15 @@ const VALID_PRESETS: PeriodPreset[] = [
   "last_30_days",
 ];
 
-type SearchParams = Promise<{ period?: string; from?: string; to?: string }>;
+type SearchParams = Promise<{
+  period?: string;
+  from?: string;
+  to?: string;
+  origin?: string;
+  modality?: string;
+  seller?: string;
+  tag?: string;
+}>;
 
 export default async function DashboardPage({
   searchParams,
@@ -36,8 +49,6 @@ export default async function DashboardPage({
   const { tenant, user, membership } = await requireTenantUser();
   const sp = await searchParams;
 
-  // Custom range (from + to) tem prioridade sobre preset. Se vier malformado,
-  // cai pra preset.
   const customPeriod = sp.from && sp.to ? resolveCustom(sp.from, sp.to) : null;
   const preset: PeriodPreset = VALID_PRESETS.includes(sp.period as PeriodPreset)
     ? (sp.period as PeriodPreset)
@@ -45,10 +56,51 @@ export default async function DashboardPage({
   const period = customPeriod ?? resolvePreset(preset);
   const currentSelector: PeriodPreset | "custom" = customPeriod ? "custom" : preset;
 
-  const [data, pdv] = await Promise.all([
-    getDashboardData(membership, period),
-    getPdvKpis(membership, { start: period.from, end: period.to }),
-  ]);
+  const filters = parseDashboardFilters({
+    origin: sp.origin,
+    modality: sp.modality,
+    seller: sp.seller,
+    tag: sp.tag,
+  });
+  const isSeller = membership.role === "SELLER";
+
+  const [data, pdv, modalitiesForFilter, sellersForFilter, tagsRaw] =
+    await Promise.all([
+      getDashboardData(membership, period, filters),
+      getPdvKpis(membership, { start: period.from, end: period.to }),
+      prisma.modality.findMany({
+        where: { tenantId: tenant.id, active: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      isSeller
+        ? Promise.resolve([])
+        : prisma.tenantUser.findMany({
+            where: { tenantId: tenant.id, role: "SELLER", active: true },
+            include: { user: { select: { id: true, name: true, email: true } } },
+            orderBy: { createdAt: "asc" },
+          }),
+      // Tags pra dropdown — agrega únicas usando raw (Prisma não tem
+      // groupBy em array fields). Limita às tags realmente em uso.
+      prisma.$queryRaw<Array<{ tag: string }>>`
+        SELECT DISTINCT unnest("tags") AS tag
+        FROM "Lead"
+        WHERE "tenantId" = ${tenant.id}
+        ORDER BY tag
+      `,
+    ]);
+
+  const modalityOptions = modalitiesForFilter.map((m) => ({
+    value: m.id,
+    label: m.name,
+  }));
+  const sellerOptions = isSeller
+    ? []
+    : sellersForFilter.map((s) => ({
+        value: s.user.id,
+        label: s.user.name ?? s.user.email,
+      }));
+  const tagOptions = tagsRaw.map((r) => r.tag).filter(Boolean);
 
   return (
     <>
@@ -72,57 +124,94 @@ export default async function DashboardPage({
       />
       <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">{period.label}</h2>
-        <PeriodFilter current={currentSelector} from={sp.from} to={sp.to} />
-      </div>
+          <h2 className="text-sm font-medium text-muted-foreground">
+            {period.label}
+          </h2>
+          <PeriodFilter current={currentSelector} from={sp.from} to={sp.to} />
+        </div>
 
-      <KPICards data={data} isSeller={data.isSeller} />
+        <DashboardFilters
+          modalities={modalityOptions}
+          sellers={sellerOptions}
+          tags={tagOptions}
+          current={{
+            origin: filters.origin,
+            modality: filters.modalityId,
+            seller: filters.sellerId,
+            tag: filters.tag,
+          }}
+        />
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Panel
-          title="Funil de conversão"
-          subtitle="Jornada da coorte de leads que entrou no período"
-        >
-          <ConversionFunnelChart data={data.conversionFunnel} />
-        </Panel>
-        <Panel title="Novos leads por dia" subtitle="Volume de captação no período">
-          <LeadsByDayChart data={data.leadsByDay} />
-        </Panel>
-      </section>
+        {/* 1) KPIs operacionais — o que pulsa diariamente */}
+        <KPICards data={data} isSeller={data.isSeller} />
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Panel
-          title="Distribuição por estágio"
-          subtitle="Onde os leads do período estão atualmente"
-        >
-          <FunnelChart data={data.funnel} />
-        </Panel>
-        <Panel title="Matrículas ativas por modalidade">
-          <ModalityPie data={data.byModality} />
-        </Panel>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        {!data.isSeller && data.ranking.length > 0 ? (
-          <Panel title="Ranking de vendedoras (período)">
-            <SellerRanking ranking={data.ranking} />
+        {/* 2) Funil de conversão + leads por dia — saúde do pipeline */}
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Panel
+            title="Funil de conversão"
+            subtitle="Jornada da coorte de leads que entrou no período"
+          >
+            <ConversionFunnelChart data={data.conversionFunnel} />
           </Panel>
-        ) : (
-          <Panel title="Resumo do período">
-            <PeriodSummary data={data} />
+          <Panel title="Novos leads por dia" subtitle="Volume de captação no período">
+            <LeadsByDayChart data={data.leadsByDay} />
           </Panel>
-        )}
-        <Panel
-          title="Lojinha (período)"
-          subtitle={
-            data.isSeller
-              ? "Volume das suas vendas"
-              : "Receita e ranking de vendas no PDV"
-          }
-        >
-          <PdvSummary kpis={pdv} isSeller={data.isSeller} />
-        </Panel>
-      </section>
+        </section>
+
+        {/* 3) Onde focar atenção — origens que convertem + gargalos parados */}
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Panel
+            title="Conversão por origem"
+            subtitle="Canais de entrada do lead — quais convertem melhor"
+          >
+            <ConversionByOriginChart data={data.conversionByOrigin} />
+          </Panel>
+          <Panel
+            title={`Leads parados (> ${data.stagnatedDays} dias)`}
+            subtitle="Sem interação registrada — gargalos no funil"
+          >
+            <StagnatedByStageChart
+              data={data.stagnatedByStage}
+              daysThreshold={data.stagnatedDays}
+            />
+          </Panel>
+        </section>
+
+        {/* 4) Estado atual do funil + mix de modalidades */}
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Panel
+            title="Distribuição por estágio"
+            subtitle="Onde os leads do período estão atualmente"
+          >
+            <FunnelChart data={data.funnel} />
+          </Panel>
+          <Panel title="Matrículas ativas por modalidade">
+            <ModalityPie data={data.byModality} />
+          </Panel>
+        </section>
+
+        {/* 5) Ranking de vendedoras + PDV — visão de performance/receita */}
+        <section className="grid gap-4 lg:grid-cols-2">
+          {!data.isSeller && data.ranking.length > 0 ? (
+            <Panel title="Ranking de vendedoras (período)">
+              <SellerRanking ranking={data.ranking} />
+            </Panel>
+          ) : (
+            <Panel title="Resumo do período">
+              <PeriodSummary data={data} />
+            </Panel>
+          )}
+          <Panel
+            title="Lojinha (período)"
+            subtitle={
+              data.isSeller
+                ? "Volume das suas vendas"
+                : "Receita e ranking de vendas no PDV"
+            }
+          >
+            <PdvSummary kpis={pdv} isSeller={data.isSeller} />
+          </Panel>
+        </section>
       </main>
     </>
   );
@@ -152,6 +241,17 @@ function Panel({
   );
 }
 
+function formatResponseTime(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds)) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}min`;
+  if (seconds < 86400) {
+    const h = seconds / 3600;
+    return `${h.toFixed(h < 10 ? 1 : 0)}h`;
+  }
+  return `${(seconds / 86400).toFixed(1)}d`;
+}
+
 function KPICards({
   data,
   isSeller,
@@ -160,16 +260,24 @@ function KPICards({
   isSeller: boolean;
 }) {
   const { kpis } = data;
+  // Layout: pra ADMIN/MANAGER são 7 KPIs (cabe em 4+3 nos breakpoints xl).
+  // Pra SELLER são 6 (sem receita). Em sm/lg cresce em colunas menores.
   return (
     <section
       className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
-        isSeller ? "xl:grid-cols-5" : "xl:grid-cols-6"
+        isSeller ? "xl:grid-cols-6" : "xl:grid-cols-7"
       }`}
     >
       <KPI
         label="Leads novos"
         value={kpis.leadsNew.current}
         previous={kpis.leadsNew.previous}
+      />
+      <KPI
+        label="Tempo de resposta"
+        value={kpis.avgFirstResponseSeconds}
+        formatRaw={formatResponseTime}
+        hint="média até 1ª ação no lead"
       />
       <KPI
         label="Aulas agendadas"
@@ -186,6 +294,13 @@ function KPICards({
         value={kpis.enrollments.current}
         previous={kpis.enrollments.previous}
       />
+      <KPI
+        label="Conversão"
+        value={kpis.conversionPct}
+        previous={kpis.conversionPrevPct}
+        format="percent"
+        hint="matrículas ÷ leads no período"
+      />
       {isSeller ? null : (
         <KPI
           label="Receita mensal"
@@ -194,13 +309,6 @@ function KPICards({
           hint="todas as matrículas ativas"
         />
       )}
-      <KPI
-        label="Conversão"
-        value={kpis.conversionPct}
-        previous={kpis.conversionPrevPct}
-        format="percent"
-        hint="matrículas ÷ leads no período"
-      />
     </section>
   );
 }
@@ -210,16 +318,19 @@ function KPI({
   value,
   previous,
   format = "number",
+  formatRaw,
   hint,
 }: {
   label: string;
   value: number | null;
   previous?: number | null;
   format?: "number" | "currency" | "percent";
+  formatRaw?: (v: number | null) => string;
   hint?: string;
 }) {
-  const display =
-    value === null
+  const display = formatRaw
+    ? formatRaw(value)
+    : value === null
       ? "—"
       : format === "currency"
         ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
