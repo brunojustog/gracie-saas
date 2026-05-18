@@ -71,7 +71,13 @@ const STATUS_LABEL: Record<EnrollmentStatus, string> = {
   SUSPENDED: "congelada",
 };
 
-export function EnrollmentsTable({ rows }: { rows: Row[] }) {
+export function EnrollmentsTable({
+  rows,
+  hideFinancials = false,
+}: {
+  rows: Row[];
+  hideFinancials?: boolean;
+}) {
   const router = useRouter();
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
   const [freezeTarget, setFreezeTarget] = useState<Row | null>(null);
@@ -106,7 +112,7 @@ export function EnrollmentsTable({ rows }: { rows: Row[] }) {
               <TableHead>Aluno</TableHead>
               <TableHead>Modalidade</TableHead>
               <TableHead>Plano</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
+              {hideFinancials ? null : <TableHead className="text-right">Valor</TableHead>}
               <TableHead>Pagamento</TableHead>
               <TableHead>Vendedora</TableHead>
               <TableHead>Matriculado em</TableHead>
@@ -131,12 +137,14 @@ export function EnrollmentsTable({ rows }: { rows: Row[] }) {
                     </span>
                   </TableCell>
                   <TableCell>{r.plan.name}</TableCell>
-                  <TableCell className="text-right font-mono">
-                    {value.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </TableCell>
+                  {hideFinancials ? null : (
+                    <TableCell className="text-right font-mono">
+                      {value.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </TableCell>
+                  )}
                   <TableCell className="text-muted-foreground">
                     {PAYMENT_LABEL[r.paymentMethod]}
                   </TableCell>

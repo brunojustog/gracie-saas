@@ -23,6 +23,7 @@ export default async function MatriculasPage({
 }) {
   const { tenant, membership, user } = await requireTenantUser();
   const sp = await searchParams;
+  const isSeller = membership.role === "SELLER";
 
   const filters = {
     search: sp.q,
@@ -49,9 +50,11 @@ export default async function MatriculasPage({
   ]);
 
   const totalActive = rows.filter((r) => r.status === "ACTIVE").length;
-  const monthlyRevenue = rows
-    .filter((r) => r.status === "ACTIVE")
-    .reduce((sum, r) => sum + Number(r.monthlyValue), 0);
+  const monthlyRevenue = isSeller
+    ? 0
+    : rows
+        .filter((r) => r.status === "ACTIVE")
+        .reduce((sum, r) => sum + Number(r.monthlyValue), 0);
 
   return (
     <>
@@ -81,20 +84,22 @@ export default async function MatriculasPage({
           </span>
         </div>
 
-        <section className="grid gap-3 sm:grid-cols-3">
+        <section className={`grid gap-3 ${isSeller ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs uppercase text-muted-foreground">Ativas</div>
           <div className="mt-1 text-2xl font-semibold">{totalActive}</div>
         </div>
-        <div className="rounded-lg border bg-card p-4">
-          <div className="text-xs uppercase text-muted-foreground">Receita mensal</div>
-          <div className="mt-1 text-2xl font-semibold">
-            {monthlyRevenue.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}
+        {isSeller ? null : (
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-xs uppercase text-muted-foreground">Receita mensal</div>
+            <div className="mt-1 text-2xl font-semibold">
+              {monthlyRevenue.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
+            </div>
           </div>
-        </div>
+        )}
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs uppercase text-muted-foreground">Canceladas</div>
           <div className="mt-1 text-2xl font-semibold">
@@ -109,7 +114,7 @@ export default async function MatriculasPage({
           initial={filters}
         />
 
-        <EnrollmentsTable rows={rows} />
+        <EnrollmentsTable rows={rows} hideFinancials={isSeller} />
       </main>
     </>
   );

@@ -76,7 +76,7 @@ export default async function DashboardPage({
         <PeriodFilter current={currentSelector} from={sp.from} to={sp.to} />
       </div>
 
-      <KPICards data={data} />
+      <KPICards data={data} isSeller={data.isSeller} />
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Panel
@@ -116,11 +116,11 @@ export default async function DashboardPage({
           title="Lojinha (período)"
           subtitle={
             data.isSeller
-              ? "Apenas as suas vendas"
+              ? "Volume das suas vendas"
               : "Receita e ranking de vendas no PDV"
           }
         >
-          <PdvSummary kpis={pdv} />
+          <PdvSummary kpis={pdv} isSeller={data.isSeller} />
         </Panel>
       </section>
       </main>
@@ -152,10 +152,20 @@ function Panel({
   );
 }
 
-function KPICards({ data }: { data: Awaited<ReturnType<typeof getDashboardData>> }) {
+function KPICards({
+  data,
+  isSeller,
+}: {
+  data: Awaited<ReturnType<typeof getDashboardData>>;
+  isSeller: boolean;
+}) {
   const { kpis } = data;
   return (
-    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <section
+      className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${
+        isSeller ? "xl:grid-cols-5" : "xl:grid-cols-6"
+      }`}
+    >
       <KPI
         label="Leads novos"
         value={kpis.leadsNew.current}
@@ -176,12 +186,14 @@ function KPICards({ data }: { data: Awaited<ReturnType<typeof getDashboardData>>
         value={kpis.enrollments.current}
         previous={kpis.enrollments.previous}
       />
-      <KPI
-        label="Receita mensal"
-        value={kpis.monthlyRevenue}
-        format="currency"
-        hint="todas as matrículas ativas"
-      />
+      {isSeller ? null : (
+        <KPI
+          label="Receita mensal"
+          value={kpis.monthlyRevenue}
+          format="currency"
+          hint="todas as matrículas ativas"
+        />
+      )}
       <KPI
         label="Conversão"
         value={kpis.conversionPct}
@@ -295,20 +307,24 @@ function SellerRanking({
 
 function PdvSummary({
   kpis,
+  isSeller,
 }: {
   kpis: Awaited<ReturnType<typeof getPdvKpis>>;
+  isSeller: boolean;
 }) {
   const fmtBRL = (n: number) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   return (
     <div className="space-y-3 text-sm">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded border bg-muted/40 p-3">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            Receita
+      <div className={`grid gap-3 ${isSeller ? "grid-cols-1" : "grid-cols-2"}`}>
+        {isSeller ? null : (
+          <div className="rounded border bg-muted/40 p-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Receita
+            </div>
+            <div className="mt-0.5 text-xl font-semibold">{fmtBRL(kpis.revenue)}</div>
           </div>
-          <div className="mt-0.5 text-xl font-semibold">{fmtBRL(kpis.revenue)}</div>
-        </div>
+        )}
         <div className="rounded border bg-muted/40 p-3">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
             Vendas
@@ -323,7 +339,9 @@ function PdvSummary({
             <tr className="border-b text-[10px] uppercase text-muted-foreground">
               <th className="px-1 py-1.5 text-left font-medium">Vendedora</th>
               <th className="px-1 py-1.5 text-right font-medium">Vendas</th>
-              <th className="px-1 py-1.5 text-right font-medium">Total</th>
+              {isSeller ? null : (
+                <th className="px-1 py-1.5 text-right font-medium">Total</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -331,9 +349,11 @@ function PdvSummary({
               <tr key={r.sellerUserId} className="border-b last:border-0">
                 <td className="px-1 py-1.5 font-medium">{r.sellerName}</td>
                 <td className="px-1 py-1.5 text-right">{r.count}</td>
-                <td className="px-1 py-1.5 text-right font-mono">
-                  {fmtBRL(r.total)}
-                </td>
+                {isSeller ? null : (
+                  <td className="px-1 py-1.5 text-right font-mono">
+                    {fmtBRL(r.total)}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -363,20 +383,21 @@ function PeriodSummary({
         <dt className="text-muted-foreground">Comparado a</dt>
         <dd className="font-medium">{previous.label}</dd>
       </div>
-      <div className="flex justify-between border-b pb-1">
-        <dt className="text-muted-foreground">Receita ativa hoje</dt>
-        <dd className="font-mono font-medium">
-          {kpis.monthlyRevenue.toLocaleString("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-          })}
-        </dd>
-      </div>
       {data.isSeller ? (
         <p className="pt-2 text-xs text-muted-foreground">
           Você está vendo somente os números dos seus leads.
         </p>
-      ) : null}
+      ) : (
+        <div className="flex justify-between border-b pb-1">
+          <dt className="text-muted-foreground">Receita ativa hoje</dt>
+          <dd className="font-mono font-medium">
+            {kpis.monthlyRevenue.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}
+          </dd>
+        </div>
+      )}
     </dl>
   );
 }
