@@ -11,6 +11,12 @@ import { useMemo, useState } from "react";
 
 import { ClassActionsModal } from "./class-actions-modal";
 import { ScheduleModal } from "./schedule-modal";
+import {
+  ScheduleSlotModal,
+  type SlotInitial,
+} from "./schedule-slot-modal";
+import { SlotActionsModal } from "./slot-actions-modal";
+import { useRouter } from "next/navigation";
 
 type Modality = { id: string; name: string; color: string | null };
 type Lead = { id: string; name: string; phone: string | null; modalityId: string | null };
@@ -48,6 +54,18 @@ type Props = {
   leads: Lead[];
 };
 
+const DAY_LABEL = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+type SlotInfo = {
+  id: string;
+  modalityName: string;
+  modalityColor: string | null;
+  dayLabel: string;
+  startTime: string;
+  durationMinutes: number;
+  clickedDate: Date;
+};
+
 const STATUS_TONE: Record<ExperimentalClassStatus, { bg: string; text: string; border: string }> = {
   SCHEDULED:   { bg: "transparent", text: "inherit", border: "currentColor" },
   CONFIRMED:   { bg: "transparent", text: "inherit", border: "currentColor" },
@@ -67,9 +85,13 @@ export function CalendarBoard({
   modalities,
   leads,
 }: Props) {
+  const router = useRouter();
   const [classes, setClasses] = useState(initialClasses);
   const [scheduleAt, setScheduleAt] = useState<Date | null>(null);
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
+  const [activeSlot, setActiveSlot] = useState<SlotInfo | null>(null);
+  const [slotEdit, setSlotEdit] = useState<SlotInitial | null>(null);
+  const [slotModalOpen, setSlotModalOpen] = useState(false);
 
   const events = useMemo<EventInput[]>(() => {
     const bgEvents: EventInput[] = scheduleSlots.map((slot) => {
@@ -128,10 +150,46 @@ export function CalendarBoard({
     if (kind === "class") {
       setActiveClassId(arg.event.extendedProps.classId as string);
     } else if (kind === "slot") {
-      // Click num slot da grade abre o modal pré-populado naquela hora.
-      // FullCalendar dá `start` da ocorrência clicada (já com data correta).
-      if (arg.event.start) setScheduleAt(arg.event.start);
+      // Click num slot da grade abre o menu de ações (v1.1-S):
+      // agendar aula aqui, editar slot ou remover. O `start` carrega
+      // a data específica clicada (não só hora) — usado no "agendar".
+      const slotId = arg.event.extendedProps.slotId as string;
+      const slot = scheduleSlots.find((s) => s.id === slotId);
+      if (slot && arg.event.start) {
+        setActiveSlot({
+          id: slot.id,
+          modalityName: slot.modality.name,
+          modalityColor: slot.modality.color,
+          dayLabel: DAY_LABEL[slot.dayOfWeek] ?? "?",
+          startTime: slot.startTime,
+          durationMinutes: slot.durationMinutes,
+          clickedDate: arg.event.start,
+        });
+      }
     }
+  };
+
+  const openNewSlotModal = () => {
+    setSlotEdit({
+      modalityId: modalities[0]?.id ?? "",
+      dayOfWeek: 1,
+      startTime: "19:00",
+      durationMinutes: 60,
+    });
+    setSlotModalOpen(true);
+  };
+
+  const openEditSlotModal = (slotId: string) => {
+    const slot = scheduleSlots.find((s) => s.id === slotId);
+    if (!slot) return;
+    setSlotEdit({
+      id: slot.id,
+      modalityId: slot.modalityId,
+      dayOfWeek: slot.dayOfWeek,
+      startTime: slot.startTime,
+      durationMinutes: slot.durationMinutes,
+    });
+    setSlotModalOpen(true);
   };
 
   const onClassCreated = (cls: CalendarClass) => {
@@ -145,6 +203,16 @@ export function CalendarBoard({
   const activeClass = activeClassId ? classes.find((c) => c.id === activeClassId) : null;
 
   return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={openNewSlotModal}
+          className="rounded-md border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
+        >
+          + Novo horário na grade
+        </button>
+      </div>
     <div className="rounded-lg border bg-card p-2">
       <FullCalendar
         plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin]}
@@ -200,6 +268,34 @@ export function CalendarBoard({
           onClassUpdated(cls);
         }}
       />
+
+      <SlotActionsModal
+        slot={activeSlot}
+        onClose={() => setActiveSlot(null)}
+        onScheduleClass={(date) => {
+          setActiveSlot(null);
+          setScheduleAt(date);
+        }}
+        onEditRequest={() => {
+          if (!activeSlot) return;
+          const id = activeSlot.id;
+          setActiveSlot(null);
+          openEditSlotModal(id);
+        }}
+        onDeleted={() => router.refresh()}
+      />
+
+      <ScheduleSlotModal
+        open={slotModalOpen}
+        onOpenChange={setSlotModalOpen}
+        initial={slotEdit}
+        modalities={modalities}
+        onSaved={() => {
+          setSlotModalOpen(false);
+          router.refresh();
+        }}
+      />
+    </div>
     </div>
   );
 }
