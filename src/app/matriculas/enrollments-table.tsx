@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 
 import { cancelEnrollment, reactivateEnrollment, suspendEnrollment } from "./actions";
+import { EnrollmentEditModal, type EditTarget } from "./enrollment-edit-modal";
 
 type Row = {
   id: string;
@@ -81,7 +82,21 @@ export function EnrollmentsTable({
   const router = useRouter();
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
   const [freezeTarget, setFreezeTarget] = useState<Row | null>(null);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const handleEdit = (row: Row) => {
+    setEditTarget({
+      id: row.id,
+      leadName: row.lead.name,
+      modalityId: row.modality.id,
+      planId: row.plan.id,
+      monthlyValue: Number(row.monthlyValue),
+      paymentMethod: row.paymentMethod,
+      enrolledAt: new Date(row.enrolledAt).toISOString().slice(0, 10),
+      observations: row.observations,
+    });
+  };
 
   const handleReactivate = (row: Row) => {
     startTransition(async () => {
@@ -172,36 +187,46 @@ export function EnrollmentsTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    {r.status === "ACTIVE" ? (
-                      <div className="flex flex-col gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setFreezeTarget(r)}
-                          disabled={pending}
-                        >
-                          Congelar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCancelTarget(r)}
-                          disabled={pending}
-                        >
-                          Cancelar
-                        </Button>
-                      </div>
-                    ) : null}
-                    {r.status === "SUSPENDED" ? (
+                    <div className="flex flex-col gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleReactivate(r)}
+                        onClick={() => handleEdit(r)}
                         disabled={pending}
                       >
-                        Reativar
+                        Editar
                       </Button>
-                    ) : null}
+                      {r.status === "ACTIVE" ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setFreezeTarget(r)}
+                            disabled={pending}
+                          >
+                            Congelar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCancelTarget(r)}
+                            disabled={pending}
+                          >
+                            Cancelar
+                          </Button>
+                        </>
+                      ) : null}
+                      {r.status === "SUSPENDED" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReactivate(r)}
+                          disabled={pending}
+                        >
+                          Reativar
+                        </Button>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -217,6 +242,11 @@ export function EnrollmentsTable({
       <FreezeDialog
         target={freezeTarget}
         onClose={() => setFreezeTarget(null)}
+      />
+      <EnrollmentEditModal
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onUpdated={() => router.refresh()}
       />
     </>
   );

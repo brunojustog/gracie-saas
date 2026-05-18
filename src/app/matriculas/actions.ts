@@ -135,6 +135,129 @@ export async function createEnrollment(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Editar matrícula (v1.1-Q)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Permite ajustar plano, modalidade, valor, pagamento, data e observações
+// de uma matrícula existente. NÃO mexe em status (transições usam as
+// actions específicas: cancel/suspend/reactivate) nem move o lead no
+// kanban — edição de matrícula é independente da jornada do lead.
+
+const updateSchema = z.object({
+  enrollmentId: z.string().min(1),
+  modalityId: z.string().min(1),
+  planId: z.string().min(1),
+  monthlyValue: z.number().positive().max(100_000),
+  paymentMethod: z.enum(["CREDIT_CARD", "PIX", "BOLETO", "CASH", "TRANSFER", "OTHER"]),
+  enrolledAt: z.string().date(),
+  observations: z.string().max(2000).nullable().optional(),
+});
+
+export async function updateEnrollment(input: unknown): Promise<ActionResult> {
+  const parsed = updateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+
+  const [modality, plan] = await Promise.all([
+    prisma.modality.findFirst({
+      where: { id: parsed.data.modalityId, tenantId: tenant.id, active: true },
+      select: { id: true, name: true },
+    }),
+    prisma.plan.findFirst({
+      where: { id: parsed.data.planId, tenantId: tenant.id, active: true },
+      select: { id: true, name: true },
+    }),
+  ]);
+  if (!modality) return { ok: false, error: "modalidade inválida" };
+  if (!plan) return { ok: false, error: "plano inválido" };
+
+  const previous = await prisma.enrollment.findUnique({
+    where: { id: enrollment.id },
+    select: {
+      modalityId: true,
+      planId: true,
+      monthlyValue: true,
+      paymentMethod: true,
+      enrolledAt: true,
+      observations: true,
+      modality: { select: { name: true } },
+      plan: { select: { name: true } },
+    },
+  });
+  if (!previous) return { ok: false, error: "matrícula desapareceu" };
+
+  const newEnrolledAt = new Date(parsed.data.enrolledAt);
+  const diffs: string[] = [];
+  if (previous.modalityId !== parsed.data.modalityId) {
+    diffs.push(`modalidade: ${previous.modality.name} → ${modality.name}`);
+  }
+  if (previous.planId !== parsed.data.planId) {
+    diffs.push(`plano: ${previous.plan.name} → ${plan.name}`);
+  }
+  if (Number(previous.monthlyValue) !== parsed.data.monthlyValue) {
+    diffs.push(
+      `valor: R$ ${Number(previous.monthlyValue).toFixed(2)} → R$ ${parsed.data.monthlyValue.toFixed(2)}`,
+    );
+  }
+  if (previous.paymentMethod !== parsed.data.paymentMethod) {
+    diffs.push(
+      `pagamento: ${previous.paymentMethod.toLowerCase()} → ${parsed.data.paymentMethod.toLowerCase()}`,
+    );
+  }
+  if (previous.enrolledAt.toISOString().slice(0, 10) !== parsed.data.enrolledAt) {
+    diffs.push(
+      `data: ${previous.enrolledAt.toLocaleDateString("pt-BR")} → ${newEnrolledAt.toLocaleDateString("pt-BR")}`,
+    );
+  }
+  const newObs = parsed.data.observations ?? null;
+  if ((previous.observations ?? null) !== newObs) {
+    diffs.push("observações atualizadas");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
+        modalityId: parsed.data.modalityId,
+        planId: parsed.data.planId,
+        monthlyValue: parsed.data.monthlyValue,
+        paymentMethod: parsed.data.paymentMethod,
+        enrolledAt: newEnrolledAt,
+        observations: newObs,
+      },
+    });
+
+    if (diffs.length > 0) {
+      await appendLeadNote(
+        {
+          tenantId: tenant.id,
+          leadId: enrollment.leadId,
+          authorId: user.id,
+          kind: "ENROLLMENT_UPDATED",
+          body: `Matrícula editada — ${diffs.join("; ")}`,
+          metadata: {
+            enrollmentId: enrollment.id,
+            modalityId: parsed.data.modalityId,
+            planId: parsed.data.planId,
+            monthlyValue: parsed.data.monthlyValue,
+            paymentMethod: parsed.data.paymentMethod,
+            enrolledAt: parsed.data.enrolledAt,
+          },
+        },
+        tx,
+      );
+    }
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/kanban");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Cancelar matrícula
 // ──────────────────────────────────────────────────────────────────────────
 
