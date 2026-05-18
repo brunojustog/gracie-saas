@@ -19,27 +19,15 @@ const membershipFactory = (
   ...overrides,
 });
 
-describe("scopedEnrollmentWhere", () => {
-  it("ADMIN vê todas as matrículas do tenant", () => {
-    const where = scopedEnrollmentWhere(membershipFactory({ role: "ADMIN" }));
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
-    expect(where).not.toHaveProperty("lead");
-  });
-
-  it("MANAGER vê todas (igual ADMIN)", () => {
-    const where = scopedEnrollmentWhere(membershipFactory({ role: "MANAGER" }));
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
-  });
-
-  it("SELLER vê apenas matrículas de leads atribuídos a si", () => {
-    const where = scopedEnrollmentWhere(
-      membershipFactory({ role: "SELLER", userId: "user_anna" }),
-    );
-    expect(where).toEqual({
-      tenantId: "tenant_gracie",
-      lead: { assignedSellerId: "user_anna" },
-    });
-  });
+describe("scopedEnrollmentWhere (v1.1-O: sem isolamento por seller)", () => {
+  it.each(["ADMIN", "MANAGER", "SELLER"] as const)(
+    "%s vê todas as matrículas do tenant",
+    (role) => {
+      const where = scopedEnrollmentWhere(membershipFactory({ role }));
+      expect(where).toEqual({ tenantId: "tenant_gracie" });
+      expect(where).not.toHaveProperty("lead");
+    },
+  );
 });
 
 describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
@@ -49,6 +37,15 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
       {},
     );
     expect(where).toEqual({ tenantId: "tenant_gracie" });
+  });
+
+  it("SELLER sem filtros = só tenant (v1.1-O)", () => {
+    const where = buildEnrollmentListWhere(
+      membershipFactory({ role: "SELLER", userId: "user_anna" }),
+      {},
+    );
+    expect(where).toEqual({ tenantId: "tenant_gracie" });
+    expect(where).not.toHaveProperty("lead");
   });
 
   it("filtro de status é aplicado pra todas as roles", () => {
@@ -64,34 +61,17 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
     expect(sellerW.status).toBe("CANCELED");
   });
 
-  it("search aplica em lead.name (case-insensitive)", () => {
-    const where = buildEnrollmentListWhere(
+  it("search aplica em lead.name (case-insensitive) — mesma forma pra qualquer role", () => {
+    const adminW = buildEnrollmentListWhere(
       membershipFactory({ role: "ADMIN" }),
       { search: "Thiago" },
     );
-    // SELLER e ADMIN têm shapes diferentes do `lead`. Pra ADMIN, deve
-    // aplicar SÓ o filtro de search:
-    expect(where.lead).toEqual({
-      name: { contains: "Thiago", mode: "insensitive" },
-    });
-  });
-
-  it("SELLER busca por nome COMBINA com scope (não sobrescreve)", () => {
-    const where = buildEnrollmentListWhere(
+    const sellerW = buildEnrollmentListWhere(
       membershipFactory({ role: "SELLER", userId: "user_anna" }),
-      { search: "Maria" },
+      { search: "Thiago" },
     );
-    expect(where.lead).toEqual({
-      name: { contains: "Maria", mode: "insensitive" },
-      assignedSellerId: "user_anna",
-    });
-  });
-
-  it("SELLER sem search ainda tem o scope aplicado", () => {
-    const where = buildEnrollmentListWhere(
-      membershipFactory({ role: "SELLER", userId: "user_anna" }),
-      {},
-    );
-    expect(where.lead).toEqual({ assignedSellerId: "user_anna" });
+    const expectedLead = { name: { contains: "Thiago", mode: "insensitive" } };
+    expect(adminW.lead).toEqual(expectedLead);
+    expect(sellerW.lead).toEqual(expectedLead);
   });
 });

@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getLeadsForKanban } from "@/server/leads";
 import { getFollowUpSummariesForLeads } from "@/server/messaging/status";
-import { roleAtLeast } from "@/server/rbac";
 import { requireTenantUser } from "@/server/tenant";
 
 import { KanbanBoard } from "./kanban-board";
@@ -49,21 +48,18 @@ export default async function KanbanPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
-    // SELLER não pode filtrar por outra vendedora — então nem mostramos
-    membership.role === "SELLER"
-      ? Promise.resolve([])
-      : prisma.tenantUser
-          .findMany({
-            where: { tenantId: tenant.id, role: "SELLER", active: true },
-            include: { user: { select: { id: true, name: true, email: true } } },
-            orderBy: { createdAt: "asc" },
-          })
-          .then((rows) =>
-            rows.map((r) => ({
-              id: r.user.id,
-              name: r.user.name ?? r.user.email,
-            })),
-          ),
+    prisma.tenantUser
+      .findMany({
+        where: { tenantId: tenant.id, role: "SELLER", active: true },
+        include: { user: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: "asc" },
+      })
+      .then((rows) =>
+        rows.map((r) => ({
+          id: r.user.id,
+          name: r.user.name ?? r.user.email,
+        })),
+      ),
   ]);
 
   // Hidrata cada card com o estado de follow-up (badge "M3/8", "pausado",
@@ -122,16 +118,10 @@ export default async function KanbanPage({
           leads={leads}
           modalities={modalities}
           sellers={sellers}
-          canReassign={roleAtLeast(membership.role, "MANAGER")}
+          canReassign={true}
           currentUserId={user.id}
           isSeller={membership.role === "SELLER"}
-          sellerOptionsForNewLead={
-            // SELLER no modal de novo lead só pode atribuir a si mesma; ADMIN/MANAGER
-            // vê todos. Pra SELLER monta uma opção única com o nome do usuário logado.
-            membership.role === "SELLER"
-              ? [{ id: user.id, name: user.name ?? user.email }]
-              : sellers
-          }
+          sellerOptionsForNewLead={sellers}
         />
       </main>
     </div>

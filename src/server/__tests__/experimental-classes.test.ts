@@ -16,29 +16,17 @@ const membershipFactory = (
   ...overrides,
 });
 
-describe("scopedClassWhere", () => {
-  it("ADMIN vê todas as aulas do tenant", () => {
-    const where = scopedClassWhere(membershipFactory({ role: "ADMIN" }));
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
-    expect(where).not.toHaveProperty("lead");
-  });
+describe("scopedClassWhere (v1.1-O: sem isolamento por seller)", () => {
+  it.each(["ADMIN", "MANAGER", "SELLER"] as const)(
+    "%s vê todas as aulas do tenant",
+    (role) => {
+      const where = scopedClassWhere(membershipFactory({ role }));
+      expect(where).toEqual({ tenantId: "tenant_gracie" });
+      expect(where).not.toHaveProperty("lead");
+    },
+  );
 
-  it("MANAGER vê todas (igual ADMIN)", () => {
-    const where = scopedClassWhere(membershipFactory({ role: "MANAGER" }));
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
-  });
-
-  it("SELLER vê apenas aulas de leads atribuídos a si (filter via lead.assignedSellerId)", () => {
-    const where = scopedClassWhere(
-      membershipFactory({ role: "SELLER", userId: "user_anna" }),
-    );
-    expect(where).toEqual({
-      tenantId: "tenant_gracie",
-      lead: { assignedSellerId: "user_anna" },
-    });
-  });
-
-  it("SELLER em tenant diferente NÃO enxerga aulas do outro (isolamento)", () => {
+  it("tenants diferentes nunca se cruzam (isolamento de tenant é a única fronteira)", () => {
     const annaGracie = scopedClassWhere(
       membershipFactory({
         role: "SELLER",

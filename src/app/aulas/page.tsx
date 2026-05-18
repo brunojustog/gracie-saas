@@ -30,14 +30,8 @@ export default async function AulasPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, color: true },
     }),
-    // Picker do modal de agendar — SELLER vê só leads próprios
     prisma.lead.findMany({
-      where: {
-        tenantId: tenant.id,
-        ...(membership.role === "SELLER"
-          ? { assignedSellerId: membership.userId }
-          : {}),
-      },
+      where: { tenantId: tenant.id },
       orderBy: { name: "asc" },
       select: {
         id: true,

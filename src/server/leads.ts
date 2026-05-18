@@ -1,30 +1,27 @@
 /**
- * Camada de dados de Lead, com escopo automático por tenant + role.
+ * Camada de dados de Lead, com isolamento por tenant.
  *
- * Política de visibilidade:
- *   - ADMIN, MANAGER → todos os leads do tenant
- *   - SELLER         → APENAS leads onde `assignedSellerId = user.id`
- *     (leads não-atribuídos ficam invisíveis pra SELLER; triagem é manual
- *     por ADMIN/MANAGER. Spec de auto-assignment é futuro.)
+ * Política de visibilidade (v1.1-O):
+ *   - Qualquer role autenticada no tenant vê todos os leads do tenant.
+ *     Operação real do BGAF mostrou que vendedoras atendem leads umas das
+ *     outras (cobertura quando alguém está fora) — restringir por
+ *     `assignedSellerId` virou atrito. `assignedSeller` continua existindo
+ *     como atribuição formal (relevante pra ranking), só não filtra leitura.
  *
  * Toda função aqui consome um `TenantUser` (membership) e injeta o filtro
- * de tenant + role automaticamente. Server Actions e Server Components
- * NUNCA devem chamar `prisma.lead.*` diretamente; sempre via estes helpers.
+ * de tenant. Server Actions e Server Components NUNCA devem chamar
+ * `prisma.lead.*` diretamente; sempre via estes helpers.
  */
 import type { Prisma, TenantUser } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
 /**
- * Filtro `where` que aplica isolamento de tenant + role.
+ * Filtro `where` que aplica isolamento de tenant.
  * Função pura — testável em isolamento.
  */
 export function scopedLeadWhere(membership: TenantUser): Prisma.LeadWhereInput {
-  const base: Prisma.LeadWhereInput = { tenantId: membership.tenantId };
-  if (membership.role === "SELLER") {
-    return { ...base, assignedSellerId: membership.userId };
-  }
-  return base;
+  return { tenantId: membership.tenantId };
 }
 
 export type KanbanFilters = {
@@ -34,14 +31,8 @@ export type KanbanFilters = {
 };
 
 /**
- * Combina o escopo da membership com filtros adicionais vindos da UI.
+ * Combina o escopo da membership (tenant) com filtros vindos da UI.
  * Filtros nunca conseguem AMPLIAR o escopo — só restringir dentro dele.
- *
- * Ex: SELLER tentando passar `?assignedSellerId=outro-seller` continua
- * vendo só os próprios leads (o spread garante que `scopedLeadWhere`
- * sobrescreve o filtro da UI quando há conflito… NÃO — a ordem importa).
- *
- * Ordem aplicada: filtros UI primeiro, scope depois → scope ganha.
  */
 export function buildKanbanWhere(
   membership: TenantUser,
@@ -62,9 +53,7 @@ export function buildKanbanWhere(
     where.modalityId = filters.modalityId;
   }
 
-  // assignedSellerId só é honrado quando o caller é ADMIN/MANAGER.
-  // Pra SELLER, scopedLeadWhere fixa em si mesmo (passa por cima).
-  if (filters.assignedSellerId && membership.role !== "SELLER") {
+  if (filters.assignedSellerId) {
     where.assignedSellerId = filters.assignedSellerId;
   }
 
@@ -100,9 +89,9 @@ export async function getLeadsForKanban(
 }
 
 /**
- * Carrega 1 lead específico respeitando o escopo. Retorna null se o user
- * não tem permissão de ver — usado por Server Actions pra autorizar antes
- * de mutar (ex: moveLeadToStage).
+ * Carrega 1 lead específico respeitando o escopo de tenant. Retorna null
+ * se o lead não existe ou é de outro tenant — usado por Server Actions pra
+ * autorizar antes de mutar (ex: moveLeadToStage).
  */
 export async function findLeadInScope(
   membership: TenantUser,

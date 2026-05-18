@@ -1,11 +1,8 @@
 /**
  * Camada de dados de ExperimentalClass (aula experimental).
  *
- * Política de visibilidade (espelha leads.ts):
- *   - ADMIN, MANAGER → todas as aulas do tenant
- *   - SELLER         → APENAS aulas de leads que ela atendeu (assignedSellerId)
- *
- * NOTA: aulas NÃO atribuídas (lead sem vendedora) ficam invisíveis pra SELLER.
+ * Política de visibilidade (v1.1-O): qualquer role do tenant vê todas
+ * as aulas do tenant. Espelha leads.ts/enrollments.ts.
  */
 import type { Prisma, TenantUser } from "@prisma/client";
 
@@ -14,13 +11,7 @@ import { prisma } from "@/lib/prisma";
 export function scopedClassWhere(
   membership: TenantUser,
 ): Prisma.ExperimentalClassWhereInput {
-  const base: Prisma.ExperimentalClassWhereInput = {
-    tenantId: membership.tenantId,
-  };
-  if (membership.role === "SELLER") {
-    return { ...base, lead: { assignedSellerId: membership.userId } };
-  }
-  return base;
+  return { tenantId: membership.tenantId };
 }
 
 /** Aulas do tenant agendadas dentro de [from, to). */

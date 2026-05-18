@@ -9,7 +9,6 @@ import { appendLeadNote, listLeadNotes, type LeadNoteFilter, type LeadNoteRow } 
 import { findLeadInScope, scopedLeadWhere } from "@/server/leads";
 import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/messaging";
 import { getLeadFollowUpStatus, type FollowUpStatus } from "@/server/messaging/status";
-import { roleAtLeast } from "@/server/rbac";
 import { requireTenantUser } from "@/server/tenant";
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -118,7 +117,7 @@ export async function updateLeadInfo(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Assign seller (só ADMIN/MANAGER pode reatribuir)
+// Assign seller (v1.1-O: qualquer role do tenant pode reatribuir)
 // ──────────────────────────────────────────────────────────────────────────
 
 const assignSchema = z.object({
@@ -131,9 +130,6 @@ export async function assignSeller(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
   const { tenant, membership } = await requireTenantUser();
-  if (!roleAtLeast(membership.role, "MANAGER")) {
-    return { ok: false, error: "apenas managers/admins podem reatribuir leads" };
-  }
 
   const lead = await findLeadInScope(membership, parsed.data.leadId);
   if (!lead) return { ok: false, error: "lead não encontrado" };
@@ -380,12 +376,6 @@ export async function createManualLead(input: unknown): Promise<CreateLeadResult
     if (!m) return { ok: false, error: "modalidade inválida" };
   }
   if (parsed.data.assignedSellerId) {
-    if (!roleAtLeast(membership.role, "MANAGER")) {
-      // SELLER só pode atribuir a si mesma.
-      if (parsed.data.assignedSellerId !== membership.userId) {
-        return { ok: false, error: "vendedora só pode criar leads pra si mesma" };
-      }
-    }
     const member = await prisma.tenantUser.findUnique({
       where: {
         tenantId_userId: { tenantId: tenant.id, userId: parsed.data.assignedSellerId },

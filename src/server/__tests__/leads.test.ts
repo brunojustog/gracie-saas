@@ -16,28 +16,17 @@ const membershipFactory = (
   ...overrides,
 });
 
-describe("scopedLeadWhere", () => {
-  it("ADMIN vê todos os leads do tenant", () => {
-    const where = scopedLeadWhere(membershipFactory({ role: "ADMIN" }));
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
-    expect(where).not.toHaveProperty("assignedSellerId");
-  });
+describe("scopedLeadWhere (v1.1-O: sem isolamento por seller)", () => {
+  it.each(["ADMIN", "MANAGER", "SELLER"] as const)(
+    "%s vê todos os leads do tenant",
+    (role) => {
+      const where = scopedLeadWhere(membershipFactory({ role }));
+      expect(where).toEqual({ tenantId: "tenant_gracie" });
+      expect(where).not.toHaveProperty("assignedSellerId");
+    },
+  );
 
-  it("MANAGER vê todos os leads do tenant (igual ADMIN)", () => {
-    const where = scopedLeadWhere(membershipFactory({ role: "MANAGER" }));
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
-    expect(where).not.toHaveProperty("assignedSellerId");
-  });
-
-  it("SELLER vê APENAS leads atribuídos a si", () => {
-    const where = scopedLeadWhere(membershipFactory({ role: "SELLER", userId: "user_anna" }));
-    expect(where).toEqual({
-      tenantId: "tenant_gracie",
-      assignedSellerId: "user_anna",
-    });
-  });
-
-  it("SELLERs de tenants diferentes nunca enxergam um o outro (isolamento)", () => {
+  it("tenants diferentes nunca se cruzam (isolamento de tenant é a única fronteira)", () => {
     const annaGracie = scopedLeadWhere(
       membershipFactory({ role: "SELLER", userId: "anna", tenantId: "gracie" }),
     );
@@ -46,7 +35,6 @@ describe("scopedLeadWhere", () => {
     );
     expect(annaGracie.tenantId).toBe("gracie");
     expect(beatrizAlbanos.tenantId).toBe("albanos");
-    expect(annaGracie.assignedSellerId).not.toBe(beatrizAlbanos.assignedSellerId);
   });
 });
 
@@ -85,21 +73,15 @@ describe("buildKanbanWhere — combinando filtros UI com scope", () => {
     expect(sellerW.modalityId).toBe("mod_gb1");
   });
 
-  it("ADMIN pode filtrar por assignedSellerId arbitrário", () => {
-    const where = buildKanbanWhere(membershipFactory({ role: "ADMIN" }), {
+  it("assignedSellerId arbitrário é honrado pra qualquer role (v1.1-O)", () => {
+    const adminW = buildKanbanWhere(membershipFactory({ role: "ADMIN" }), {
       assignedSellerId: "user_evelyn",
     });
-    expect(where.assignedSellerId).toBe("user_evelyn");
-  });
-
-  it("SELLER tentando passar assignedSellerId de outra pessoa NÃO escapa do scope", () => {
-    // Cenário: Anna (SELLER) tenta mexer no querystring pra ver leads da Evelyn.
-    // O filtro UI seria respeitado por buildKanbanWhere? NÃO — scope vence.
-    const where = buildKanbanWhere(
+    const sellerW = buildKanbanWhere(
       membershipFactory({ role: "SELLER", userId: "user_anna" }),
       { assignedSellerId: "user_evelyn" },
     );
-    // O filtro UI é simplesmente descartado nesse caso.
-    expect(where.assignedSellerId).toBe("user_anna");
+    expect(adminW.assignedSellerId).toBe("user_evelyn");
+    expect(sellerW.assignedSellerId).toBe("user_evelyn");
   });
 });

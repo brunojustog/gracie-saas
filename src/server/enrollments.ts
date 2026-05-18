@@ -1,9 +1,8 @@
 /**
  * Camada de dados de Enrollment (matrícula).
  *
- * Política de visibilidade (espelha leads/experimental-classes):
- *   - ADMIN, MANAGER → todas as matrículas do tenant
- *   - SELLER         → APENAS matrículas de leads atribuídos a si
+ * Política de visibilidade (v1.1-O): qualquer role do tenant vê todas
+ * as matrículas do tenant. Espelha leads.ts/experimental-classes.ts.
  *
  * Enrollment é 1:1 com Lead — tentativa de criar duplicata viola constraint
  * unique do schema. Os helpers aqui assumem que essa unicidade está
@@ -16,13 +15,7 @@ import { prisma } from "@/lib/prisma";
 export function scopedEnrollmentWhere(
   membership: TenantUser,
 ): Prisma.EnrollmentWhereInput {
-  const base: Prisma.EnrollmentWhereInput = {
-    tenantId: membership.tenantId,
-  };
-  if (membership.role === "SELLER") {
-    return { ...base, lead: { assignedSellerId: membership.userId } };
-  }
-  return base;
+  return { tenantId: membership.tenantId };
 }
 
 export type EnrollmentListFilters = {
@@ -42,19 +35,10 @@ export function buildEnrollmentListWhere(
   if (filters.modalityId) where.modalityId = filters.modalityId;
   if (filters.status) where.status = filters.status;
 
-  // Filtros que afetam o relacionamento `lead` (search por nome + scope do
-  // SELLER) são compostos no MESMO objeto pra não se sobrescreverem.
-  // Tampering: SELLER passando ?seller=outra continua vendo só os seus
-  // (assignedSellerId é forçado abaixo, sobrescreve qualquer querystring).
-  const leadConstraint: Prisma.LeadWhereInput = {};
   if (filters.search?.trim()) {
-    leadConstraint.name = { contains: filters.search.trim(), mode: "insensitive" };
-  }
-  if (membership.role === "SELLER") {
-    leadConstraint.assignedSellerId = membership.userId;
-  }
-  if (Object.keys(leadConstraint).length > 0) {
-    where.lead = leadConstraint;
+    where.lead = {
+      name: { contains: filters.search.trim(), mode: "insensitive" },
+    };
   }
 
   return where;
