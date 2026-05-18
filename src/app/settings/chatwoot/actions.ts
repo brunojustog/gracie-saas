@@ -11,6 +11,11 @@ const schema = z.object({
   chatwootAccountId: z.number().int().positive().nullable(),
   chatwootApiToken: z.string().max(500).nullable().or(z.literal("").transform(() => null)),
   chatwootWebhookSecret: z.string().max(500).nullable().or(z.literal("").transform(() => null)),
+  chatwootImportLabel: z
+    .string()
+    .max(100)
+    .nullable()
+    .or(z.literal("").transform(() => null)),
 });
 
 export async function updateChatwootConfig(
@@ -27,6 +32,7 @@ export async function updateChatwootConfig(
       chatwootAccountId: parsed.data.chatwootAccountId ?? null,
       chatwootApiToken: parsed.data.chatwootApiToken ?? null,
       chatwootWebhookSecret: parsed.data.chatwootWebhookSecret ?? null,
+      chatwootImportLabel: parsed.data.chatwootImportLabel?.trim() || null,
     },
   });
 

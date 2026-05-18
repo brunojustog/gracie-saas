@@ -101,6 +101,12 @@ model Tenant {
   chatwootAccountId     Int?
   chatwootApiToken      String?
   chatwootWebhookSecret String?
+  /**
+   * v1.1-U: filtro de import. Quando setado (não-nulo, não-vazio), só
+   * conversas com essa label entram como lead (webhook + backfill).
+   * Null/empty = importa todas as conversas (comportamento legado).
+   */
+  chatwootImportLabel   String?
 
   // Wuzapi (WhatsApp custom API) — usado pra disparar follow-up automatizado.
   //   - wuzapiUrl: URL base (ex: https://wuzapi.brunojusto.com.br)

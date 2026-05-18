@@ -136,9 +136,28 @@ async function importContact(
   contact: ChatwootContact,
   conversations: ChatwootConversation[],
   stageByName: Map<string, { id: string }>,
+  importLabel: string | null,
 ): Promise<ImportContactResult> {
   const contactId = String(contact.id);
-  const hint = decideStage(conversations, contact.name);
+
+  // v1.1-U: filtro por label. Considera só conversas que carregam a label;
+  // se sobrar zero, skipa o contato. Contatos sem nenhuma conversa também
+  // skipam quando o filtro está ativo (não tem como inferir intenção).
+  let effectiveConversations = conversations;
+  if (importLabel) {
+    const needle = importLabel.toLowerCase();
+    effectiveConversations = conversations.filter((c) =>
+      (c.labels ?? []).some((l) => l.toLowerCase() === needle),
+    );
+    if (effectiveConversations.length === 0) {
+      return {
+        kind: "skipped",
+        reason: `nenhuma conversa com label "${importLabel}"`,
+      };
+    }
+  }
+
+  const hint = decideStage(effectiveConversations, contact.name);
   const stage = stageByName.get(hint.stageName);
   if (!stage) {
     return { kind: "skipped", reason: `Stage "${hint.stageName}" não existe no tenant` };
@@ -146,11 +165,11 @@ async function importContact(
 
   // Canal da conversa mais recente (se houver) determina o origin.
   const latestChannel =
-    conversations[0]?.channel ??
-    conversations[0]?.meta?.channel ??
+    effectiveConversations[0]?.channel ??
+    effectiveConversations[0]?.meta?.channel ??
     null;
 
-  const { firstAt, lastAt } = pickInteractionDates(conversations);
+  const { firstAt, lastAt } = pickInteractionDates(effectiveConversations);
 
   const existing = await prisma.lead.findFirst({
     where: { tenantId, chatwootContactId: contactId },
@@ -162,9 +181,13 @@ async function importContact(
     phone: contact.phone_number ?? undefined,
     email: contact.email ?? undefined,
     chatwootContactId: contactId,
-    chatwootConversationId: conversations[0] ? String(conversations[0].id) : null,
+    chatwootConversationId: effectiveConversations[0]
+      ? String(effectiveConversations[0].id)
+      : null,
     chatwootInboxId:
-      typeof conversations[0]?.inbox_id === "number" ? conversations[0]!.inbox_id : null,
+      typeof effectiveConversations[0]?.inbox_id === "number"
+        ? effectiveConversations[0]!.inbox_id
+        : null,
     firstInteractionAt: firstAt,
     lastInteractionAt: lastAt,
   };
@@ -193,9 +216,13 @@ async function importContact(
         tags: hint.tags,
         notes: hint.notes,
         chatwootContactId: contactId,
-        chatwootConversationId: conversations[0] ? String(conversations[0].id) : null,
+        chatwootConversationId: effectiveConversations[0]
+          ? String(effectiveConversations[0].id)
+          : null,
         chatwootInboxId:
-          typeof conversations[0]?.inbox_id === "number" ? conversations[0]!.inbox_id : null,
+          typeof effectiveConversations[0]?.inbox_id === "number"
+            ? effectiveConversations[0]!.inbox_id
+            : null,
         firstInteractionAt: firstAt,
         lastInteractionAt: lastAt,
       },
@@ -204,7 +231,7 @@ async function importContact(
       data: {
         leadId: lead.id,
         toStageId: stage.id,
-        notes: `Lead importado do Chatwoot (status conversa: ${conversations[0]?.status ?? "sem conversa"})`,
+        notes: `Lead importado do Chatwoot (status conversa: ${effectiveConversations[0]?.status ?? "sem conversa"})`,
       },
     });
     return lead;
@@ -239,11 +266,18 @@ export async function importChatwootPage(
   credentials: ChatwootCredentials,
   page: number,
 ): Promise<ImportPageSummary | { error: string }> {
-  const stages = await prisma.stage.findMany({
-    where: { tenantId, active: true },
-    select: { id: true, name: true },
-  });
+  const [stages, tenant] = await Promise.all([
+    prisma.stage.findMany({
+      where: { tenantId, active: true },
+      select: { id: true, name: true },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { chatwootImportLabel: true },
+    }),
+  ]);
   const stageByName = new Map(stages.map((s) => [s.name, s]));
+  const importLabel = tenant?.chatwootImportLabel?.trim() || null;
 
   const result = await listContacts(credentials, page);
   if (!result.ok) {
@@ -276,7 +310,7 @@ export async function importChatwootPage(
     }
 
     try {
-      const out = await importContact(tenantId, contact, conversations, stageByName);
+      const out = await importContact(tenantId, contact, conversations, stageByName, importLabel);
       if (out.kind === "created") summary.created++;
       else if (out.kind === "updated") summary.updated++;
       else {

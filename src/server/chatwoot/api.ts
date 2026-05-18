@@ -139,6 +139,13 @@ export type ChatwootConversation = {
   last_activity_at?: number | null;
   /** Canal usado nessa conversa — discutível, às vezes vem só no inbox. */
   channel?: string | null;
+  /**
+   * Labels da conversa (v1.1-U). A API REST retorna como `labels` no payload
+   * de `/contacts/{id}/conversations`. Algumas versões do Chatwoot mandam só
+   * pelo endpoint dedicado `/conversations/{id}/labels` — se vier vazio
+   * mesmo havendo label, o usuário precisa atualizar.
+   */
+  labels?: string[];
   messages?: ChatwootMessage[];
   meta?: {
     channel?: string | null;

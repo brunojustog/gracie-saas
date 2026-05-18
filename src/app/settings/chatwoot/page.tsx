@@ -14,6 +14,7 @@ export default async function ChatwootPage() {
       chatwootAccountId: true,
       chatwootApiToken: true,
       chatwootWebhookSecret: true,
+      chatwootImportLabel: true,
     },
   });
 
@@ -25,6 +26,7 @@ export default async function ChatwootPage() {
         chatwootAccountId: data?.chatwootAccountId ?? null,
         chatwootApiToken: data?.chatwootApiToken ?? "",
         chatwootWebhookSecret: data?.chatwootWebhookSecret ?? "",
+        chatwootImportLabel: data?.chatwootImportLabel ?? "",
       }}
     />
   );

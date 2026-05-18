@@ -15,6 +15,7 @@ type Initial = {
   chatwootAccountId: number | null;
   chatwootApiToken: string;
   chatwootWebhookSecret: string;
+  chatwootImportLabel: string;
 };
 
 export function ChatwootForm({
@@ -30,6 +31,7 @@ export function ChatwootForm({
   );
   const [apiToken, setApiToken] = useState(initial.chatwootApiToken);
   const [webhookSecret, setWebhookSecret] = useState(initial.chatwootWebhookSecret);
+  const [importLabel, setImportLabel] = useState(initial.chatwootImportLabel);
   const [pending, startTransition] = useTransition();
 
   const handleSave = () => {
@@ -44,6 +46,7 @@ export function ChatwootForm({
         chatwootAccountId: idNum,
         chatwootApiToken: apiToken || null,
         chatwootWebhookSecret: webhookSecret || null,
+        chatwootImportLabel: importLabel || null,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -151,6 +154,37 @@ export function ChatwootForm({
 
         <Button onClick={handleSave} disabled={pending} className="w-full">
           {pending ? "Salvando…" : "Salvar configuração"}
+        </Button>
+      </div>
+
+      <div className="space-y-3 rounded-lg border bg-card p-4">
+        <div>
+          <h3 className="text-sm font-semibold">Filtro de import por label</h3>
+          <p className="text-xs text-muted-foreground">
+            Quando preenchido, só conversas marcadas com essa label no Chatwoot
+            entram como lead (webhook em tempo real + import histórico).
+            Deixar em branco = importa tudo (comportamento padrão).
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="import-label">Label do Chatwoot</Label>
+          <Input
+            id="import-label"
+            value={importLabel}
+            onChange={(e) => setImportLabel(e.target.value)}
+            placeholder="ex: lead"
+            disabled={pending}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Comparação case-insensitive. A label precisa estar na conversa no
+            momento em que o webhook chega — se for adicionada depois, o lead
+            não entra automaticamente.
+          </p>
+        </div>
+
+        <Button onClick={handleSave} disabled={pending} className="w-full">
+          {pending ? "Salvando…" : "Salvar filtro"}
         </Button>
       </div>
     </div>

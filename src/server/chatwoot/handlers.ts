@@ -27,6 +27,34 @@ export type HandlerResult =
   | { kind: "skipped"; reason: string };
 
 /**
+ * v1.1-U: filtro de import por label. Quando o tenant tem
+ * `chatwootImportLabel` setado, só conversas que carregam essa label entram
+ * como lead. Comportamento padrão (null/empty) = importa tudo.
+ *
+ * Comparação case-insensitive porque o Chatwoot às vezes normaliza o
+ * casing das labels dependendo da versão.
+ */
+async function shouldImportConversation(
+  tenantId: string,
+  conversationLabels: string[] | null | undefined,
+): Promise<{ allow: true } | { allow: false; reason: string }> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { chatwootImportLabel: true },
+  });
+  const filter = tenant?.chatwootImportLabel?.trim();
+  if (!filter) return { allow: true };
+
+  const labels = (conversationLabels ?? []).map((l) => l.toLowerCase());
+  if (labels.includes(filter.toLowerCase())) return { allow: true };
+
+  return {
+    allow: false,
+    reason: `conversa sem label "${filter}" — filtro de import ativo`,
+  };
+}
+
+/**
  * Resolve o stage inicial do tenant (primeiro `active` por `order` ASC).
  * Lança se não existir — significa que o seed/setup do tenant está incompleto.
  */
@@ -149,6 +177,9 @@ export async function handleConversationCreated(
     return { kind: "skipped", reason: "sender sem id válido" };
   }
 
+  const gate = await shouldImportConversation(tenantId, event.labels);
+  if (!gate.allow) return { kind: "skipped", reason: gate.reason };
+
   return upsertLeadFromContact({
     tenantId,
     contact: {
@@ -171,6 +202,21 @@ export async function handleContactCreated(
   const contactId = normalizeId(event.id);
   if (!contactId) {
     return { kind: "skipped", reason: "contact_created sem id" };
+  }
+
+  // v1.1-U: contact_created não tem conversa associada — não dá pra inferir
+  // labels. Quando filtro está ativo, ignora pra não vazar leads sem etiqueta.
+  // Lead vai entrar depois via conversation_created/message_created se a
+  // conversa receber a label correta.
+  const filter = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { chatwootImportLabel: true },
+  });
+  if (filter?.chatwootImportLabel?.trim()) {
+    return {
+      kind: "skipped",
+      reason: "contact_created sem labels — filtro de import ativo",
+    };
   }
 
   return upsertLeadFromContact({
@@ -322,6 +368,14 @@ export async function handleMessageCreated(
     });
     return { kind: "updated", leadId: existing.id };
   }
+
+  // v1.1-U: criando lead via message_created — só passa se a conversa carrega
+  // a label do filtro. Lead já existente é tratado acima (não passa por aqui).
+  const gate = await shouldImportConversation(
+    tenantId,
+    event.conversation?.labels,
+  );
+  if (!gate.allow) return { kind: "skipped", reason: gate.reason };
 
   return upsertLeadFromContact({
     tenantId,

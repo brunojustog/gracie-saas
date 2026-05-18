@@ -48,6 +48,12 @@ export const conversationCreatedSchema = z
     inbox_id: z.union([z.number(), z.string()]).nullish(),
     channel: chatwootChannelSchema.nullish(),
     status: z.string().nullish(),
+    /**
+     * Labels da conversa (v1.1-U). O Chatwoot manda como array de strings
+     * (nomes das labels). Pode vir vazio/ausente quando a conversa nasce
+     * sem label ainda.
+     */
+    labels: z.array(z.string()).nullish(),
     meta: z
       .object({
         sender: chatwootContactSchema.optional(),
@@ -81,6 +87,7 @@ export const messageCreatedSchema = z
         id: z.union([z.number(), z.string()]),
         inbox_id: z.union([z.number(), z.string()]).nullish(),
         channel: chatwootChannelSchema.nullish(),
+        labels: z.array(z.string()).nullish(),
         meta: z
           .object({
             sender: chatwootContactSchema.optional(),
