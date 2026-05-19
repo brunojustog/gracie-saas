@@ -25,6 +25,7 @@ import { EnrollmentModal } from "../matriculas/enrollment-modal";
 import { moveLeadToStage } from "./actions";
 import { LeadCard } from "./lead-card";
 import { LeadSheet } from "./lead-sheet";
+import { LossReasonDialog } from "./loss-reason-dialog";
 import { NewLeadModal } from "./new-lead-modal";
 import { QuickScheduleModal } from "./quick-schedule-modal";
 
@@ -109,6 +110,12 @@ export function KanbanBoard({
     /** Stage pra onde mover o lead após agendar (= stage que disparou o intercept). */
     targetStageId: string;
   } | null>(null);
+  const [lossTarget, setLossTarget] = useState<{
+    leadId: string;
+    leadName: string;
+    toStageId: string;
+    toStageName: string;
+  } | null>(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
   const [, startTransition] = useTransition();
 
@@ -169,6 +176,19 @@ export function KanbanBoard({
         name: lead.name,
         modalityId: lead.modalityId,
         targetStageId: targetStage.id,
+      });
+      return;
+    }
+
+    // v1.1-Z: drag pra stage isLost abre dialog de motivo obrigatório
+    // (igual ao soft delete: motivo fica gravado pra audit). Confirmar
+    // move + adiciona tag "Perdido" + pausa welcome.
+    if (targetStage?.isLost) {
+      setLossTarget({
+        leadId,
+        leadName: lead.name,
+        toStageId: targetStage.id,
+        toStageName: targetStage.name,
       });
       return;
     }
@@ -281,6 +301,12 @@ export function KanbanBoard({
           // o path. Força refresh pra trazer o estado novo.
           router.refresh();
         }}
+      />
+
+      <LossReasonDialog
+        target={lossTarget}
+        onClose={() => setLossTarget(null)}
+        onConfirmed={() => router.refresh()}
       />
 
       <QuickScheduleModal
