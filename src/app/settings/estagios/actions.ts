@@ -14,6 +14,7 @@ const stageSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   isWon: z.boolean().default(false),
   isLost: z.boolean().default(false),
+  isScheduling: z.boolean().default(false),
   active: z.boolean().default(true),
 });
 
@@ -37,6 +38,7 @@ export async function upsertStage(input: unknown): Promise<Result> {
         color: parsed.data.color,
         isWon: parsed.data.isWon,
         isLost: parsed.data.isLost,
+        isScheduling: parsed.data.isScheduling,
         active: parsed.data.active,
       },
     });
@@ -53,6 +55,7 @@ export async function upsertStage(input: unknown): Promise<Result> {
         color: parsed.data.color,
         isWon: parsed.data.isWon,
         isLost: parsed.data.isLost,
+        isScheduling: parsed.data.isScheduling,
         order: (max._max.order ?? 0) + 1,
       },
     });

@@ -94,6 +94,17 @@ export async function getLeadsForKanban(
       modality: { select: { id: true, name: true } },
       assignedSeller: { select: { id: true, name: true, email: true } },
       enrollment: { select: { id: true, status: true } },
+      // v1.1-X/Y: aulas futuras (SCHEDULED/CONFIRMED) usadas pra decidir
+      // se drag pro stage de agendamento abre o modal ou não.
+      experimentalClasses: {
+        where: {
+          status: { in: ["SCHEDULED", "CONFIRMED"] },
+          scheduledDate: { gt: new Date() },
+        },
+        select: { id: true, scheduledDate: true, status: true },
+        orderBy: { scheduledDate: "asc" },
+        take: 1,
+      },
     },
     orderBy: { lastInteractionAt: "desc" },
   });

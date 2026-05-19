@@ -48,6 +48,7 @@ export default async function KanbanPage({
         order: true,
         isWon: true,
         isLost: true,
+        isScheduling: true,
       },
     }),
     getLeadsForKanban(membership, filters),

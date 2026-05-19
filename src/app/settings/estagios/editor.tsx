@@ -40,6 +40,7 @@ type Stage = {
   order: number;
   isWon: boolean;
   isLost: boolean;
+  isScheduling: boolean;
   active: boolean;
 };
 
@@ -176,6 +177,11 @@ function SortableStage({
               perdido
             </span>
           )}
+          {stage.isScheduling && (
+            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-900">
+              agendamento
+            </span>
+          )}
           {!stage.active && (
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
               inativo
@@ -202,6 +208,7 @@ function StageFormBody({
   const [color, setColor] = useState(stage?.color ?? "#6B7280");
   const [isWon, setIsWon] = useState(stage?.isWon ?? false);
   const [isLost, setIsLost] = useState(stage?.isLost ?? false);
+  const [isScheduling, setIsScheduling] = useState(stage?.isScheduling ?? false);
   const [active, setActive] = useState(stage?.active ?? true);
   const [pending, startTransition] = useTransition();
 
@@ -221,6 +228,7 @@ function StageFormBody({
         color,
         isWon,
         isLost,
+        isScheduling,
         active,
       });
       if (!result.ok) {
@@ -280,6 +288,22 @@ function StageFormBody({
               }}
             />
           </div>
+        </div>
+        <div className="flex items-start justify-between rounded border p-3">
+          <div>
+            <Label htmlFor="scheduling" className="text-sm">
+              Estágio de agendamento
+            </Label>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Quando arrastar lead pra esse estágio, abre modal de agendar
+              aula automaticamente (se lead não tem aula futura).
+            </p>
+          </div>
+          <Switch
+            id="scheduling"
+            checked={isScheduling}
+            onCheckedChange={setIsScheduling}
+          />
         </div>
         {stage ? (
           <div className="flex items-center justify-between rounded border p-3">

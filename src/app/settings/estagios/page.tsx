@@ -16,6 +16,7 @@ export default async function EstagiosPage() {
       order: true,
       isWon: true,
       isLost: true,
+      isScheduling: true,
       active: true,
     },
   });

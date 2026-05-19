@@ -167,6 +167,12 @@ model Stage {
   order    Int
   isWon    Boolean @default(false)
   isLost   Boolean @default(false)
+  /**
+   * v1.1-X: drag pra esse stage abre modal de agendar aula experimental
+   * (se o lead ainda não tem aula futura). UX pra vendedora não precisar
+   * sair do kanban.
+   */
+  isScheduling Boolean @default(false)
   active   Boolean @default(true)
 
   tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)

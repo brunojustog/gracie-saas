@@ -25,12 +25,18 @@ import { moveLeadToStage } from "./actions";
 import { LeadCard } from "./lead-card";
 import { LeadSheet } from "./lead-sheet";
 import { NewLeadModal } from "./new-lead-modal";
+import { QuickScheduleModal } from "./quick-schedule-modal";
 
 type Lead = React.ComponentProps<typeof LeadCard>["lead"] & {
   stageId: string;
   modalityId: string | null;
   /** Se já tem matrícula, drag pro stage Matriculado NÃO intercepta. */
   enrollment: { id: string; status: string } | null;
+  /**
+   * Aula(s) futura(s) — v1.1-X usa pra decidir se intercepta drag pro stage
+   * de agendamento. Vem ordenado por scheduledDate ASC, take: 1.
+   */
+  experimentalClasses: Array<{ id: string; scheduledDate: Date | string; status: string }>;
 };
 
 type Stage = {
@@ -40,6 +46,7 @@ type Stage = {
   order: number;
   isWon: boolean;
   isLost: boolean;
+  isScheduling: boolean;
 };
 
 type Modality = { id: string; name: string };
@@ -93,6 +100,13 @@ export function KanbanBoard({
     name: string;
     modalityId: string | null;
   } | null>(null);
+  const [scheduleLead, setScheduleLead] = useState<{
+    id: string;
+    name: string;
+    modalityId: string | null;
+    /** Stage pra onde mover o lead após agendar (= stage que disparou o intercept). */
+    targetStageId: string;
+  } | null>(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
   const [, startTransition] = useTransition();
 
@@ -141,6 +155,19 @@ export function KanbanBoard({
     // ainda — se o user cancelar, o card permanece no stage original.
     if (targetStage?.isWon && !lead.enrollment) {
       setEnrollLead({ id: lead.id, name: lead.name, modalityId: lead.modalityId });
+      return;
+    }
+
+    // v1.1-X: interceptação pra stage de agendamento. Abre modal SE o lead
+    // ainda não tem aula futura (SCHEDULED/CONFIRMED). Lead já agendado: só
+    // move silencioso — vendedora pode reagrupar sem popup chato.
+    if (targetStage?.isScheduling && lead.experimentalClasses.length === 0) {
+      setScheduleLead({
+        id: lead.id,
+        name: lead.name,
+        modalityId: lead.modalityId,
+        targetStageId: targetStage.id,
+      });
       return;
     }
 
@@ -218,6 +245,30 @@ export function KanbanBoard({
           setEnrollLead(null);
           // Server action moveu o lead pro stage Matriculado e revalidou
           // o path. Força refresh pra trazer o estado novo.
+          router.refresh();
+        }}
+      />
+
+      <QuickScheduleModal
+        lead={scheduleLead}
+        modalities={modalities}
+        onClose={() => setScheduleLead(null)}
+        onScheduled={async () => {
+          // Move o lead pro stage de agendamento (que disparou a intercept).
+          // A vendedora arrastou com essa intenção — completamos o gesto agora
+          // que o agendamento confirmou. Optimistic update + refresh.
+          const target = scheduleLead;
+          if (target) {
+            setLeads((prev) =>
+              prev.map((l) =>
+                l.id === target.id ? { ...l, stageId: target.targetStageId } : l,
+              ),
+            );
+            await moveLeadToStage({
+              leadId: target.id,
+              toStageId: target.targetStageId,
+            });
+          }
           router.refresh();
         }}
       />
