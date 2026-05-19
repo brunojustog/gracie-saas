@@ -10,12 +10,12 @@ import type { ExperimentalClassStatus } from "@prisma/client";
 import { useMemo, useState } from "react";
 
 import { ClassActionsModal } from "./class-actions-modal";
+import { ManageScheduleModal } from "./manage-schedule-modal";
 import { ScheduleModal } from "./schedule-modal";
 import {
   ScheduleSlotModal,
   type SlotInitial,
 } from "./schedule-slot-modal";
-import { SlotActionsModal } from "./slot-actions-modal";
 import { useRouter } from "next/navigation";
 
 type Modality = { id: string; name: string; color: string | null };
@@ -54,17 +54,6 @@ type Props = {
   leads: Lead[];
 };
 
-const DAY_LABEL = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-
-type SlotInfo = {
-  id: string;
-  modalityName: string;
-  modalityColor: string | null;
-  dayLabel: string;
-  startTime: string;
-  durationMinutes: number;
-  clickedDate: Date;
-};
 
 const STATUS_TONE: Record<ExperimentalClassStatus, { bg: string; text: string; border: string }> = {
   SCHEDULED:   { bg: "transparent", text: "inherit", border: "currentColor" },
@@ -89,9 +78,9 @@ export function CalendarBoard({
   const [classes, setClasses] = useState(initialClasses);
   const [scheduleAt, setScheduleAt] = useState<Date | null>(null);
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
-  const [activeSlot, setActiveSlot] = useState<SlotInfo | null>(null);
   const [slotEdit, setSlotEdit] = useState<SlotInitial | null>(null);
   const [slotModalOpen, setSlotModalOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const events = useMemo<EventInput[]>(() => {
     const bgEvents: EventInput[] = scheduleSlots.map((slot) => {
@@ -146,26 +135,12 @@ export function CalendarBoard({
   };
 
   const onEventClick = (arg: EventClickArg) => {
+    // FullCalendar 6 não dispara eventClick em eventos com display:"background",
+    // então só "class" (aulas reais) chega aqui. Slots da grade são gerenciados
+    // via botão "Gerenciar grade" no header (abre ManageScheduleModal).
     const kind = arg.event.extendedProps.kind;
     if (kind === "class") {
       setActiveClassId(arg.event.extendedProps.classId as string);
-    } else if (kind === "slot") {
-      // Click num slot da grade abre o menu de ações (v1.1-S):
-      // agendar aula aqui, editar slot ou remover. O `start` carrega
-      // a data específica clicada (não só hora) — usado no "agendar".
-      const slotId = arg.event.extendedProps.slotId as string;
-      const slot = scheduleSlots.find((s) => s.id === slotId);
-      if (slot && arg.event.start) {
-        setActiveSlot({
-          id: slot.id,
-          modalityName: slot.modality.name,
-          modalityColor: slot.modality.color,
-          dayLabel: DAY_LABEL[slot.dayOfWeek] ?? "?",
-          startTime: slot.startTime,
-          durationMinutes: slot.durationMinutes,
-          clickedDate: arg.event.start,
-        });
-      }
     }
   };
 
@@ -204,7 +179,14 @@ export function CalendarBoard({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setManageOpen(true)}
+          className="rounded-md border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
+        >
+          Gerenciar grade
+        </button>
         <button
           type="button"
           onClick={openNewSlotModal}
@@ -269,20 +251,14 @@ export function CalendarBoard({
         }}
       />
 
-      <SlotActionsModal
-        slot={activeSlot}
-        onClose={() => setActiveSlot(null)}
-        onScheduleClass={(date) => {
-          setActiveSlot(null);
-          setScheduleAt(date);
+      <ManageScheduleModal
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        slots={scheduleSlots}
+        onEditSlot={(slotId) => {
+          setManageOpen(false);
+          openEditSlotModal(slotId);
         }}
-        onEditRequest={() => {
-          if (!activeSlot) return;
-          const id = activeSlot.id;
-          setActiveSlot(null);
-          openEditSlotModal(id);
-        }}
-        onDeleted={() => router.refresh()}
       />
 
       <ScheduleSlotModal
