@@ -270,29 +270,48 @@ function StageFormBody({
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex items-center justify-between rounded border p-2">
-            <Label htmlFor="won" className="text-sm">
-              Ganho
-            </Label>
+          <div className="flex items-start justify-between rounded border p-2">
+            <div>
+              <Label htmlFor="won" className="text-sm">
+                Ganho
+              </Label>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Drag pra cá abre modal de matrícula.
+              </p>
+            </div>
             <Switch
               id="won"
               checked={isWon}
               onCheckedChange={(v) => {
                 setIsWon(v);
-                if (v) setIsLost(false);
+                if (v) {
+                  setIsLost(false);
+                  // Terminal: desliga intercepts não-aplicáveis
+                  setIsScheduling(false);
+                  setIsAttendance(false);
+                }
               }}
             />
           </div>
-          <div className="flex items-center justify-between rounded border p-2">
-            <Label htmlFor="lost" className="text-sm">
-              Perdido
-            </Label>
+          <div className="flex items-start justify-between rounded border p-2">
+            <div>
+              <Label htmlFor="lost" className="text-sm">
+                Perdido
+              </Label>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Drag pra cá pede motivo da perda.
+              </p>
+            </div>
             <Switch
               id="lost"
               checked={isLost}
               onCheckedChange={(v) => {
                 setIsLost(v);
-                if (v) setIsWon(false);
+                if (v) {
+                  setIsWon(false);
+                  setIsScheduling(false);
+                  setIsAttendance(false);
+                }
               }}
             />
           </div>
@@ -310,6 +329,7 @@ function StageFormBody({
           <Switch
             id="scheduling"
             checked={isScheduling}
+            disabled={isWon || isLost}
             onCheckedChange={setIsScheduling}
           />
         </div>
@@ -327,6 +347,7 @@ function StageFormBody({
           <Switch
             id="attendance"
             checked={isAttendance}
+            disabled={isWon || isLost}
             onCheckedChange={setIsAttendance}
           />
         </div>

@@ -25,6 +25,17 @@ export async function upsertStage(input: unknown): Promise<Result> {
   if (parsed.data.isWon && parsed.data.isLost) {
     return { ok: false, error: "stage não pode ser won e lost ao mesmo tempo" };
   }
+  // Estágios terminais (Ganho/Perda) já têm interceptação própria no drag:
+  // - isWon  → abre modal de matrícula
+  // - isLost → abre dialog de motivo da perda
+  // Marcar isScheduling/isAttendance junto causa conflito (drag pra Ganho
+  // poderia abrir modal de agendamento se o lead já tem matrícula).
+  if ((parsed.data.isWon || parsed.data.isLost) && (parsed.data.isScheduling || parsed.data.isAttendance)) {
+    return {
+      ok: false,
+      error: "estágio Ganho/Perdido não pode ter 'Agendamento' ou 'Comparecimento' marcados (já têm comportamento próprio no drag)",
+    };
+  }
   const { tenant } = await requireRole("ADMIN");
 
   if (parsed.data.id) {
