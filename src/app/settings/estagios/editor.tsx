@@ -41,6 +41,7 @@ type Stage = {
   isWon: boolean;
   isLost: boolean;
   isScheduling: boolean;
+  isAttendance: boolean;
   active: boolean;
 };
 
@@ -182,6 +183,11 @@ function SortableStage({
               agendamento
             </span>
           )}
+          {stage.isAttendance && (
+            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-900">
+              comparecimento
+            </span>
+          )}
           {!stage.active && (
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
               inativo
@@ -209,6 +215,7 @@ function StageFormBody({
   const [isWon, setIsWon] = useState(stage?.isWon ?? false);
   const [isLost, setIsLost] = useState(stage?.isLost ?? false);
   const [isScheduling, setIsScheduling] = useState(stage?.isScheduling ?? false);
+  const [isAttendance, setIsAttendance] = useState(stage?.isAttendance ?? false);
   const [active, setActive] = useState(stage?.active ?? true);
   const [pending, startTransition] = useTransition();
 
@@ -229,6 +236,7 @@ function StageFormBody({
         isWon,
         isLost,
         isScheduling,
+        isAttendance,
         active,
       });
       if (!result.ok) {
@@ -303,6 +311,23 @@ function StageFormBody({
             id="scheduling"
             checked={isScheduling}
             onCheckedChange={setIsScheduling}
+          />
+        </div>
+        <div className="flex items-start justify-between rounded border p-3">
+          <div>
+            <Label htmlFor="attendance" className="text-sm">
+              Estágio de comparecimento
+            </Label>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Quando arrastar lead pra esse estágio, marca a aula futura mais
+              próxima como ATTENDED (dispara mensagem pós-aula). No-op se o
+              lead não tem aula agendada.
+            </p>
+          </div>
+          <Switch
+            id="attendance"
+            checked={isAttendance}
+            onCheckedChange={setIsAttendance}
           />
         </div>
         {stage ? (

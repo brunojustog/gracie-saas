@@ -15,6 +15,7 @@ const stageSchema = z.object({
   isWon: z.boolean().default(false),
   isLost: z.boolean().default(false),
   isScheduling: z.boolean().default(false),
+  isAttendance: z.boolean().default(false),
   active: z.boolean().default(true),
 });
 
@@ -39,6 +40,7 @@ export async function upsertStage(input: unknown): Promise<Result> {
         isWon: parsed.data.isWon,
         isLost: parsed.data.isLost,
         isScheduling: parsed.data.isScheduling,
+        isAttendance: parsed.data.isAttendance,
         active: parsed.data.active,
       },
     });
@@ -56,6 +58,7 @@ export async function upsertStage(input: unknown): Promise<Result> {
         isWon: parsed.data.isWon,
         isLost: parsed.data.isLost,
         isScheduling: parsed.data.isScheduling,
+        isAttendance: parsed.data.isAttendance,
         order: (max._max.order ?? 0) + 1,
       },
     });

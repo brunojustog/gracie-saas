@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { updateClassStatus } from "../aulas/actions";
 import { EnrollmentModal } from "../matriculas/enrollment-modal";
 
 import { moveLeadToStage } from "./actions";
@@ -47,6 +48,7 @@ type Stage = {
   isWon: boolean;
   isLost: boolean;
   isScheduling: boolean;
+  isAttendance: boolean;
 };
 
 type Modality = { id: string; name: string };
@@ -167,6 +169,38 @@ export function KanbanBoard({
         name: lead.name,
         modalityId: lead.modalityId,
         targetStageId: targetStage.id,
+      });
+      return;
+    }
+
+    // v1.1-Y: drag pra stage de comparecimento marca a aula futura mais
+    // próxima como ATTENDED automaticamente (dispara mensagem pós-aula).
+    // Se o lead não tem aula agendada, cai no fluxo normal de mover stage.
+    if (targetStage?.isAttendance && lead.experimentalClasses[0]) {
+      const upcoming = lead.experimentalClasses[0];
+      const previousStageId = lead.stageId;
+      setLeads((prev) =>
+        prev.map((l) => (l.id === leadId ? { ...l, stageId: overId } : l)),
+      );
+      startTransition(async () => {
+        const [attResult, moveResult] = await Promise.all([
+          updateClassStatus({ classId: upcoming.id, status: "ATTENDED" }),
+          moveLeadToStage({ leadId, toStageId: overId }),
+        ]);
+        if (!attResult.ok || !moveResult.ok) {
+          setLeads((prev) =>
+            prev.map((l) =>
+              l.id === leadId ? { ...l, stageId: previousStageId } : l,
+            ),
+          );
+          toast.error(
+            attResult.ok
+              ? `Não foi possível mover: ${moveResult.ok ? "" : moveResult.error}`
+              : `Não foi possível marcar comparecimento: ${attResult.error}`,
+          );
+          return;
+        }
+        toast.success(`${lead.name}: comparecimento registrado`);
       });
       return;
     }

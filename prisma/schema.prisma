@@ -173,6 +173,12 @@ model Stage {
    * sair do kanban.
    */
   isScheduling Boolean @default(false)
+  /**
+   * v1.1-Y: drag pra esse stage marca a aula futura mais próxima como
+   * ATTENDED automaticamente. Reduz cliques pra registrar comparecimento.
+   * No-op se o lead não tem aula SCHEDULED/CONFIRMED.
+   */
+  isAttendance Boolean @default(false)
   active   Boolean @default(true)
 
   tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
