@@ -41,6 +41,7 @@ export default async function MatriculasPage({
     prisma.lead.findMany({
       where: {
         tenantId: tenant.id,
+        deletedAt: null,
         // Pickamos apenas leads SEM matrícula (1:1 — não dá pra criar duplicata)
         enrollment: null,
       },

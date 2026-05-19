@@ -33,6 +33,7 @@ model User {
   sessions          Session[]
   tenants           TenantUser[]
   assignedLeads     Lead[]         @relation("AssignedSeller")
+  deletedLeads      Lead[]         @relation("DeletedLeadBy")
   movementsHistory  StageHistory[]
   salesAsSeller     Sale[]         @relation("SaleSeller")
   authoredLeadNotes LeadNote[]
@@ -308,10 +309,20 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /**
+   * Soft delete (v1.1-W). Lead some das queries normais mas fica no banco
+   * pra auditoria e restauração via /settings/lixeira (ADMIN).
+   * Bloqueado quando há enrollment ACTIVE — cancela matrícula primeiro.
+   */
+  deletedAt       DateTime?
+  deletedById     String?
+  deletionReason  String?   @db.Text
+
   tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   stage               Stage               @relation(fields: [stageId], references: [id])
   modality            Modality?           @relation(fields: [modalityId], references: [id])
   assignedSeller      User?               @relation("AssignedSeller", fields: [assignedSellerId], references: [id])
+  deletedBy           User?               @relation("DeletedLeadBy", fields: [deletedById], references: [id])
   history             StageHistory[]
   experimentalClasses ExperimentalClass[]
   enrollment          Enrollment?
@@ -322,6 +333,7 @@ model Lead {
   @@index([tenantId])
   @@index([tenantId, stageId])
   @@index([tenantId, assignedSellerId])
+  @@index([tenantId, deletedAt])
   @@index([chatwootContactId])
 }
 
@@ -370,6 +382,8 @@ enum LeadNoteKind {
   FOLLOWUP_PAUSED
   FOLLOWUP_RESUMED
   LEAD_CREATED
+  LEAD_DELETED
+  LEAD_RESTORED
 }
 
 /**

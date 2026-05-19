@@ -17,6 +17,7 @@ export default async function PdvPage() {
     prisma.lead.findMany({
       where: {
         tenantId: tenant.id,
+        deletedAt: null,
         ...(membership.role === "SELLER"
           ? { assignedSellerId: membership.userId }
           : {}),

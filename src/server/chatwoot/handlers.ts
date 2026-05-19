@@ -94,8 +94,11 @@ export async function upsertLeadFromContact(params: {
 }): Promise<HandlerResult> {
   const { tenantId, contact, channel, conversationId, inboxId } = params;
 
+  // Soft-deleted (v1.1-W) NÃO é "achado" aqui — se a vendedora apagou o lead
+  // e o contato volta a interagir, cria um lead novo. O deletado fica na
+  // lixeira pra auditar. Evita "ressuscitar" lead implicitamente.
   const existing = await prisma.lead.findFirst({
-    where: { tenantId, chatwootContactId: contact.id },
+    where: { tenantId, chatwootContactId: contact.id, deletedAt: null },
     select: { id: true },
   });
 

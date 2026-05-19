@@ -21,6 +21,7 @@ import {
   Snowflake,
   SkipForward,
   Sparkles,
+  Trash2,
   UserPlus,
   XCircle,
 } from "lucide-react";
@@ -74,6 +75,7 @@ import {
   type LeadDetails,
   addLeadNote,
   assignSeller,
+  deleteLead,
   getLeadDetails,
   getLeadFollowUp,
   getLeadNotes,
@@ -221,6 +223,7 @@ function LeadLoader({
       sellers={sellers}
       onLeadChange={setLead}
       onLeadPatch={onLeadPatch}
+      onClose={onClose}
     />
   );
 }
@@ -233,6 +236,7 @@ function LeadSheetContent({
   sellers,
   onLeadChange,
   onLeadPatch,
+  onClose,
 }: {
   lead: LeadDetails;
   canReassign: boolean;
@@ -241,6 +245,7 @@ function LeadSheetContent({
   sellers: Seller[];
   onLeadChange: (lead: LeadDetails) => void;
   onLeadPatch: (leadId: string, patch: LeadCardPatch) => void;
+  onClose: () => void;
 }) {
   return (
     <>
@@ -282,6 +287,7 @@ function LeadSheetContent({
             sellers={sellers}
             onLeadChange={onLeadChange}
             onLeadPatch={onLeadPatch}
+            onClose={onClose}
           />
         </TabsContent>
 
@@ -336,6 +342,7 @@ function OverviewTab({
   sellers,
   onLeadChange,
   onLeadPatch,
+  onClose,
 }: {
   lead: LeadDetails;
   canReassign: boolean;
@@ -344,6 +351,7 @@ function OverviewTab({
   sellers: Seller[];
   onLeadChange: (lead: LeadDetails) => void;
   onLeadPatch: (leadId: string, patch: LeadCardPatch) => void;
+  onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -668,6 +676,8 @@ function OverviewTab({
       </Button>
 
       <EnrollmentSection lead={lead} />
+
+      <DangerZone lead={lead} onClose={onClose} />
     </div>
   );
 }
@@ -1493,6 +1503,8 @@ const NOTE_ICON: Record<LeadNoteKind, typeof CheckCheck> = {
   FOLLOWUP_PAUSED: Pause,
   FOLLOWUP_RESUMED: Play,
   LEAD_CREATED: UserPlus,
+  LEAD_DELETED: Trash2,
+  LEAD_RESTORED: Play,
 };
 
 const NOTE_TONE: Record<LeadNoteKind, string> = {
@@ -1512,6 +1524,8 @@ const NOTE_TONE: Record<LeadNoteKind, string> = {
   FOLLOWUP_PAUSED: "text-zinc-500",
   FOLLOWUP_RESUMED: "text-sky-600 dark:text-sky-400",
   LEAD_CREATED: "text-zinc-500",
+  LEAD_DELETED: "text-red-600 dark:text-red-400",
+  LEAD_RESTORED: "text-emerald-600 dark:text-emerald-400",
 };
 
 function HistoryTab({ leadId }: { leadId: string }) {
@@ -1654,5 +1668,165 @@ function NoteList({
         );
       })}
     </ol>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Danger zone — soft delete do lead (v1.1-W)
+// ──────────────────────────────────────────────────────────────────────────
+
+function DangerZone({
+  lead,
+  onClose,
+}: {
+  lead: LeadDetails;
+  onClose: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasActiveEnrollment = lead.enrollment?.status === "ACTIVE";
+
+  return (
+    <>
+      <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 dark:border-red-900/50 dark:bg-red-950/20">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">
+          Zona perigosa
+        </h4>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Exclui o lead e move pra lixeira (ADMIN pode restaurar). Histórico
+          preservado.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2 h-8 border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+          onClick={() => setOpen(true)}
+          disabled={hasActiveEnrollment}
+          title={
+            hasActiveEnrollment
+              ? "Cancele a matrícula ativa antes de excluir"
+              : undefined
+          }
+        >
+          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          Excluir lead
+        </Button>
+        {hasActiveEnrollment ? (
+          <p className="mt-1.5 text-[11px] text-red-700 dark:text-red-400">
+            Lead tem matrícula ativa — cancele primeiro.
+          </p>
+        ) : null}
+      </div>
+
+      <DeleteLeadDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        leadId={lead.id}
+        leadName={lead.name}
+        onDeleted={onClose}
+      />
+    </>
+  );
+}
+
+function DeleteLeadDialog({
+  open,
+  onClose,
+  leadId,
+  leadName,
+  onDeleted,
+}: {
+  open: boolean;
+  onClose: () => void;
+  leadId: string;
+  leadName: string;
+  onDeleted: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {open ? (
+          <DeleteLeadBody
+            leadId={leadId}
+            leadName={leadName}
+            onClose={onClose}
+            onDeleted={onDeleted}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteLeadBody({
+  leadId,
+  leadName,
+  onClose,
+  onDeleted,
+}: {
+  leadId: string;
+  leadName: string;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const router = useRouter();
+  const [reason, setReason] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const handleConfirm = () => {
+    if (reason.trim().length < 3) {
+      toast.error("Informe o motivo (mínimo 3 caracteres)");
+      return;
+    }
+    startTransition(async () => {
+      const result = await deleteLead({ leadId, reason: reason.trim() });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Lead excluído");
+      onDeleted();
+      router.refresh();
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Excluir lead</DialogTitle>
+        <DialogDescription>
+          Lead <span className="font-medium">{leadName}</span> some do kanban e
+          vai pra lixeira. ADMIN pode restaurar depois. Informe o motivo (fica
+          gravado no diário do lead).
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="delete-reason">
+          Motivo <span className="text-red-500">*</span>
+        </Label>
+        <Textarea
+          id="delete-reason"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="ex: lead duplicado (já existe Maria Silva mais novo); spam; teste interno…"
+          rows={3}
+          disabled={pending}
+          autoFocus
+        />
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={pending}>
+          Voltar
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={handleConfirm}
+          disabled={pending || reason.trim().length < 3}
+        >
+          {pending ? "Excluindo…" : "Confirmar exclusão"}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

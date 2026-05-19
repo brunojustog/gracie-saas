@@ -8,6 +8,7 @@ import {
   MessageCircle,
   Smartphone,
   Tag,
+  Trash2,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -33,6 +34,7 @@ const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/settings/chatwoot/import", label: "Importar do Chatwoot", icon: Download },
   { href: "/settings/wuzapi", label: "WhatsApp (Wuzapi)", icon: Smartphone },
   { href: "/settings/import-csv", label: "Importar planilhas (CSV)", icon: FileSpreadsheet },
+  { href: "/settings/lixeira", label: "Lixeira (leads excluídos)", icon: Trash2 },
 ];
 
 export function SettingsNav() {

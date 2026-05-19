@@ -16,15 +16,23 @@ const membershipFactory = (
   ...overrides,
 });
 
-describe("scopedLeadWhere (v1.1-O: sem isolamento por seller)", () => {
+describe("scopedLeadWhere (v1.1-O: sem isolamento por seller; v1.1-W: soft delete)", () => {
   it.each(["ADMIN", "MANAGER", "SELLER"] as const)(
-    "%s vê todos os leads do tenant",
+    "%s vê todos os leads do tenant (não-deletados por padrão)",
     (role) => {
       const where = scopedLeadWhere(membershipFactory({ role }));
-      expect(where).toEqual({ tenantId: "tenant_gracie" });
+      expect(where).toEqual({ tenantId: "tenant_gracie", deletedAt: null });
       expect(where).not.toHaveProperty("assignedSellerId");
     },
   );
+
+  it("includeDeleted: true mostra também os excluídos (uso administrativo)", () => {
+    const where = scopedLeadWhere(membershipFactory({ role: "ADMIN" }), {
+      includeDeleted: true,
+    });
+    expect(where).toEqual({ tenantId: "tenant_gracie" });
+    expect(where).not.toHaveProperty("deletedAt");
+  });
 
   it("tenants diferentes nunca se cruzam (isolamento de tenant é a única fronteira)", () => {
     const annaGracie = scopedLeadWhere(
@@ -39,9 +47,9 @@ describe("scopedLeadWhere (v1.1-O: sem isolamento por seller)", () => {
 });
 
 describe("buildKanbanWhere — combinando filtros UI com scope", () => {
-  it("ADMIN sem filtros = só tenant", () => {
+  it("ADMIN sem filtros = só tenant (não-deletados)", () => {
     const where = buildKanbanWhere(membershipFactory({ role: "ADMIN" }), {});
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
+    expect(where).toEqual({ tenantId: "tenant_gracie", deletedAt: null });
   });
 
   it("search aplica OR em name/phone/email com case-insensitive em texto", () => {

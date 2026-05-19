@@ -343,6 +343,74 @@ export async function setLeadOrigin(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Soft delete (v1.1-W) — qualquer role do tenant
+// ──────────────────────────────────────────────────────────────────────────
+
+const deleteSchema = z.object({
+  leadId: z.string().min(1),
+  reason: z.string().min(3).max(500),
+});
+
+export async function deleteLead(input: unknown): Promise<ActionResult> {
+  const parsed = deleteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "informe o motivo (mínimo 3 caracteres)" };
+  }
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const lead = await findLeadInScope(membership, parsed.data.leadId);
+  if (!lead) return { ok: false, error: "lead não encontrado ou já excluído" };
+
+  // Bloqueia se houver matrícula ATIVA. Cancele primeiro pra preservar
+  // a coerência financeira (Enrollment fica órfão se o lead some).
+  const activeEnrollment = await prisma.enrollment.findFirst({
+    where: { leadId: lead.id, status: "ACTIVE" },
+    select: { id: true },
+  });
+  if (activeEnrollment) {
+    return {
+      ok: false,
+      error: "lead tem matrícula ATIVA — cancele a matrícula antes de excluir",
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: lead.id },
+      data: {
+        deletedAt: new Date(),
+        deletedById: user.id,
+        deletionReason: parsed.data.reason.trim(),
+      },
+    });
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: lead.id,
+        authorId: user.id,
+        kind: "LEAD_DELETED",
+        body: `Lead excluído — ${parsed.data.reason.trim()}`,
+        metadata: { reason: parsed.data.reason.trim() },
+      },
+      tx,
+    );
+  });
+
+  // Pausa jobs de follow-up — não faz sentido continuar mandando welcome
+  // pra lead excluído. Outros tipos (reminder de aula, pós-aula) também
+  // são silenciados via pause genérico.
+  try {
+    await pauseLeadJobs(lead.id, "lead excluído");
+  } catch (err) {
+    console.error("[deleteLead] pauseLeadJobs falhou", err);
+  }
+
+  revalidatePath("/kanban");
+  revalidatePath("/settings/lixeira");
+  return { ok: true };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Criar lead manualmente (walk-in, indicação no balcão, lead que não passou
 // pelo Chatwoot, etc).
 // ──────────────────────────────────────────────────────────────────────────

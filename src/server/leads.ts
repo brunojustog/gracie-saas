@@ -17,11 +17,21 @@ import type { Prisma, TenantUser } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Filtro `where` que aplica isolamento de tenant.
+ * Filtro `where` que aplica isolamento de tenant + exclui soft-deletados
+ * por padrão (v1.1-W). Passe `includeDeleted: true` SÓ pra cenários
+ * administrativos (tela de lixeira, restauração) — o resto da app não
+ * deve ver leads excluídos.
  * Função pura — testável em isolamento.
  */
-export function scopedLeadWhere(membership: TenantUser): Prisma.LeadWhereInput {
-  return { tenantId: membership.tenantId };
+export function scopedLeadWhere(
+  membership: TenantUser,
+  opts: { includeDeleted?: boolean } = {},
+): Prisma.LeadWhereInput {
+  const base: Prisma.LeadWhereInput = { tenantId: membership.tenantId };
+  if (!opts.includeDeleted) {
+    base.deletedAt = null;
+  }
+  return base;
 }
 
 export type KanbanFilters = {

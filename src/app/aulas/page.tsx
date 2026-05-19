@@ -31,7 +31,7 @@ export default async function AulasPage() {
       select: { id: true, name: true, color: true },
     }),
     prisma.lead.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, deletedAt: null },
       orderBy: { name: "asc" },
       select: {
         id: true,
