@@ -174,3 +174,32 @@ export async function listContactConversations(
   if (!result.ok) return result;
   return { ok: true, data: result.data.payload ?? [] };
 }
+
+/**
+ * Detalhe completo de UMA conversa, incluindo `meta.sender` (contato).
+ * Usado pelo webhook do kanban (v1.1-V) que recebe só `conversation_id`
+ * no payload — buscamos o contato aqui pra criar o lead.
+ *
+ * O Chatwoot usa `display_id` no path quando dentro do scope da account.
+ */
+export type ChatwootConversationDetail = ChatwootConversation & {
+  meta?: ChatwootConversation["meta"] & {
+    sender?: {
+      id?: number;
+      name?: string | null;
+      email?: string | null;
+      phone_number?: string | null;
+      identifier?: string | null;
+    };
+  };
+};
+
+export async function getConversation(
+  creds: ChatwootCredentials,
+  conversationDisplayId: number | string,
+): Promise<ChatwootApiResult<ChatwootConversationDetail>> {
+  return call<ChatwootConversationDetail>(
+    creds,
+    `/api/v1/accounts/${creds.accountId}/conversations/${conversationDisplayId}`,
+  );
+}

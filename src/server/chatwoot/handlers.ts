@@ -75,8 +75,11 @@ async function getInitialStageId(tenantId: string): Promise<string> {
 /**
  * Cria ou atualiza Lead a partir de um contato do Chatwoot.
  * Idempotente em (tenantId, chatwootContactId).
+ *
+ * Exportada pra ser reusada pelo handler do webhook do kanban (v1.1-V),
+ * que tem o mesmo upsert mas vem por outro evento.
  */
-async function upsertLeadFromContact(params: {
+export async function upsertLeadFromContact(params: {
   tenantId: string;
   contact: {
     id: string;

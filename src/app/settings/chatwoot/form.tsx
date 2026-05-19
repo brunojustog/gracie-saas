@@ -61,6 +61,11 @@ export function ChatwootForm({
       ? `${window.location.protocol}//${window.location.host}/api/webhooks/chatwoot/${tenantSlug}`
       : `/api/webhooks/chatwoot/${tenantSlug}`;
 
+  const kanbanWebhookUrl =
+    typeof window !== "undefined"
+      ? `${window.location.protocol}//${window.location.host}/api/webhooks/chatwoot-kanban/${tenantSlug}`
+      : `/api/webhooks/chatwoot-kanban/${tenantSlug}`;
+
   return (
     <div className="space-y-4">
       <div>
@@ -155,6 +160,34 @@ export function ChatwootForm({
         <Button onClick={handleSave} disabled={pending} className="w-full">
           {pending ? "Salvando…" : "Salvar configuração"}
         </Button>
+      </div>
+
+      <div className="rounded-lg border bg-muted/30 p-3">
+        <Label className="text-xs uppercase text-muted-foreground">
+          Webhook URL do Kanban Chatwoot (v1.1-V)
+        </Label>
+        <div className="mt-1 flex items-center gap-2">
+          <code className="flex-1 rounded bg-background px-2 py-1.5 text-xs font-mono break-all">
+            {kanbanWebhookUrl}
+          </code>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              navigator.clipboard.writeText(kanbanWebhookUrl);
+              toast.success("Copiado");
+            }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          No Chatwoot: <strong>Kanban → Configurações → Webhook</strong>. Cole
+          esta URL e habilite o evento <code>Item Criado</code>. Quando uma
+          vendedora puxa uma conversa pro kanban do Chatwoot, o lead entra
+          automaticamente no Gracie (mesmo sem a label de importação acima).
+          O contato é buscado via API REST usando as credenciais configuradas.
+        </p>
       </div>
 
       <div className="space-y-3 rounded-lg border bg-card p-4">
