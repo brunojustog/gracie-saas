@@ -2,6 +2,7 @@
 
 import type { EnrollmentStatus, PaymentMethod } from "@prisma/client";
 import { format } from "date-fns";
+import { PencilLine, Play, Snowflake, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -122,7 +123,7 @@ export function EnrollmentsTable({
 
   return (
     <>
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -134,7 +135,7 @@ export function EnrollmentsTable({
               <TableHead>Vendedora</TableHead>
               <TableHead>Matriculado em</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-12" />
+              <TableHead className="w-[120px] text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -190,45 +191,57 @@ export function EnrollmentsTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-end gap-0.5">
                       {hideFinancials ? null : (
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          className="h-8 w-8"
                           onClick={() => handleEdit(r)}
                           disabled={pending}
+                          title="Editar matrícula"
+                          aria-label="Editar matrícula"
                         >
-                          Editar
+                          <PencilLine className="h-4 w-4" />
                         </Button>
                       )}
                       {r.status === "ACTIVE" ? (
                         <>
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
+                            className="h-8 w-8 text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-950/40"
                             onClick={() => setFreezeTarget(r)}
                             disabled={pending}
+                            title="Congelar matrícula"
+                            aria-label="Congelar matrícula"
                           >
-                            Congelar
+                            <Snowflake className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
+                            className="h-8 w-8 text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
                             onClick={() => setCancelTarget(r)}
                             disabled={pending}
+                            title="Cancelar matrícula"
+                            aria-label="Cancelar matrícula"
                           >
-                            Cancelar
+                            <XCircle className="h-4 w-4" />
                           </Button>
                         </>
                       ) : null}
                       {r.status === "SUSPENDED" ? (
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
                           onClick={() => handleReactivate(r)}
                           disabled={pending}
+                          title="Reativar matrícula"
+                          aria-label="Reativar matrícula"
                         >
-                          Reativar
+                          <Play className="h-4 w-4" />
                         </Button>
                       ) : null}
                     </div>
