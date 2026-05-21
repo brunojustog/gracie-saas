@@ -24,7 +24,7 @@ export type LeadDetails = NonNullable<Awaited<ReturnType<typeof getLeadDetails>>
 export async function getLeadDetails(leadId: string) {
   const { tenant, membership } = await requireTenantUser();
 
-  return prisma.lead.findFirst({
+  const lead = await prisma.lead.findFirst({
     where: { id: leadId, ...scopedLeadWhere(membership) },
     select: {
       id: true,
@@ -75,7 +75,19 @@ export async function getLeadDetails(leadId: string) {
         },
       },
     },
-  }).then((lead) => (lead ? { ...lead, _tenantSlug: tenant.slug } : null));
+  });
+
+  if (!lead) return null;
+
+  // SELLER não vê valor mensal da matrícula — mascara no payload pra não
+  // vazar via RSC stream / DevTools. UI espelha gating.
+  const isSeller = membership.role === "SELLER";
+  const enrollment =
+    lead.enrollment && isSeller
+      ? { ...lead.enrollment, monthlyValue: null }
+      : lead.enrollment;
+
+  return { ...lead, enrollment, _tenantSlug: tenant.slug };
 }
 
 // ──────────────────────────────────────────────────────────────────────────

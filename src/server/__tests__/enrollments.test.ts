@@ -74,4 +74,34 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
     expect(adminW.lead).toEqual(expectedLead);
     expect(sellerW.lead).toEqual(expectedLead);
   });
+
+  it("filtro planId é aplicado direto no where", () => {
+    const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
+      planId: "plan_anual",
+    });
+    expect(where.planId).toBe("plan_anual");
+  });
+
+  it("filtro paymentMethod é aplicado direto no where", () => {
+    const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
+      paymentMethod: "PIX",
+    });
+    expect(where.paymentMethod).toBe("PIX");
+  });
+
+  it("filtros combinados (modality + plan + payment + status) coexistem", () => {
+    const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
+      modalityId: "mod_jiujitsu",
+      planId: "plan_mensal",
+      paymentMethod: "BOLETO",
+      status: "ACTIVE",
+    });
+    expect(where).toMatchObject({
+      tenantId: "tenant_gracie",
+      modalityId: "mod_jiujitsu",
+      planId: "plan_mensal",
+      paymentMethod: "BOLETO",
+      status: "ACTIVE",
+    });
+  });
 });

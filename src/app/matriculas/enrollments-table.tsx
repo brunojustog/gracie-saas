@@ -37,7 +37,8 @@ type Row = {
   suspendedAt: Date | string | null;
   suspensionReason: string | null;
   expectedReturnAt: Date | string | null;
-  monthlyValue: number | string | { toString(): string };
+  // null quando SELLER — backend mascara pra não vazar receita.
+  monthlyValue: number | string | { toString(): string } | null;
   paymentMethod: PaymentMethod;
   status: EnrollmentStatus;
   observations: string | null;
@@ -86,6 +87,7 @@ export function EnrollmentsTable({
   const [pending, startTransition] = useTransition();
 
   const handleEdit = (row: Row) => {
+    if (row.monthlyValue === null) return; // SELLER não edita (modal expõe valor)
     setEditTarget({
       id: row.id,
       leadName: row.lead.name,
@@ -137,7 +139,8 @@ export function EnrollmentsTable({
           </TableHeader>
           <TableBody>
             {rows.map((r) => {
-              const value = Number(r.monthlyValue);
+              const value =
+                r.monthlyValue !== null ? Number(r.monthlyValue) : null;
               return (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">{r.lead.name}</TableCell>
@@ -152,7 +155,7 @@ export function EnrollmentsTable({
                     </span>
                   </TableCell>
                   <TableCell>{r.plan.name}</TableCell>
-                  {hideFinancials ? null : (
+                  {hideFinancials || value === null ? null : (
                     <TableCell className="text-right font-mono">
                       {value.toLocaleString("pt-BR", {
                         style: "currency",
@@ -188,14 +191,16 @@ export function EnrollmentsTable({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(r)}
-                        disabled={pending}
-                      >
-                        Editar
-                      </Button>
+                      {hideFinancials ? null : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(r)}
+                          disabled={pending}
+                        >
+                          Editar
+                        </Button>
+                      )}
                       {r.status === "ACTIVE" ? (
                         <>
                           <Button

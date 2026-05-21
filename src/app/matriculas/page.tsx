@@ -1,4 +1,4 @@
-import type { EnrollmentStatus } from "@prisma/client";
+import type { EnrollmentStatus, PaymentMethod } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/top-nav";
@@ -10,9 +10,20 @@ import { requireTenantUser } from "@/server/tenant";
 import { EnrollmentsTable } from "./enrollments-table";
 import { EnrollmentsToolbar } from "./toolbar";
 
+const VALID_PAYMENT_METHODS: PaymentMethod[] = [
+  "PIX",
+  "CREDIT_CARD",
+  "BOLETO",
+  "CASH",
+  "TRANSFER",
+  "OTHER",
+];
+
 type SearchParams = Promise<{
   q?: string;
   modality?: string;
+  plan?: string;
+  payment?: string;
   status?: EnrollmentStatus;
 }>;
 
@@ -25,15 +36,26 @@ export default async function MatriculasPage({
   const sp = await searchParams;
   const isSeller = membership.role === "SELLER";
 
+  const paymentMethod = VALID_PAYMENT_METHODS.includes(sp.payment as PaymentMethod)
+    ? (sp.payment as PaymentMethod)
+    : undefined;
+
   const filters = {
     search: sp.q,
     modalityId: sp.modality,
+    planId: sp.plan,
+    paymentMethod,
     status: sp.status,
   };
 
-  const [rows, modalities, leadsForPicker] = await Promise.all([
+  const [rows, modalities, plans, leadsForPicker] = await Promise.all([
     getEnrollmentsForList(membership, filters),
     prisma.modality.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.plan.findMany({
       where: { tenantId: tenant.id, active: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
@@ -51,11 +73,13 @@ export default async function MatriculasPage({
   ]);
 
   const totalActive = rows.filter((r) => r.status === "ACTIVE").length;
+  // monthlyValue vem null pra SELLER (mascarado em getEnrollmentsForList);
+  // o reduce abaixo só roda pra ADMIN/MANAGER de qualquer forma.
   const monthlyRevenue = isSeller
     ? 0
     : rows
         .filter((r) => r.status === "ACTIVE")
-        .reduce((sum, r) => sum + Number(r.monthlyValue), 0);
+        .reduce((sum, r) => sum + Number(r.monthlyValue ?? 0), 0);
 
   return (
     <>
@@ -111,8 +135,15 @@ export default async function MatriculasPage({
 
         <EnrollmentsToolbar
           modalities={modalities}
+          plans={plans}
           leads={leadsForPicker}
-          initial={filters}
+          initial={{
+            search: filters.search,
+            modalityId: filters.modalityId,
+            planId: filters.planId,
+            paymentMethod: filters.paymentMethod,
+            status: filters.status,
+          }}
         />
 
         <EnrollmentsTable rows={rows} hideFinancials={isSeller} />

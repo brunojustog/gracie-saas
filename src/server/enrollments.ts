@@ -8,7 +8,12 @@
  * unique do schema. Os helpers aqui assumem que essa unicidade está
  * garantida no banco e expõem erros amigáveis na server action.
  */
-import type { EnrollmentStatus, Prisma, TenantUser } from "@prisma/client";
+import type {
+  EnrollmentStatus,
+  PaymentMethod,
+  Prisma,
+  TenantUser,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -21,6 +26,8 @@ export function scopedEnrollmentWhere(
 export type EnrollmentListFilters = {
   search?: string;
   modalityId?: string;
+  planId?: string;
+  paymentMethod?: PaymentMethod;
   status?: EnrollmentStatus;
 };
 
@@ -33,6 +40,8 @@ export function buildEnrollmentListWhere(
   };
 
   if (filters.modalityId) where.modalityId = filters.modalityId;
+  if (filters.planId) where.planId = filters.planId;
+  if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
   if (filters.status) where.status = filters.status;
 
   if (filters.search?.trim()) {
@@ -48,7 +57,7 @@ export async function getEnrollmentsForList(
   membership: TenantUser,
   filters: EnrollmentListFilters = {},
 ) {
-  return prisma.enrollment.findMany({
+  const rows = await prisma.enrollment.findMany({
     where: buildEnrollmentListWhere(membership, filters),
     select: {
       id: true,
@@ -74,6 +83,14 @@ export async function getEnrollmentsForList(
     },
     orderBy: { enrolledAt: "desc" },
   });
+
+  // SELLER não vê valor de matrícula — mascara no payload pra não vazar via
+  // RSC stream / DevTools. UI espelha com `hideFinancials`.
+  const isSeller = membership.role === "SELLER";
+  return rows.map((r) => ({
+    ...r,
+    monthlyValue: isSeller ? null : r.monthlyValue,
+  }));
 }
 
 export async function findEnrollmentInScope(

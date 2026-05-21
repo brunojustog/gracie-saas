@@ -967,7 +967,8 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
   }
 
   const e = lead.enrollment;
-  const value = Number(e.monthlyValue);
+  // null quando SELLER — servidor mascara em getLeadDetails pra não vazar.
+  const value = e.monthlyValue !== null ? Number(e.monthlyValue) : null;
   const tone =
     e.status === "ACTIVE"
       ? "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30"
@@ -1002,8 +1003,17 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
               Matriculado em {format(new Date(e.enrolledAt), "dd/MM/yyyy")}
             </div>
             <div className="text-xs text-muted-foreground">
-              {e.modality.name} · {e.plan.name} ·{" "}
-              {value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês
+              {e.modality.name} · {e.plan.name}
+              {value !== null ? (
+                <>
+                  {" · "}
+                  {value.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })}
+                  /mês
+                </>
+              ) : null}
             </div>
           </div>
           <span className="shrink-0 rounded-full bg-card px-2 py-0.5 text-[10px] font-medium uppercase">

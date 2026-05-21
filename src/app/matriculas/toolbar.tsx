@@ -1,5 +1,6 @@
 "use client";
 
+import type { PaymentMethod } from "@prisma/client";
 import { Plus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition, type ChangeEvent } from "react";
@@ -17,17 +18,39 @@ import {
 import { EnrollmentModal } from "./enrollment-modal";
 
 type Modality = { id: string; name: string };
+type Plan = { id: string; name: string };
 type Lead = { id: string; name: string; modalityId: string | null };
 
 const ALL = "__all__";
 
+const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
+  { value: "PIX", label: "Pix" },
+  { value: "CREDIT_CARD", label: "Cartão" },
+  { value: "BOLETO", label: "Boleto" },
+  { value: "CASH", label: "Dinheiro" },
+  { value: "TRANSFER", label: "Transferência" },
+  { value: "OTHER", label: "Outro" },
+];
+
 type Props = {
   modalities: Modality[];
+  plans: Plan[];
   leads: Lead[];
-  initial: { search?: string; modalityId?: string; status?: string };
+  initial: {
+    search?: string;
+    modalityId?: string;
+    planId?: string;
+    paymentMethod?: PaymentMethod;
+    status?: string;
+  };
 };
 
-export function EnrollmentsToolbar({ modalities, leads, initial }: Props) {
+export function EnrollmentsToolbar({
+  modalities,
+  plans,
+  leads,
+  initial,
+}: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const [search, setSearch] = useState(initial.search ?? "");
@@ -71,6 +94,40 @@ export function EnrollmentsToolbar({ modalities, leads, initial }: Props) {
             {modalities.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={initial.planId ?? ALL}
+          onValueChange={(v) => setParam("plan", v)}
+        >
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue placeholder="Plano" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todos planos</SelectItem>
+            {plans.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={initial.paymentMethod ?? ALL}
+          onValueChange={(v) => setParam("payment", v)}
+        >
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue placeholder="Pagamento" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todas formas</SelectItem>
+            {PAYMENT_OPTIONS.map((p) => (
+              <SelectItem key={p.value} value={p.value}>
+                {p.label}
               </SelectItem>
             ))}
           </SelectContent>
