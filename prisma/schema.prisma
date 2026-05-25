@@ -119,6 +119,13 @@ model Tenant {
   wuzapiToken           String?
   followUpEnabled       Boolean  @default(false)
 
+  // ManyChat (chatbot Instagram/WhatsApp/Facebook). v1.1-AA: integração só
+  // INCOMING (webhook). ManyChat não tem assinatura HMAC nativa — usamos
+  // header customizado `X-Manychat-Secret` que o admin configura no External
+  // Request da automação. Token vazio = sem validação (aceita qualquer POST
+  // pra esse tenant — útil só pra dev/setup).
+  manychatWebhookSecret String?
+
   users               TenantUser[]
   leads               Lead[]
   modalities          Modality[]
@@ -284,6 +291,11 @@ model Lead {
   chatwootConversationId String?
   chatwootInboxId        Int?
 
+  // ManyChat integration (v1.1-AA). Subscriber ID é o handle único do
+  // contato dentro da página/conta ManyChat — usado pra dedup quando o
+  // mesmo subscriber dispara vários eventos.
+  manychatSubscriberId String?
+
   // Comercial
   stageId          String
   modalityId       String?
@@ -347,6 +359,7 @@ model Lead {
   @@index([tenantId, assignedSellerId])
   @@index([tenantId, deletedAt])
   @@index([chatwootContactId])
+  @@index([manychatSubscriberId])
 }
 
 model StageHistory {
@@ -396,6 +409,10 @@ enum LeadNoteKind {
   LEAD_CREATED
   LEAD_DELETED
   LEAD_RESTORED
+  // v1.1-AA: eventos vindos do ManyChat (tag aplicada, resposta de flow,
+  // conversa iniciada/encerrada). subscriber_created não escreve note —
+  // a própria criação do Lead já marca o início.
+  MANYCHAT_EVENT
 }
 
 /**
