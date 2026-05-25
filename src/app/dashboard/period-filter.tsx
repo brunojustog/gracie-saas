@@ -49,7 +49,8 @@ export function PeriodFilter({ current, from, to }: Props) {
     const next = new URLSearchParams(params.toString());
     next.delete("from");
     next.delete("to");
-    if (value === "this_month") next.delete("period");
+    // "last_30_days" é o default da dashboard — sem ?period na URL.
+    if (value === "last_30_days") next.delete("period");
     else next.set("period", value);
     setShowCustom(false);
     startTransition(() => {

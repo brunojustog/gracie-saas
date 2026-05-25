@@ -1,8 +1,11 @@
 /**
  * Camada analítica do dashboard de KPIs (fase 10, ampliada v1.1-R).
  *
- * Política: tudo escopado via `scopedLeadWhere(membership)` para que SELLER
- * só veja números dos próprios leads. ADMIN/MANAGER vê o tenant inteiro.
+ * Política: tudo escopado via `scopedLeadWhere(membership)` (isolamento por
+ * tenant). Visibilidade dentro do tenant segue a regra v1.1-O documentada
+ * em `src/server/leads.ts`: qualquer role vê todos os leads. `isSeller`
+ * ainda existe pra esconder ranking de vendedoras e KPI de receita na UI,
+ * mas NÃO restringe os agregados.
  *
  * Filtros (v1.1-R): origin, modalityId, sellerId, tag — compostos no `where`
  * base; aplicam-se a TODOS os agregados pra manter coerência (variação %,
@@ -31,44 +34,33 @@ export async function getDashboardData(
   const tenantId = membership.tenantId;
   const isSeller = membership.role === "SELLER";
 
-  // Filtros base aplicados em TODAS as queries de Lead. Combina:
-  //   - scope de tenant (e, pra dashboard, scope SELLER do analytics)
-  //   - filtros da toolbar (origem, modalidade, vendedora, tag)
-  const sellerScope: Prisma.LeadWhereInput = isSeller
-    ? { assignedSellerId: membership.userId }
-    : {};
+  // Filtros base aplicados em TODAS as queries de Lead: scope de tenant +
+  // filtros da toolbar (origem, modalidade, vendedora, tag). Visibilidade
+  // SELLER não restringe agregados — política v1.1-O.
   const filterWhere: Prisma.LeadWhereInput = {};
   if (filters.origin) filterWhere.origin = filters.origin;
   if (filters.modalityId) filterWhere.modalityId = filters.modalityId;
   if (filters.sellerId && !isSeller) {
-    // SELLER já está fixo em si mesma; tampering ignora.
+    // SELLER não pode escolher outra vendedora via URL — tampering ignora.
     filterWhere.assignedSellerId = filters.sellerId;
   }
   if (filters.tag) filterWhere.tags = { has: filters.tag };
 
   const leadWhereBase: Prisma.LeadWhereInput = {
     ...scopedLeadWhere(membership),
-    ...sellerScope,
     ...filterWhere,
   };
 
   // Filtros equivalentes pra queries que partem de Enrollment/Class
   // (precisam navegar via `lead: { ... }`).
-  const leadConstraintForEnrollment: Prisma.LeadWhereInput = {
-    ...sellerScope,
-    ...filterWhere,
-  };
-  const hasLeadConstraint = Object.keys(leadConstraintForEnrollment).length > 0;
-  const leadFilter = hasLeadConstraint ? { lead: leadConstraintForEnrollment } : {};
+  const hasLeadConstraint = Object.keys(filterWhere).length > 0;
+  const leadFilter = hasLeadConstraint ? { lead: filterWhere } : {};
 
-  // Helper: monta um fragmento "AND ..." que espelha sellerScope+filterWhere
-  // em SQL raw, com prefixo opcional pra qualificar colunas (ex: "l.").
+  // Helper: monta um fragmento "AND ..." que espelha filterWhere em SQL raw,
+  // com prefixo opcional pra qualificar colunas (ex: "l.").
   const buildLeadSqlFilter = (tablePrefix = ""): Prisma.Sql => {
     const p = Prisma.raw(tablePrefix); // identifier safe (sem aspas)
     const conds: Prisma.Sql[] = [];
-    if (isSeller) {
-      conds.push(Prisma.sql`${p}"assignedSellerId" = ${membership.userId}`);
-    }
     if (filters.origin) {
       conds.push(Prisma.sql`${p}"origin"::text = ${filters.origin}`);
     }

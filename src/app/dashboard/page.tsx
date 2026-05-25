@@ -50,9 +50,12 @@ export default async function DashboardPage({
   const sp = await searchParams;
 
   const customPeriod = sp.from && sp.to ? resolveCustom(sp.from, sp.to) : null;
+  // Default: "last_30_days" em vez de "this_month" — evita dashboard vazia
+  // logo no início do mês ou pra tenants cujos eventos relevantes caíram no
+  // mês anterior.
   const preset: PeriodPreset = VALID_PRESETS.includes(sp.period as PeriodPreset)
     ? (sp.period as PeriodPreset)
-    : "this_month";
+    : "last_30_days";
   const period = customPeriod ?? resolvePreset(preset);
   const currentSelector: PeriodPreset | "custom" = customPeriod ? "custom" : preset;
 
