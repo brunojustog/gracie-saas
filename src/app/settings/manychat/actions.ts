@@ -14,6 +14,17 @@ const schema = z.object({
     .max(200)
     .nullable()
     .or(z.literal("").transform(() => null)),
+  /**
+   * v1.1-AB: identificador `fb...` da conta no ManyChat (visível na URL do
+   * painel). Habilita o deep-link da conversa no card do kanban. Aceita
+   * com ou sem o prefixo "fb"; só dígitos além dele.
+   */
+  manychatPageId: z
+    .string()
+    .max(50)
+    .regex(/^(fb)?\d*$/i, "use o formato fb123456789 (ou só os números)")
+    .nullable()
+    .or(z.literal("").transform(() => null)),
 });
 
 export async function updateManychatConfig(
@@ -27,6 +38,7 @@ export async function updateManychatConfig(
     where: { id: tenant.id },
     data: {
       manychatWebhookSecret: parsed.data.manychatWebhookSecret ?? null,
+      manychatPageId: parsed.data.manychatPageId?.toLowerCase() ?? null,
     },
   });
 

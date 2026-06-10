@@ -26,6 +26,26 @@ export function channelToOrigin(
   return CHANNEL_TO_ORIGIN[channel] ?? "MANYCHAT";
 }
 
+/**
+ * ManyChat manda o placeholder LITERAL ("{{phone}}", "Fulana {{last_name}}")
+ * quando a variável está vazia no flow — chegava assim no banco (visto em
+ * prod). Remove os tokens `{{...}}`; string que fica vazia vira null.
+ */
+const PLACEHOLDER_RE = /\{\{[^}]*\}\}/g;
+
+export function stripManychatPlaceholders(value: string): string | null {
+  const cleaned = value.replace(PLACEHOLDER_RE, "").trim();
+  return cleaned === "" ? null : cleaned;
+}
+
+/** Idem, e ainda remove `@` inicial — ig_username é persistido sem o @. */
+export function normalizeIgUsername(value: string): string | null {
+  const cleaned = stripManychatPlaceholders(value);
+  if (!cleaned) return null;
+  const noAt = cleaned.replace(/^@+/, "").trim();
+  return noAt === "" ? null : noAt;
+}
+
 /** Normaliza ID do ManyChat — pode vir como number ou string. Persistimos como string. */
 export function normalizeId(
   id: number | string | null | undefined,

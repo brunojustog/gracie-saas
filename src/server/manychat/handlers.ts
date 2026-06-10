@@ -95,6 +95,7 @@ export async function upsertLeadFromSubscriber(params: {
     const newName = fallbackSubscriberName(subscriber);
     if (subscriber.phone) update.phone = subscriber.phone;
     if (subscriber.email) update.email = subscriber.email;
+    if (subscriber.ig_username) update.manychatIgUsername = subscriber.ig_username;
     if (newName && newName !== "Contato ManyChat") update.name = newName;
 
     await prisma.lead.update({ where: { id: existing.id }, data: update });
@@ -112,6 +113,7 @@ export async function upsertLeadFromSubscriber(params: {
         email: subscriber.email ?? null,
         origin: channelToOrigin(channel),
         manychatSubscriberId: subscriberId,
+        manychatIgUsername: subscriber.ig_username ?? null,
         firstInteractionAt: isFirstContact ? now : now,
         lastInteractionAt: now,
       },

@@ -37,6 +37,17 @@ export default async function KanbanPage({
       ? `${tenant.chatwootUrl.replace(/\/+$/, "")}/app/accounts/${tenant.chatwootAccountId}/conversations/`
       : null;
 
+  // v1.1-AB: deep-link da conversa do ManyChat. Precisa do manychatPageId
+  // (o trecho `fb...` da URL logado no ManyChat) — configurável em
+  // /settings/manychat. Aceita com ou sem o prefixo "fb".
+  const manychatChatBaseUrl = tenant.manychatPageId
+    ? `https://app.manychat.com/${
+        tenant.manychatPageId.startsWith("fb")
+          ? tenant.manychatPageId
+          : `fb${tenant.manychatPageId}`
+      }/chat/`
+    : null;
+
   const [stages, leadsRaw, modalities, sellers] = await Promise.all([
     prisma.stage.findMany({
       where: { tenantId: tenant.id, active: true },
@@ -81,6 +92,15 @@ export default async function KanbanPage({
   const leads = leadsRaw.map((l) => ({
     ...l,
     followUp: followUpByLead.get(l.id) ?? null,
+    // Link da conversa do lead vindo do ManyChat (v1.1-AB): deep-link do
+    // painel do ManyChat quando dá (pageId + subscriberId), senão DM do
+    // Instagram via ig.me (quando o subscriber compartilhou o @).
+    manychatChatUrl:
+      manychatChatBaseUrl && l.manychatSubscriberId
+        ? `${manychatChatBaseUrl}${l.manychatSubscriberId}`
+        : l.manychatIgUsername
+          ? `https://ig.me/m/${l.manychatIgUsername}`
+          : null,
   }));
 
   return (

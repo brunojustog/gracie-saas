@@ -8,7 +8,7 @@ export default async function ManychatPage() {
 
   const data = await prisma.tenant.findUnique({
     where: { id: tenant.id },
-    select: { manychatWebhookSecret: true },
+    select: { manychatWebhookSecret: true, manychatPageId: true },
   });
 
   return (
@@ -16,6 +16,7 @@ export default async function ManychatPage() {
       tenantSlug={tenant.slug}
       initial={{
         manychatWebhookSecret: data?.manychatWebhookSecret ?? "",
+        manychatPageId: data?.manychatPageId ?? "",
       }}
     />
   );

@@ -21,6 +21,8 @@
  */
 import { z } from "zod";
 
+import { normalizeIgUsername, stripManychatPlaceholders } from "./mapper";
+
 // ──────────────────────────────────────────────────────────────────────────
 // Sub-schemas
 // ──────────────────────────────────────────────────────────────────────────
@@ -34,15 +36,25 @@ export const manychatChannelSchema = z
   .transform((s) => s.toLowerCase())
   .nullish();
 
+/**
+ * String "suja" do ManyChat: quando a variável do flow está vazia, chega o
+ * placeholder literal ("{{phone}}"). Sanitiza no parse — campos que ficam
+ * vazios viram null (e os handlers tratam null como "não veio").
+ */
+const manychatStringSchema = z
+  .string()
+  .transform(stripManychatPlaceholders)
+  .nullish();
+
 export const manychatSubscriberSchema = z
   .object({
     id: z.union([z.number(), z.string()]),
-    name: z.string().nullish(),
-    first_name: z.string().nullish(),
-    last_name: z.string().nullish(),
-    phone: z.string().nullish(),
-    email: z.string().nullish().or(z.literal("").transform(() => null)),
-    ig_username: z.string().nullish(),
+    name: manychatStringSchema,
+    first_name: manychatStringSchema,
+    last_name: manychatStringSchema,
+    phone: manychatStringSchema,
+    email: manychatStringSchema,
+    ig_username: z.string().transform(normalizeIgUsername).nullish(),
     channel: manychatChannelSchema,
   })
   .passthrough();

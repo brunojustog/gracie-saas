@@ -12,6 +12,7 @@ import { generateManychatSecret, updateManychatConfig } from "./actions";
 
 type Initial = {
   manychatWebhookSecret: string;
+  manychatPageId: string;
 };
 
 export function ManychatForm({
@@ -22,12 +23,14 @@ export function ManychatForm({
   initial: Initial;
 }) {
   const [secret, setSecret] = useState(initial.manychatWebhookSecret);
+  const [pageId, setPageId] = useState(initial.manychatPageId);
   const [pending, startTransition] = useTransition();
 
   const handleSave = () => {
     startTransition(async () => {
       const result = await updateManychatConfig({
         manychatWebhookSecret: secret || null,
+        manychatPageId: pageId.trim() || null,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -131,6 +134,30 @@ export function ManychatForm({
               </Button>
             ) : null}
           </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border bg-card p-4">
+        <h3 className="text-sm font-semibold">Link da conversa no kanban</h3>
+        <p className="text-[11px] text-muted-foreground">
+          Pra abrir a conversa direto no painel do ManyChat a partir do card
+          do lead, informe o <strong>ID da conta</strong>: abra o ManyChat
+          logado e copie o trecho <code>fb…</code> da URL (ex:{" "}
+          <code>app.manychat.com/<strong>fb123456789</strong>/dashboard</code>).
+          Sem ele, o card cai no fallback: abre a DM do Instagram do lead
+          (quando o flow enviou o <code>ig_username</code>).
+        </p>
+        <div className="space-y-1">
+          <Label htmlFor="pageId">ID da conta ManyChat</Label>
+          <Input
+            id="pageId"
+            type="text"
+            value={pageId}
+            onChange={(e) => setPageId(e.target.value)}
+            placeholder="fb123456789"
+            disabled={pending}
+            className="font-mono text-xs"
+          />
         </div>
       </div>
 

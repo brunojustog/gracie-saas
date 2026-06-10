@@ -53,6 +53,12 @@ type Props = {
     origin: LeadOrigin;
     lastInteractionAt: Date | string;
     chatwootConversationId: string | null;
+    /**
+     * v1.1-AB: link pronto pra abrir a conversa de lead do ManyChat —
+     * computado server-side (kanban/page.tsx). Ou deep-link do painel
+     * ManyChat ou DM do Instagram (ig.me). Null = sem link.
+     */
+    manychatChatUrl?: string | null;
     modality: { id: string; name: string } | null;
     assignedSeller: { id: string; name: string | null; email: string } | null;
     tags?: string[];
@@ -221,6 +227,10 @@ export function LeadCard({
     chatwootConversationBaseUrl && lead.chatwootConversationId
       ? `${chatwootConversationBaseUrl}${lead.chatwootConversationId}`
       : null;
+  const manychatHref = lead.manychatChatUrl ?? null;
+  const manychatTitle = manychatHref?.includes("app.manychat.com")
+    ? "Abrir conversa no ManyChat"
+    : "Abrir DM no Instagram";
 
   return (
     <Card
@@ -241,19 +251,37 @@ export function LeadCard({
               aria-label={STALENESS_LABEL[stale]}
             />
             <h3 className="truncate text-sm font-medium">{lead.name}</h3>
-            {chatwootHref ? (
-              <a
-                href={chatwootHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Abrir conversa no Chatwoot"
-                aria-label="Abrir conversa no Chatwoot"
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <ExternalLink className="h-3 w-3" />
-              </a>
+            {chatwootHref || manychatHref ? (
+              <span className="ml-auto flex shrink-0 items-center">
+                {chatwootHref ? (
+                  <a
+                    href={chatwootHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Abrir conversa no Chatwoot"
+                    aria-label="Abrir conversa no Chatwoot"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : null}
+                {manychatHref ? (
+                  <a
+                    href={manychatHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={manychatTitle}
+                    aria-label={manychatTitle}
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <Camera className="h-3 w-3" />
+                  </a>
+                ) : null}
+              </span>
             ) : null}
           </div>
           {phone ? (
