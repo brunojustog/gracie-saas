@@ -4,7 +4,8 @@ import { requireRole } from "@/server/tenant";
 import { PlansEditor } from "./editor";
 
 export default async function PlanosPage() {
-  const { tenant } = await requireRole("ADMIN");
+  // v1.1-AH: SELLER gerencia planos (espelha o requireRole da action).
+  const { tenant } = await requireRole("SELLER");
 
   const [plans, modalities] = await Promise.all([
     prisma.plan.findMany({

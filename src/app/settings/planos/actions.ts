@@ -21,7 +21,9 @@ const planSchema = z.object({
 export async function upsertPlan(input: unknown): Promise<Result> {
   const parsed = planSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
-  const { tenant } = await requireRole("ADMIN");
+  // v1.1-AH: SELLER gerencia o catálogo de planos (criar/editar/desativar)
+  // — decisão do tenant: a equipe de vendas é dona da tabela de preços.
+  const { tenant } = await requireRole("SELLER");
 
   // Modality (se setada) tem que ser do tenant
   if (parsed.data.modalityId) {

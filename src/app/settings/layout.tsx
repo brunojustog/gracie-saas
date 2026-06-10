@@ -12,8 +12,11 @@ export default async function SettingsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Apenas ADMIN. requireRole redireciona pra /dashboard quem não cumprir.
-  const { tenant, user, membership } = await requireRole("ADMIN");
+  // v1.1-AH: o shell de /settings aceita qualquer membro do tenant — cada
+  // página interna tem o próprio requireRole (planos = SELLER; o resto =
+  // ADMIN), e a nav lateral filtra os itens por role. requireRole
+  // redireciona pra /dashboard quem não cumprir.
+  const { tenant, user, membership } = await requireRole("SELLER");
 
   return (
     <>
@@ -42,7 +45,7 @@ export default async function SettingsLayout({
         </div>
 
         <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-          <SettingsNav />
+          <SettingsNav role={membership.role} />
           <section>{children}</section>
         </div>
       </main>

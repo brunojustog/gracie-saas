@@ -27,7 +27,9 @@ const LINKS: NavLink[] = [
   { href: "/aulas", label: "Aulas", icon: Calendar },
   { href: "/matriculas", label: "Matrículas", icon: GraduationCap },
   { href: "/pdv", label: "Lojinha", icon: ShoppingBag },
-  { href: "/settings", label: "Config", icon: Settings, adminOnly: true },
+  // v1.1-AH: Config visível pra todos — SELLER acessa /settings/planos
+  // (a nav lateral do settings filtra o resto por role).
+  { href: "/settings", label: "Config", icon: Settings },
 ];
 
 export type TopNavProps = {
