@@ -3,6 +3,7 @@
 import {
   Download,
   FileSpreadsheet,
+  Globe,
   GraduationCap,
   LayoutGrid,
   MessageCircle,
@@ -35,6 +36,7 @@ const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/settings/chatwoot/import", label: "Importar do Chatwoot", icon: Download },
   { href: "/settings/wuzapi", label: "WhatsApp (Wuzapi)", icon: Smartphone },
   { href: "/settings/manychat", label: "Integração ManyChat", icon: MessagesSquare },
+  { href: "/settings/site", label: "Leads do site (webhook)", icon: Globe },
   { href: "/settings/import-csv", label: "Importar planilhas (CSV)", icon: FileSpreadsheet },
   { href: "/settings/lixeira", label: "Lixeira (leads excluídos)", icon: Trash2 },
 ];
