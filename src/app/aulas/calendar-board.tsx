@@ -1,6 +1,11 @@
 "use client";
 
-import type { DateSelectArg, EventClickArg, EventInput } from "@fullcalendar/core";
+import type {
+  DateSelectArg,
+  DatesSetArg,
+  EventClickArg,
+  EventInput,
+} from "@fullcalendar/core";
 import ptBrLocale from "@fullcalendar/core/locales/pt-br";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -81,6 +86,13 @@ export function CalendarBoard({
   const [slotEdit, setSlotEdit] = useState<SlotInitial | null>(null);
   const [slotModalOpen, setSlotModalOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  // v1.1-AB: range visível do calendário (datesSet dispara no mount e a cada
+  // navegação/troca de view) — alimenta o contador de agendados do período.
+  const [visibleRange, setVisibleRange] = useState<{
+    start: Date;
+    end: Date;
+    viewType: string;
+  } | null>(null);
 
   const events = useMemo<EventInput[]>(() => {
     const bgEvents: EventInput[] = scheduleSlots.map((slot) => {
@@ -177,9 +189,49 @@ export function CalendarBoard({
 
   const activeClass = activeClassId ? classes.find((c) => c.id === activeClassId) : null;
 
+  // Soma de aulas agendadas (SCHEDULED/CONFIRMED) dentro do range visível.
+  // Pedido do tenant: ao entrar na visão "semana", ver o total de agendados
+  // da semana corrente sem precisar contar célula por célula.
+  const visibleStats = useMemo(() => {
+    if (!visibleRange) return null;
+    const inRange = classes.filter((c) => {
+      const d = new Date(c.scheduledDate);
+      return d >= visibleRange.start && d < visibleRange.end;
+    });
+    return {
+      scheduled: inRange.filter(
+        (c) => c.status === "SCHEDULED" || c.status === "CONFIRMED",
+      ).length,
+      attended: inRange.filter((c) => c.status === "ATTENDED").length,
+      viewType: visibleRange.viewType,
+    };
+  }, [classes, visibleRange]);
+
+  const periodLabel =
+    visibleStats?.viewType === "timeGridWeek"
+      ? "nesta semana"
+      : visibleStats?.viewType === "timeGridDay"
+        ? "neste dia"
+        : "neste mês";
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {visibleStats ? (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">
+              {visibleStats.scheduled} agendada{visibleStats.scheduled === 1 ? "" : "s"} {periodLabel}
+            </span>
+            {visibleStats.attended > 0 ? (
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+                {visibleStats.attended} compareceu{visibleStats.attended === 1 ? "" : "ram"}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => setManageOpen(true)}
@@ -194,6 +246,7 @@ export function CalendarBoard({
         >
           + Novo horário na grade
         </button>
+        </div>
       </div>
     <div className="rounded-lg border bg-card p-2">
       <FullCalendar
@@ -224,6 +277,13 @@ export function CalendarBoard({
         select={onDateSelect}
         eventClick={onEventClick}
         eventDisplay="block"
+        datesSet={(arg: DatesSetArg) =>
+          setVisibleRange({
+            start: arg.start,
+            end: arg.end,
+            viewType: arg.view.type,
+          })
+        }
       />
 
       <ScheduleModal
