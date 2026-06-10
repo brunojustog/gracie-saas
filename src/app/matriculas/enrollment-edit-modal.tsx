@@ -56,10 +56,11 @@ type Props = {
   onClose: () => void;
   onUpdated?: () => void;
   /**
-   * true pra SELLER: esconde modalidade/plano/valor (mascarados desde
-   * v1.1-P) — ela edita data, vencimento, pagamento e observações. O
-   * server-side ignora campos financeiros vindos de SELLER de qualquer
-   * forma; isso aqui é só espelho na UI.
+   * true pra SELLER: esconde o campo de VALOR (mascarado desde v1.1-P) —
+   * ela edita modalidade, plano (v1.1-AG: troca de plano é operação de
+   * venda; o servidor assume o preço de tabela do plano novo), datas,
+   * pagamento e observações. O server-side ignora o valor vindo de SELLER
+   * de qualquer forma; isso aqui é só espelho na UI.
    */
   hideFinancials?: boolean;
 };
@@ -119,8 +120,6 @@ function ModalBody({
   const [observations, setObservations] = useState(target.observations ?? "");
 
   useEffect(() => {
-    // SELLER não renderiza os selects de modalidade/plano — pula o fetch.
-    if (hideFinancials) return;
     let aborted = false;
     getEnrollmentFormOptions().then((data) => {
       if (!aborted) setOptions(data);
@@ -128,7 +127,7 @@ function ModalBody({
     return () => {
       aborted = true;
     };
-  }, [hideFinancials]);
+  }, []);
 
   const handlePlanChange = (newPlanId: string) => {
     setPlanId(newPlanId);
@@ -161,11 +160,11 @@ function ModalBody({
     startTransition(async () => {
       const result = await updateEnrollment({
         enrollmentId: target.id,
-        // Campos financeiros nem são enviados por SELLER (o server ignoraria
-        // de qualquer forma).
-        ...(hideFinancials
-          ? {}
-          : { modalityId, planId, monthlyValue: value }),
+        modalityId,
+        planId,
+        // Valor nem é enviado por SELLER (o server ignoraria de qualquer
+        // forma — troca de plano assume o preço de tabela).
+        ...(hideFinancials ? {} : { monthlyValue: value }),
         paymentMethod,
         enrolledAt,
         nextDueDate: nextDueDate || null,
@@ -181,7 +180,7 @@ function ModalBody({
     });
   };
 
-  if (!hideFinancials && !options) {
+  if (!options) {
     return (
       <DialogHeader>
         <DialogTitle>Carregando…</DialogTitle>
@@ -192,7 +191,9 @@ function ModalBody({
   const submitDisabled =
     pending ||
     !enrolledAt ||
-    (!hideFinancials && (!modalityId || !planId || !monthlyValue));
+    !modalityId ||
+    !planId ||
+    (!hideFinancials && !monthlyValue);
 
   return (
     <>
@@ -201,89 +202,76 @@ function ModalBody({
         <DialogDescription>
           {target.leadName} —{" "}
           {hideFinancials
-            ? "ajustes em data, vencimento, pagamento ou observações."
+            ? "ajustes em plano, datas, pagamento ou observações. Trocar de plano aplica o preço de tabela do plano novo."
             : "ajustes em plano, valor, pagamento, datas ou observações."}
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3">
-        {hideFinancials || !options ? null : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="edit-modality">Modalidade</Label>
-                <Select
-                  value={modalityId}
-                  onValueChange={setModalityId}
-                  disabled={pending}
-                >
-                  <SelectTrigger id="edit-modality">
-                    <SelectValue placeholder="Escolha…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {options.modalities.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{ background: m.color ?? "#6B7280" }}
-                            aria-hidden
-                          />
-                          {m.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="edit-modality">Modalidade</Label>
+            <Select
+              value={modalityId}
+              onValueChange={setModalityId}
+              disabled={pending}
+            >
+              <SelectTrigger id="edit-modality">
+                <SelectValue placeholder="Escolha…" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.modalities.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: m.color ?? "#6B7280" }}
+                        aria-hidden
+                      />
+                      {m.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="edit-plan">Plano</Label>
-                <Select value={planId} onValueChange={handlePlanChange} disabled={pending}>
-                  <SelectTrigger id="edit-plan">
-                    <SelectValue placeholder="Escolha…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredPlans.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name} ·{" "}
-                        {p.monthlyValue.toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-plan">Plano</Label>
+            <Select value={planId} onValueChange={handlePlanChange} disabled={pending}>
+              <SelectTrigger id="edit-plan">
+                <SelectValue placeholder="Escolha…" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredPlans.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} ·{" "}
+                    {p.monthlyValue.toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className={`grid gap-3 ${hideFinancials ? "grid-cols-1" : "grid-cols-2"}`}>
+          {hideFinancials ? null : (
+            <div className="space-y-1">
+              <Label htmlFor="edit-value">Valor mensal (R$)</Label>
+              <Input
+                id="edit-value"
+                type="number"
+                step="0.01"
+                min="0"
+                value={monthlyValue}
+                onChange={(e) => setMonthlyValue(e.target.value)}
+                disabled={pending}
+              />
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="edit-value">Valor mensal (R$)</Label>
-                <Input
-                  id="edit-value"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={monthlyValue}
-                  onChange={(e) => setMonthlyValue(e.target.value)}
-                  disabled={pending}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="edit-payment">Pagamento</Label>
-                <PaymentSelect
-                  value={paymentMethod}
-                  onChange={setPaymentMethod}
-                  disabled={pending}
-                />
-              </div>
-            </div>
-          </>
-        )}
-
-        {hideFinancials ? (
+          )}
           <div className="space-y-1">
             <Label htmlFor="edit-payment">Pagamento</Label>
             <PaymentSelect
@@ -292,7 +280,7 @@ function ModalBody({
               disabled={pending}
             />
           </div>
-        ) : null}
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">

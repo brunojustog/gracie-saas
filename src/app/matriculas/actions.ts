@@ -149,10 +149,12 @@ export async function createEnrollment(input: unknown): Promise<ActionResult> {
 // actions específicas: cancel/suspend/reactivate) nem move o lead no
 // kanban — edição de matrícula é independente da jornada do lead.
 //
-// SELLER pode editar (v1.1-AB), mas só os campos não-financeiros: data da
-// matrícula, vencimento, forma de pagamento e observações. Modalidade,
-// plano e valor enviados por SELLER são IGNORADOS server-side (a UI nem
-// mostra esses campos pra ela — valores são mascarados desde v1.1-P).
+// SELLER pode editar (v1.1-AB) e, desde v1.1-AG, TROCAR plano/modalidade
+// (mudança de plano é operação de venda — melhor que cancelar+recriar, que
+// perderia histórico e moveria o lead pra "perdido"). O que SELLER continua
+// NÃO controlando é o VALOR: o campo é ignorado server-side; ao trocar de
+// plano, o valor assume o preço de tabela do plano novo. Desconto negociado
+// é ajuste de ADMIN/MANAGER depois (valores são mascarados desde v1.1-P).
 
 const updateSchema = z.object({
   enrollmentId: z.string().min(1),
@@ -190,16 +192,12 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
   });
   if (!previous) return { ok: false, error: "matrícula desapareceu" };
 
-  // SELLER não mexe em campos financeiros — força os valores atuais,
-  // independente do que o client mandou.
   const isSeller = membership.role === "SELLER";
-  const effectiveModalityId = isSeller
-    ? previous.modalityId
-    : (parsed.data.modalityId ?? previous.modalityId);
-  const effectivePlanId = isSeller
-    ? previous.planId
-    : (parsed.data.planId ?? previous.planId);
-  const effectiveMonthlyValue = isSeller
+  const effectiveModalityId = parsed.data.modalityId ?? previous.modalityId;
+  const effectivePlanId = parsed.data.planId ?? previous.planId;
+  // SELLER não define valor: mantém o atual — e, se trocou de plano, assume
+  // o preço de tabela do plano novo (resolvido na validação abaixo).
+  let effectiveMonthlyValue = isSeller
     ? Number(previous.monthlyValue)
     : (parsed.data.monthlyValue ?? Number(previous.monthlyValue));
 
@@ -219,10 +217,11 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
   if (effectivePlanId !== previous.planId) {
     const plan = await prisma.plan.findFirst({
       where: { id: effectivePlanId, tenantId: tenant.id, active: true },
-      select: { id: true, name: true },
+      select: { id: true, name: true, monthlyValue: true },
     });
     if (!plan) return { ok: false, error: "plano inválido" };
     planName = plan.name;
+    if (isSeller) effectiveMonthlyValue = Number(plan.monthlyValue);
   }
 
   const newEnrolledAt = new Date(parsed.data.enrolledAt);
