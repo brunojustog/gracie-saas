@@ -88,3 +88,32 @@ describe("buildAdminUrl", () => {
     ).toBe("https://admin.app.simplifica.com.br/admin");
   });
 });
+
+// ── v1.1-AF: domínio custom por tenant ────────────────────────────────────
+
+import { parseCustomDomainMap } from "@/server/tenant-routing";
+
+describe("buildTenantUrl com domínio custom", () => {
+  const custom = parseCustomDomainMap("app.gbanaliafranco.com.br=bgaf");
+
+  it("slug com domínio custom gera o link nele (https, sem porta)", () => {
+    expect(
+      buildTenantUrl({
+        slug: "bgaf",
+        host: "bgaf.simplificaonline.site",
+        forwardedProto: "https",
+        customDomains: custom,
+      }),
+    ).toBe("https://app.gbanaliafranco.com.br/dashboard");
+  });
+
+  it("slug sem domínio custom segue o esquema de subdomínio", () => {
+    expect(
+      buildTenantUrl({
+        slug: "gracie",
+        host: "localhost:3000",
+        customDomains: custom,
+      }),
+    ).toBe("http://gracie.localhost:3000/dashboard");
+  });
+});

@@ -1,3 +1,5 @@
+import { customDomainForSlug } from "@/server/tenant-routing";
+
 /**
  * Gera URLs de tenant trocando o subdomínio do host atual.
  *
@@ -6,14 +8,24 @@
  *
  * Mantém a porta. O protocolo é inferido pelo header `x-forwarded-proto`
  * quando atrás de proxy (prod) e cai pra "http" em localhost.
+ *
+ * v1.1-AF: tenant com domínio custom (TENANT_CUSTOM_DOMAINS) gera o link
+ * direto nele (sempre https, sem porta — domínio custom é coisa de prod).
  */
 export function buildTenantUrl(params: {
   slug: string;
   host: string;
   forwardedProto?: string | null;
   path?: string;
+  /** Override do mapa de domínios custom — só pra testes. */
+  customDomains?: Map<string, string>;
 }): string {
   const { slug, host, forwardedProto, path = "/dashboard" } = params;
+
+  const customHost = params.customDomains
+    ? (customDomainForSlug(slug, params.customDomains) ?? null)
+    : customDomainForSlug(slug);
+  if (customHost) return `https://${customHost}${path}`;
 
   const hostname = host.split(":")[0]!;
   const port = host.includes(":") ? host.split(":")[1] : undefined;

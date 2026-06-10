@@ -23,6 +23,46 @@ const ROOT_HOSTS = new Set([
   "simplificaonline.site",
 ]);
 
+/**
+ * v1.1-AF: domínios CUSTOM por tenant (white-label) — ex: o tenant `bgaf`
+ * atende também em `app.gbanaliafranco.com.br`, onde a heurística de
+ * subdomínio não funciona (o 1º segmento é "app", não o slug).
+ *
+ * Config via env `TENANT_CUSTOM_DOMAINS` (Edge-safe — sem banco aqui):
+ *
+ *   TENANT_CUSTOM_DOMAINS=app.gbanaliafranco.com.br=bgaf,outro.com.br=slug2
+ *
+ * Match é por hostname EXATO (sem porta) e tem precedência sobre subdomínio.
+ */
+export function parseCustomDomainMap(
+  raw: string | null | undefined,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!raw) return map;
+  for (const pair of raw.split(",")) {
+    const [host, slug] = pair.split("=").map((s) => s?.trim().toLowerCase());
+    if (host && slug) map.set(host, slug);
+  }
+  return map;
+}
+
+const CUSTOM_DOMAINS = parseCustomDomainMap(process.env.TENANT_CUSTOM_DOMAINS);
+
+/**
+ * Domínio custom de um slug (inverso do mapa), pra geração de links
+ * (picker do super-admin, convite por e-mail). Null = tenant usa o
+ * esquema padrão de subdomínio.
+ */
+export function customDomainForSlug(
+  slug: string,
+  customDomains: Map<string, string> = CUSTOM_DOMAINS,
+): string | null {
+  for (const [host, s] of customDomains) {
+    if (s === slug) return host;
+  }
+  return null;
+}
+
 /** Subdomínios reservados para super-admin (escopo agregado). */
 const ADMIN_SUBDOMAINS = new Set(["admin"]);
 
@@ -41,11 +81,19 @@ export type TenantContext =
  *   parseTenantFromHost("app.simplifica.com.br")     // { kind: "root" }
  *   parseTenantFromHost("gracie.app.simplifica.com.br") // { kind: "tenant", slug: "gracie" }
  */
-export function parseTenantFromHost(host: string | null | undefined): TenantContext {
+export function parseTenantFromHost(
+  host: string | null | undefined,
+  customDomains: Map<string, string> = CUSTOM_DOMAINS,
+): TenantContext {
   if (!host) return { kind: "root" };
 
   // Strip port (e.g. "gracie.localhost:3000" → "gracie.localhost")
   const hostname = host.split(":")[0]!.toLowerCase();
+
+  // Domínio custom (white-label) tem precedência sobre a heurística de
+  // subdomínio — ver TENANT_CUSTOM_DOMAINS acima.
+  const customSlug = customDomains.get(hostname);
+  if (customSlug) return { kind: "tenant", slug: customSlug };
 
   if (ROOT_HOSTS.has(hostname)) return { kind: "root" };
 

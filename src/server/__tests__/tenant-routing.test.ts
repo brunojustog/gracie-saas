@@ -108,3 +108,76 @@ describe("encodeTenantHeader / decodeTenantHeader (roundtrip)", () => {
     }
   });
 });
+
+// ── v1.1-AF: domínios custom (white-label) ────────────────────────────────
+
+import { customDomainForSlug, parseCustomDomainMap } from "../tenant-routing";
+
+describe("parseCustomDomainMap", () => {
+  it("parseia pares host=slug separados por vírgula", () => {
+    const map = parseCustomDomainMap(
+      "app.gbanaliafranco.com.br=bgaf, Outro.Com.BR=slug2",
+    );
+    expect(map.get("app.gbanaliafranco.com.br")).toBe("bgaf");
+    expect(map.get("outro.com.br")).toBe("slug2"); // normaliza lowercase
+    expect(map.size).toBe(2);
+  });
+
+  it("env vazio/ausente vira mapa vazio", () => {
+    expect(parseCustomDomainMap("").size).toBe(0);
+    expect(parseCustomDomainMap(null).size).toBe(0);
+    expect(parseCustomDomainMap(undefined).size).toBe(0);
+  });
+
+  it("ignora pares malformados", () => {
+    const map = parseCustomDomainMap("semigual,=semhost,semslug=,a.com=ok");
+    expect(map.size).toBe(1);
+    expect(map.get("a.com")).toBe("ok");
+  });
+});
+
+describe("parseTenantFromHost com domínios custom", () => {
+  const custom = parseCustomDomainMap("app.gbanaliafranco.com.br=bgaf");
+
+  it("host custom resolve pro slug mapeado (não pro subdomínio 'app')", () => {
+    expect(parseTenantFromHost("app.gbanaliafranco.com.br", custom)).toEqual({
+      kind: "tenant",
+      slug: "bgaf",
+    });
+    expect(parseTenantFromHost("app.gbanaliafranco.com.br:443", custom)).toEqual({
+      kind: "tenant",
+      slug: "bgaf",
+    });
+  });
+
+  it("custom tem precedência mas não afeta os outros hosts", () => {
+    expect(parseTenantFromHost("bgaf.simplificaonline.site", custom)).toEqual({
+      kind: "tenant",
+      slug: "bgaf",
+    });
+    expect(parseTenantFromHost("gracie.localhost:3000", custom)).toEqual({
+      kind: "tenant",
+      slug: "gracie",
+    });
+  });
+
+  it("sem o mapa, host custom cairia na heurística de subdomínio (errado)", () => {
+    // Documenta o porquê do mapa existir: sem ele, "app" viraria slug.
+    expect(parseTenantFromHost("app.gbanaliafranco.com.br", new Map())).toEqual({
+      kind: "tenant",
+      slug: "app",
+    });
+  });
+});
+
+describe("customDomainForSlug", () => {
+  const custom = parseCustomDomainMap("app.gbanaliafranco.com.br=bgaf");
+
+  it("acha o domínio do slug (inverso)", () => {
+    expect(customDomainForSlug("bgaf", custom)).toBe("app.gbanaliafranco.com.br");
+  });
+
+  it("slug sem domínio custom retorna null", () => {
+    expect(customDomainForSlug("gracie", custom)).toBeNull();
+  });
+});
