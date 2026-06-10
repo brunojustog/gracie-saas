@@ -35,8 +35,9 @@ model User {
   assignedLeads     Lead[]         @relation("AssignedSeller")
   deletedLeads      Lead[]         @relation("DeletedLeadBy")
   movementsHistory  StageHistory[]
-  salesAsSeller     Sale[]         @relation("SaleSeller")
+  salesAsSeller     Sale[]          @relation("SaleSeller")
   authoredLeadNotes LeadNote[]
+  confirmedPayments PaymentRecord[] @relation("PaymentConfirmedBy")
 }
 
 model Account {
@@ -125,6 +126,18 @@ model Tenant {
   // Request da automação. Token vazio = sem validação (aceita qualquer POST
   // pra esse tenant — útil só pra dev/setup).
   manychatWebhookSecret String?
+  /**
+   * v1.1-AB: identificador da conta/página no ManyChat — é o trecho `fb...`
+   * da URL quando logado (app.manychat.com/fb<id>/...). Com ele dá pra montar
+   * o deep-link da conversa: app.manychat.com/fb<id>/chat/<subscriberId>.
+   * Null = card cai no fallback do perfil do Instagram (ig_username).
+   */
+  manychatPageId        String?
+
+  // Webhook genérico de leads do site (v1.1-AB). Mesmo modelo do ManyChat:
+  // secret simples comparado com timingSafeEqual (header X-Site-Webhook-Secret
+  // ou ?secret=). Vazio = aceita qualquer POST (só dev/setup).
+  siteWebhookSecret     String?
 
   users               TenantUser[]
   leads               Lead[]
@@ -139,6 +152,7 @@ model Tenant {
   products            Product[]
   sales               Sale[]
   leadNotes           LeadNote[]
+  paymentRecords      PaymentRecord[]
 }
 
 enum Role {
@@ -295,6 +309,12 @@ model Lead {
   // contato dentro da página/conta ManyChat — usado pra dedup quando o
   // mesmo subscriber dispara vários eventos.
   manychatSubscriberId String?
+  /**
+   * v1.1-AB: @ do Instagram do subscriber (sem o @). Usado pro link da
+   * conversa no card: deep-link do ManyChat quando o tenant configurou
+   * manychatPageId, senão perfil instagram.com/<username>.
+   */
+  manychatIgUsername   String?
 
   // Comercial
   stageId          String
@@ -413,6 +433,8 @@ enum LeadNoteKind {
   // conversa iniciada/encerrada). subscriber_created não escreve note —
   // a própria criação do Lead já marca o início.
   MANYCHAT_EVENT
+  // v1.1-AB: pagamento de mensalidade confirmado (PaymentRecord criado).
+  PAYMENT_CONFIRMED
 }
 
 /**
@@ -531,6 +553,16 @@ model Enrollment {
   suspensionReason String?
   expectedReturnAt DateTime?
 
+  /**
+   * v1.1-AB: próximo vencimento da mensalidade. Confirmar um pagamento
+   * (PaymentRecord) avança essa data +1 mês (ancorado no dia do mês).
+   * "Inadimplente" é derivado: status ACTIVE && nextDueDate < hoje.
+   * Backfill da migration: dia do mês de `enrolledAt`, no ciclo corrente
+   * ou seguinte. Null = sem controle de vencimento (matrículas antigas
+   * canceladas, p.ex.).
+   */
+  nextDueDate DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -538,9 +570,41 @@ model Enrollment {
   lead     Lead     @relation(fields: [leadId], references: [id])
   modality Modality @relation(fields: [modalityId], references: [id])
   plan     Plan     @relation(fields: [planId], references: [id])
+  payments PaymentRecord[]
 
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, status, nextDueDate])
+}
+
+/**
+ * v1.1-AB: 1 row por pagamento de mensalidade confirmado manualmente
+ * (vendedora clica "Confirmar pagamento" na tela de matrículas).
+ *
+ * `amount` é snapshot do monthlyValue no momento da confirmação — reajuste
+ * de plano depois não reescreve o histórico. `dueDate` é o vencimento que
+ * esse pagamento quitou (o nextDueDate vigente na hora).
+ */
+model PaymentRecord {
+  id            String         @id @default(cuid())
+  tenantId      String
+  enrollmentId  String
+  /** Vencimento quitado por esse pagamento (null se a matrícula não tinha vencimento). */
+  dueDate       DateTime?
+  paidAt        DateTime       @default(now())
+  amount        Decimal        @db.Decimal(10, 2)
+  method        PaymentMethod?
+  confirmedById String?
+  notes         String?
+
+  createdAt DateTime @default(now())
+
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enrollment  Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  confirmedBy User?      @relation("PaymentConfirmedBy", fields: [confirmedById], references: [id])
+
+  @@index([tenantId, paidAt])
+  @@index([enrollmentId])
 }
 
 // ──────────────────────────────────────────────────────────────────────────

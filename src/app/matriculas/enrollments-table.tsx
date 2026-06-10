@@ -1,8 +1,8 @@
 "use client";
 
 import type { EnrollmentStatus, PaymentMethod } from "@prisma/client";
-import { format } from "date-fns";
-import { PencilLine, Play, Snowflake, XCircle } from "lucide-react";
+import { differenceInCalendarDays, format, startOfDay } from "date-fns";
+import { Banknote, PencilLine, Play, Snowflake, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -28,7 +28,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { cancelEnrollment, reactivateEnrollment, suspendEnrollment } from "./actions";
+import {
+  cancelEnrollment,
+  confirmPayment,
+  reactivateEnrollment,
+  suspendEnrollment,
+} from "./actions";
 import { EnrollmentEditModal, type EditTarget } from "./enrollment-edit-modal";
 
 type Row = {
@@ -38,6 +43,7 @@ type Row = {
   suspendedAt: Date | string | null;
   suspensionReason: string | null;
   expectedReturnAt: Date | string | null;
+  nextDueDate: Date | string | null;
   // null quando SELLER — backend mascara pra não vazar receita.
   monthlyValue: number | string | { toString(): string } | null;
   paymentMethod: PaymentMethod;
@@ -85,18 +91,23 @@ export function EnrollmentsTable({
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
   const [freezeTarget, setFreezeTarget] = useState<Row | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [payTarget, setPayTarget] = useState<Row | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // v1.1-AB: SELLER também edita — o modal esconde os campos financeiros
+  // (hideFinancials) e o server ignora qualquer campo financeiro de SELLER.
   const handleEdit = (row: Row) => {
-    if (row.monthlyValue === null) return; // SELLER não edita (modal expõe valor)
     setEditTarget({
       id: row.id,
       leadName: row.lead.name,
       modalityId: row.modality.id,
       planId: row.plan.id,
-      monthlyValue: Number(row.monthlyValue),
+      monthlyValue: row.monthlyValue !== null ? Number(row.monthlyValue) : null,
       paymentMethod: row.paymentMethod,
       enrolledAt: new Date(row.enrolledAt).toISOString().slice(0, 10),
+      nextDueDate: row.nextDueDate
+        ? new Date(row.nextDueDate).toISOString().slice(0, 10)
+        : null,
       observations: row.observations,
     });
   };
@@ -134,6 +145,7 @@ export function EnrollmentsTable({
               <TableHead>Pagamento</TableHead>
               <TableHead>Vendedora</TableHead>
               <TableHead>Matriculado em</TableHead>
+              <TableHead>Vencimento</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[120px] text-right">Ações</TableHead>
             </TableRow>
@@ -174,6 +186,9 @@ export function EnrollmentsTable({
                     {format(new Date(r.enrolledAt), "dd/MM/yyyy")}
                   </TableCell>
                   <TableCell>
+                    <DueDateCell row={r} />
+                  </TableCell>
+                  <TableCell>
                     <div className="flex flex-col gap-0.5">
                       <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[r.status]}`}>
                         {STATUS_LABEL[r.status]}
@@ -192,21 +207,30 @@ export function EnrollmentsTable({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-0.5">
-                      {hideFinancials ? null : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleEdit(r)}
-                          disabled={pending}
-                          title="Editar matrícula"
-                          aria-label="Editar matrícula"
-                        >
-                          <PencilLine className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleEdit(r)}
+                        disabled={pending}
+                        title="Editar matrícula"
+                        aria-label="Editar matrícula"
+                      >
+                        <PencilLine className="h-4 w-4" />
+                      </Button>
                       {r.status === "ACTIVE" ? (
                         <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                            onClick={() => setPayTarget(r)}
+                            disabled={pending}
+                            title="Confirmar pagamento da mensalidade"
+                            aria-label="Confirmar pagamento da mensalidade"
+                          >
+                            <Banknote className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -261,11 +285,132 @@ export function EnrollmentsTable({
         target={freezeTarget}
         onClose={() => setFreezeTarget(null)}
       />
+      <ConfirmPaymentDialog
+        target={payTarget}
+        onClose={() => setPayTarget(null)}
+      />
       <EnrollmentEditModal
         target={editTarget}
         onClose={() => setEditTarget(null)}
         onUpdated={() => router.refresh()}
+        hideFinancials={hideFinancials}
       />
+    </>
+  );
+}
+
+/**
+ * Vencimento + estado derivado: vermelho "venceu há Xd" (inadimplente),
+ * âmbar "vence em Xd" quando está a ≤3 dias. Só matrícula ATIVA cobra.
+ */
+function DueDateCell({ row }: { row: Row }) {
+  if (!row.nextDueDate) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const due = new Date(row.nextDueDate);
+  const days = differenceInCalendarDays(startOfDay(due), startOfDay(new Date()));
+  const isBillable = row.status === "ACTIVE";
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className={isBillable && days < 0 ? "font-medium text-red-700 dark:text-red-300" : "text-muted-foreground"}>
+        {format(due, "dd/MM/yyyy")}
+      </span>
+      {isBillable && days < 0 ? (
+        <span className="inline-block w-fit rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-900 dark:bg-red-900/40 dark:text-red-200">
+          venceu há {Math.abs(days)}d
+        </span>
+      ) : null}
+      {isBillable && days >= 0 && days <= 3 ? (
+        <span className="inline-block w-fit rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+          {days === 0 ? "vence hoje" : `vence em ${days}d`}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function ConfirmPaymentDialog({
+  target,
+  onClose,
+}: {
+  target: Row | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {target ? (
+          <ConfirmPaymentBody key={target.id} target={target} onClose={onClose} />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConfirmPaymentBody({ target, onClose }: { target: Row; onClose: () => void }) {
+  const router = useRouter();
+  const [paidAt, setPaidAt] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [pending, startTransition] = useTransition();
+
+  const dueLabel = target.nextDueDate
+    ? format(new Date(target.nextDueDate), "dd/MM/yyyy")
+    : null;
+
+  const handleConfirm = () => {
+    startTransition(async () => {
+      const result = await confirmPayment({
+        enrollmentId: target.id,
+        paidAt,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Pagamento confirmado — vencimento avançado 1 mês");
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Confirmar pagamento</DialogTitle>
+        <DialogDescription>
+          {target.lead.name} — {target.modality.name} ({target.plan.name})
+          {dueLabel ? ` · vencimento atual: ${dueLabel}` : ""}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="pay-date">Data do pagamento</Label>
+          <Input
+            id="pay-date"
+            type="date"
+            value={paidAt}
+            onChange={(e) => setPaidAt(e.target.value)}
+            disabled={pending}
+          />
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Registra a mensalidade como paga e avança o vencimento em 1 mês.
+          Cada confirmação quita <strong>uma</strong> mensalidade — aluno com
+          mais de um mês em aberto continua na lista até quitar tudo.
+        </p>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={pending}>
+          Voltar
+        </Button>
+        <Button onClick={handleConfirm} disabled={pending || !paidAt}>
+          {pending ? "Confirmando…" : "Confirmar pagamento"}
+        </Button>
+      </DialogFooter>
     </>
   );
 }

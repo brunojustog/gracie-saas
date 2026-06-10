@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/top-nav";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
-import { getEnrollmentsForList } from "@/server/enrollments";
+import { getEnrollmentsForList, type DueFilter } from "@/server/enrollments";
+import { countOverdue } from "@/server/payments";
 import { requireTenantUser } from "@/server/tenant";
 
 import { EnrollmentsTable } from "./enrollments-table";
@@ -25,6 +26,7 @@ type SearchParams = Promise<{
   plan?: string;
   payment?: string;
   status?: EnrollmentStatus;
+  due?: string;
 }>;
 
 export default async function MatriculasPage({
@@ -40,16 +42,21 @@ export default async function MatriculasPage({
     ? (sp.payment as PaymentMethod)
     : undefined;
 
+  const due: DueFilter | undefined =
+    sp.due === "overdue" || sp.due === "due7" ? sp.due : undefined;
+
   const filters = {
     search: sp.q,
     modalityId: sp.modality,
     planId: sp.plan,
     paymentMethod,
     status: sp.status,
+    due,
   };
 
-  const [rows, modalities, plans, leadsForPicker] = await Promise.all([
+  const [rows, overdueCount, modalities, plans, leadsForPicker] = await Promise.all([
     getEnrollmentsForList(membership, filters),
+    countOverdue(membership),
     prisma.modality.findMany({
       where: { tenantId: tenant.id, active: true },
       orderBy: { name: "asc" },
@@ -109,11 +116,21 @@ export default async function MatriculasPage({
           </span>
         </div>
 
-        <section className={`grid gap-3 ${isSeller ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+        <section className={`grid gap-3 ${isSeller ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs uppercase text-muted-foreground">Ativas</div>
           <div className="mt-1 text-2xl font-semibold">{totalActive}</div>
         </div>
+        <a
+          href="/matriculas?due=overdue"
+          className="rounded-lg border bg-card p-4 transition-colors hover:bg-muted/40"
+          title="Ver inadimplentes"
+        >
+          <div className="text-xs uppercase text-muted-foreground">Inadimplentes</div>
+          <div className={`mt-1 text-2xl font-semibold ${overdueCount > 0 ? "text-red-700 dark:text-red-300" : ""}`}>
+            {overdueCount}
+          </div>
+        </a>
         {isSeller ? null : (
           <div className="rounded-lg border bg-card p-4">
             <div className="text-xs uppercase text-muted-foreground">Receita mensal</div>
@@ -143,6 +160,7 @@ export default async function MatriculasPage({
             planId: filters.planId,
             paymentMethod: filters.paymentMethod,
             status: filters.status,
+            due: filters.due,
           }}
         />
 

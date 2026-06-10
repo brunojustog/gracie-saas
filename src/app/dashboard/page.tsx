@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getDashboardData } from "@/server/analytics";
+import { getDueOverview, type DueRow } from "@/server/payments";
 import { getPdvKpis } from "@/server/pdv";
 import { requireTenantUser } from "@/server/tenant";
 
@@ -67,10 +68,12 @@ export default async function DashboardPage({
   });
   const isSeller = membership.role === "SELLER";
 
-  const [data, pdv, modalitiesForFilter, sellersForFilter, tagsRaw] =
+  const [data, pdv, dueOverview, modalitiesForFilter, sellersForFilter, tagsRaw] =
     await Promise.all([
       getDashboardData(membership, period, filters),
       getPdvKpis(membership, { start: period.from, end: period.to }),
+      // Vencimentos não respeitam o filtro de período — são sempre "hoje".
+      getDueOverview(membership, 7),
       prisma.modality.findMany({
         where: { tenantId: tenant.id, active: true },
         orderBy: { name: "asc" },
@@ -147,6 +150,34 @@ export default async function DashboardPage({
 
         {/* 1) KPIs operacionais — o que pulsa diariamente */}
         <KPICards data={data} isSeller={data.isSeller} />
+
+        {/* 1b) Cobrança (v1.1-AB) — quem vence nos próximos dias e quem já
+            venceu. Independe do filtro de período: é sempre o estado de hoje. */}
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Panel
+            title={`Inadimplentes (${dueOverview.overdue.length})`}
+            subtitle="Mensalidade vencida e não confirmada — cobrar e registrar o pagamento em Matrículas"
+          >
+            <DueList
+              rows={dueOverview.overdue}
+              emptyLabel="Nenhum aluno inadimplente. 🎉"
+              hideFinancials={data.isSeller}
+              overdue
+              linkHref="/matriculas?due=overdue"
+            />
+          </Panel>
+          <Panel
+            title={`Próximos vencimentos (${dueOverview.upcoming.length})`}
+            subtitle={`Mensalidades que vencem em até ${dueOverview.horizonDays} dias`}
+          >
+            <DueList
+              rows={dueOverview.upcoming}
+              emptyLabel="Nada vencendo nos próximos dias."
+              hideFinancials={data.isSeller}
+              linkHref="/matriculas?due=due7"
+            />
+          </Panel>
+        </section>
 
         {/* 2) Funil de conversão + leads por dia — saúde do pipeline */}
         <section className="grid gap-4 lg:grid-cols-2">
@@ -240,6 +271,91 @@ function Panel({
         ) : null}
       </div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Lista compacta de vencimentos (dashboard). Mostra até 10 e linka pra
+ * /matriculas com o filtro correspondente pra ver/cobrar o resto.
+ */
+function DueList({
+  rows,
+  emptyLabel,
+  hideFinancials,
+  overdue = false,
+  linkHref,
+}: {
+  rows: DueRow[];
+  emptyLabel: string;
+  hideFinancials: boolean;
+  overdue?: boolean;
+  linkHref: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="text-xs text-muted-foreground">{emptyLabel}</p>;
+  }
+  const visible = rows.slice(0, 10);
+  return (
+    <div className="space-y-1">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b text-xs uppercase text-muted-foreground">
+            <th className="px-2 py-1.5 text-left font-medium">Aluno</th>
+            <th className="px-2 py-1.5 text-left font-medium">Plano</th>
+            <th className="px-2 py-1.5 text-right font-medium">Vencimento</th>
+            {hideFinancials ? null : (
+              <th className="px-2 py-1.5 text-right font-medium">Valor</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((r) => (
+            <tr key={r.enrollmentId} className="border-b last:border-0">
+              <td className="px-2 py-1.5">
+                <div className="font-medium">{r.leadName}</div>
+                {r.leadPhone ? (
+                  <div className="text-[11px] text-muted-foreground">{r.leadPhone}</div>
+                ) : null}
+              </td>
+              <td className="px-2 py-1.5 text-muted-foreground">
+                {r.planName}
+                <span className="text-[11px]"> · {r.modalityName}</span>
+              </td>
+              <td className="px-2 py-1.5 text-right">
+                <span className={overdue ? "font-medium text-red-700 dark:text-red-300" : ""}>
+                  {r.nextDueDate.toLocaleDateString("pt-BR")}
+                </span>
+                {overdue ? (
+                  <div className="text-[11px] text-red-700/80 dark:text-red-300/80">
+                    há {r.daysOverdue}d
+                  </div>
+                ) : null}
+              </td>
+              {hideFinancials ? null : (
+                <td className="px-2 py-1.5 text-right font-mono text-xs">
+                  {(r.monthlyValue ?? 0).toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex items-center justify-between pt-1">
+        {rows.length > visible.length ? (
+          <span className="text-[11px] text-muted-foreground">
+            +{rows.length - visible.length} não exibido{rows.length - visible.length === 1 ? "" : "s"}
+          </span>
+        ) : (
+          <span />
+        )}
+        <a href={linkHref} className="text-[11px] font-medium text-primary hover:underline">
+          Ver em Matrículas →
+        </a>
+      </div>
     </div>
   );
 }

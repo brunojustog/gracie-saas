@@ -43,9 +43,11 @@ export type EditTarget = {
   leadName: string;
   modalityId: string;
   planId: string;
-  monthlyValue: number;
+  /** null quando SELLER (valor mascarado no backend). */
+  monthlyValue: number | null;
   paymentMethod: PaymentMethod;
   enrolledAt: string; // ISO yyyy-mm-dd
+  nextDueDate: string | null; // ISO yyyy-mm-dd
   observations: string | null;
 };
 
@@ -53,9 +55,21 @@ type Props = {
   target: EditTarget | null;
   onClose: () => void;
   onUpdated?: () => void;
+  /**
+   * true pra SELLER: esconde modalidade/plano/valor (mascarados desde
+   * v1.1-P) — ela edita data, vencimento, pagamento e observações. O
+   * server-side ignora campos financeiros vindos de SELLER de qualquer
+   * forma; isso aqui é só espelho na UI.
+   */
+  hideFinancials?: boolean;
 };
 
-export function EnrollmentEditModal({ target, onClose, onUpdated }: Props) {
+export function EnrollmentEditModal({
+  target,
+  onClose,
+  onUpdated,
+  hideFinancials = false,
+}: Props) {
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
@@ -65,6 +79,7 @@ export function EnrollmentEditModal({ target, onClose, onUpdated }: Props) {
             target={target}
             onClose={onClose}
             onUpdated={onUpdated}
+            hideFinancials={hideFinancials}
           />
         ) : null}
       </DialogContent>
@@ -76,10 +91,12 @@ function ModalBody({
   target,
   onClose,
   onUpdated,
+  hideFinancials,
 }: {
   target: EditTarget;
   onClose: () => void;
   onUpdated?: () => void;
+  hideFinancials: boolean;
 }) {
   const [options, setOptions] = useState<{
     modalities: Modality[];
@@ -92,15 +109,18 @@ function ModalBody({
   const [modalityId, setModalityId] = useState(target.modalityId);
   const [planId, setPlanId] = useState(target.planId);
   const [monthlyValue, setMonthlyValue] = useState<string>(
-    String(target.monthlyValue),
+    target.monthlyValue !== null ? String(target.monthlyValue) : "",
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     target.paymentMethod,
   );
   const [enrolledAt, setEnrolledAt] = useState(target.enrolledAt);
+  const [nextDueDate, setNextDueDate] = useState(target.nextDueDate ?? "");
   const [observations, setObservations] = useState(target.observations ?? "");
 
   useEffect(() => {
+    // SELLER não renderiza os selects de modalidade/plano — pula o fetch.
+    if (hideFinancials) return;
     let aborted = false;
     getEnrollmentFormOptions().then((data) => {
       if (!aborted) setOptions(data);
@@ -108,7 +128,7 @@ function ModalBody({
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [hideFinancials]);
 
   const handlePlanChange = (newPlanId: string) => {
     setPlanId(newPlanId);
@@ -130,19 +150,25 @@ function ModalBody({
   }, [options, modalityId]);
 
   const handleSubmit = () => {
-    const value = Number(monthlyValue.replace(",", "."));
-    if (!Number.isFinite(value) || value <= 0) {
-      toast.error("Valor mensal inválido");
-      return;
+    let value: number | undefined;
+    if (!hideFinancials) {
+      value = Number(monthlyValue.replace(",", "."));
+      if (!Number.isFinite(value) || value <= 0) {
+        toast.error("Valor mensal inválido");
+        return;
+      }
     }
     startTransition(async () => {
       const result = await updateEnrollment({
         enrollmentId: target.id,
-        modalityId,
-        planId,
-        monthlyValue: value,
+        // Campos financeiros nem são enviados por SELLER (o server ignoraria
+        // de qualquer forma).
+        ...(hideFinancials
+          ? {}
+          : { modalityId, planId, monthlyValue: value }),
         paymentMethod,
         enrolledAt,
+        nextDueDate: nextDueDate || null,
         observations: observations.trim() ? observations.trim() : null,
       });
       if (!result.ok) {
@@ -155,7 +181,7 @@ function ModalBody({
     });
   };
 
-  if (!options) {
+  if (!hideFinancials && !options) {
     return (
       <DialogHeader>
         <DialogTitle>Carregando…</DialogTitle>
@@ -163,108 +189,135 @@ function ModalBody({
     );
   }
 
+  const submitDisabled =
+    pending ||
+    !enrolledAt ||
+    (!hideFinancials && (!modalityId || !planId || !monthlyValue));
+
   return (
     <>
       <DialogHeader>
         <DialogTitle>Editar matrícula</DialogTitle>
         <DialogDescription>
-          {target.leadName} — ajustes em plano, valor, pagamento, data ou observações.
+          {target.leadName} —{" "}
+          {hideFinancials
+            ? "ajustes em data, vencimento, pagamento ou observações."
+            : "ajustes em plano, valor, pagamento, datas ou observações."}
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        {hideFinancials || !options ? null : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="edit-modality">Modalidade</Label>
+                <Select
+                  value={modalityId}
+                  onValueChange={setModalityId}
+                  disabled={pending}
+                >
+                  <SelectTrigger id="edit-modality">
+                    <SelectValue placeholder="Escolha…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {options.modalities.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ background: m.color ?? "#6B7280" }}
+                            aria-hidden
+                          />
+                          {m.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="edit-plan">Plano</Label>
+                <Select value={planId} onValueChange={handlePlanChange} disabled={pending}>
+                  <SelectTrigger id="edit-plan">
+                    <SelectValue placeholder="Escolha…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredPlans.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} ·{" "}
+                        {p.monthlyValue.toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="edit-value">Valor mensal (R$)</Label>
+                <Input
+                  id="edit-value"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={monthlyValue}
+                  onChange={(e) => setMonthlyValue(e.target.value)}
+                  disabled={pending}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-payment">Pagamento</Label>
+                <PaymentSelect
+                  value={paymentMethod}
+                  onChange={setPaymentMethod}
+                  disabled={pending}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {hideFinancials ? (
           <div className="space-y-1">
-            <Label htmlFor="edit-modality">Modalidade</Label>
-            <Select
-              value={modalityId}
-              onValueChange={setModalityId}
+            <Label htmlFor="edit-payment">Pagamento</Label>
+            <PaymentSelect
+              value={paymentMethod}
+              onChange={setPaymentMethod}
               disabled={pending}
-            >
-              <SelectTrigger id="edit-modality">
-                <SelectValue placeholder="Escolha…" />
-              </SelectTrigger>
-              <SelectContent>
-                {options.modalities.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    <span className="flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ background: m.color ?? "#6B7280" }}
-                        aria-hidden
-                      />
-                      {m.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="edit-plan">Plano</Label>
-            <Select value={planId} onValueChange={handlePlanChange} disabled={pending}>
-              <SelectTrigger id="edit-plan">
-                <SelectValue placeholder="Escolha…" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredPlans.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name} ·{" "}
-                    {p.monthlyValue.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="edit-value">Valor mensal (R$)</Label>
+            <Label htmlFor="edit-enrolledAt">Matriculado em</Label>
             <Input
-              id="edit-value"
-              type="number"
-              step="0.01"
-              min="0"
-              value={monthlyValue}
-              onChange={(e) => setMonthlyValue(e.target.value)}
+              id="edit-enrolledAt"
+              type="date"
+              value={enrolledAt}
+              onChange={(e) => setEnrolledAt(e.target.value)}
               disabled={pending}
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-payment">Pagamento</Label>
-            <Select
-              value={paymentMethod}
-              onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
+            <Label htmlFor="edit-nextDueDate">Próximo vencimento</Label>
+            <Input
+              id="edit-nextDueDate"
+              type="date"
+              value={nextDueDate}
+              onChange={(e) => setNextDueDate(e.target.value)}
               disabled={pending}
-            >
-              <SelectTrigger id="edit-payment">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Vazio = sem controle de vencimento.
+            </p>
           </div>
-        </div>
-
-        <div className="space-y-1">
-          <Label htmlFor="edit-enrolledAt">Matriculado em</Label>
-          <Input
-            id="edit-enrolledAt"
-            type="date"
-            value={enrolledAt}
-            onChange={(e) => setEnrolledAt(e.target.value)}
-            disabled={pending}
-          />
         </div>
 
         <div className="space-y-1">
@@ -284,13 +337,39 @@ function ModalBody({
         <Button variant="outline" onClick={onClose} disabled={pending}>
           Cancelar
         </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={!modalityId || !planId || !monthlyValue || !enrolledAt || pending}
-        >
+        <Button onClick={handleSubmit} disabled={submitDisabled}>
           {pending ? "Salvando…" : "Salvar alterações"}
         </Button>
       </DialogFooter>
     </>
+  );
+}
+
+function PaymentSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PaymentMethod;
+  onChange: (v: PaymentMethod) => void;
+  disabled: boolean;
+}) {
+  return (
+    <Select
+      value={value}
+      onValueChange={(v) => onChange(v as PaymentMethod)}
+      disabled={disabled}
+    >
+      <SelectTrigger id="edit-payment">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {PAYMENT_METHODS.map((m) => (
+          <SelectItem key={m.value} value={m.value}>
+            {m.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

@@ -42,6 +42,7 @@ type Props = {
     planId?: string;
     paymentMethod?: PaymentMethod;
     status?: string;
+    due?: string;
   };
 };
 
@@ -145,6 +146,21 @@ export function EnrollmentsToolbar({
             <SelectItem value="ACTIVE">Ativa</SelectItem>
             <SelectItem value="CANCELED">Cancelada</SelectItem>
             <SelectItem value="SUSPENDED">Congelada</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* v1.1-AB: recorte por vencimento — sempre implica matrícula ativa. */}
+        <Select
+          value={initial.due ?? ALL}
+          onValueChange={(v) => setParam("due", v)}
+        >
+          <SelectTrigger className="h-9 w-48">
+            <SelectValue placeholder="Vencimento" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Qualquer vencimento</SelectItem>
+            <SelectItem value="overdue">Inadimplentes</SelectItem>
+            <SelectItem value="due7">Vence em 7 dias</SelectItem>
           </SelectContent>
         </Select>
 

@@ -8,6 +8,7 @@
  * unique do schema. Os helpers aqui assumem que essa unicidade está
  * garantida no banco e expõem erros amigáveis na server action.
  */
+import { addDays, startOfDay } from "date-fns";
 import type {
   EnrollmentStatus,
   PaymentMethod,
@@ -23,12 +24,21 @@ export function scopedEnrollmentWhere(
   return { tenantId: membership.tenantId };
 }
 
+/**
+ * v1.1-AB: recorte por vencimento. Sempre implica status ACTIVE (cancelada/
+ * congelada não cobra) — sobrepõe o filtro de status quando setado.
+ *   - "overdue": inadimplentes (nextDueDate < hoje)
+ *   - "due7": vence entre hoje e hoje+7 (inclusive)
+ */
+export type DueFilter = "overdue" | "due7";
+
 export type EnrollmentListFilters = {
   search?: string;
   modalityId?: string;
   planId?: string;
   paymentMethod?: PaymentMethod;
   status?: EnrollmentStatus;
+  due?: DueFilter;
 };
 
 export function buildEnrollmentListWhere(
@@ -43,6 +53,15 @@ export function buildEnrollmentListWhere(
   if (filters.planId) where.planId = filters.planId;
   if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
   if (filters.status) where.status = filters.status;
+
+  if (filters.due) {
+    const today = startOfDay(new Date());
+    where.status = "ACTIVE";
+    where.nextDueDate =
+      filters.due === "overdue"
+        ? { not: null, lt: today }
+        : { not: null, gte: today, lt: addDays(today, 8) };
+  }
 
   if (filters.search?.trim()) {
     where.lead = {
@@ -66,6 +85,7 @@ export async function getEnrollmentsForList(
       suspendedAt: true,
       suspensionReason: true,
       expectedReturnAt: true,
+      nextDueDate: true,
       monthlyValue: true,
       paymentMethod: true,
       status: true,

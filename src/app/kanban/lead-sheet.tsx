@@ -5,6 +5,7 @@ import { ptBR } from "date-fns/locale";
 import {
   AlertTriangle,
   ArrowRightLeft,
+  Banknote,
   CalendarCheck,
   CalendarClock,
   CalendarX,
@@ -1517,6 +1518,7 @@ const NOTE_ICON: Record<LeadNoteKind, typeof CheckCheck> = {
   LEAD_DELETED: Trash2,
   LEAD_RESTORED: Play,
   MANYCHAT_EVENT: MessagesSquare,
+  PAYMENT_CONFIRMED: Banknote,
 };
 
 const NOTE_TONE: Record<LeadNoteKind, string> = {
@@ -1539,6 +1541,7 @@ const NOTE_TONE: Record<LeadNoteKind, string> = {
   LEAD_DELETED: "text-red-600 dark:text-red-400",
   LEAD_RESTORED: "text-emerald-600 dark:text-emerald-400",
   MANYCHAT_EVENT: "text-fuchsia-600 dark:text-fuchsia-400",
+  PAYMENT_CONFIRMED: "text-emerald-600 dark:text-emerald-400",
 };
 
 function HistoryTab({ leadId }: { leadId: string }) {

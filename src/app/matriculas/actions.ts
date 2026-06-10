@@ -1,5 +1,6 @@
 "use server";
 
+import { addMonths } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -24,6 +25,8 @@ const createSchema = z.object({
   monthlyValue: z.number().positive().max(100_000),
   paymentMethod: z.enum(["CREDIT_CARD", "PIX", "BOLETO", "CASH", "TRANSFER", "OTHER"]),
   observations: z.string().max(2000).optional(),
+  /** v1.1-AB: primeiro vencimento. Sem ele, default = 1 mês após a matrícula. */
+  nextDueDate: z.string().date().optional(),
 });
 
 export async function createEnrollment(input: unknown): Promise<ActionResult> {
@@ -85,6 +88,9 @@ export async function createEnrollment(input: unknown): Promise<ActionResult> {
         paymentMethod: parsed.data.paymentMethod,
         observations: parsed.data.observations ?? null,
         status: "ACTIVE",
+        nextDueDate: parsed.data.nextDueDate
+          ? new Date(parsed.data.nextDueDate)
+          : addMonths(new Date(), 1),
       },
     });
 
@@ -135,21 +141,28 @@ export async function createEnrollment(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Editar matrícula (v1.1-Q)
+// Editar matrícula (v1.1-Q; role-aware desde v1.1-AB)
 // ──────────────────────────────────────────────────────────────────────────
 //
-// Permite ajustar plano, modalidade, valor, pagamento, data e observações
+// Permite ajustar plano, modalidade, valor, pagamento, datas e observações
 // de uma matrícula existente. NÃO mexe em status (transições usam as
 // actions específicas: cancel/suspend/reactivate) nem move o lead no
 // kanban — edição de matrícula é independente da jornada do lead.
+//
+// SELLER pode editar (v1.1-AB), mas só os campos não-financeiros: data da
+// matrícula, vencimento, forma de pagamento e observações. Modalidade,
+// plano e valor enviados por SELLER são IGNORADOS server-side (a UI nem
+// mostra esses campos pra ela — valores são mascarados desde v1.1-P).
 
 const updateSchema = z.object({
   enrollmentId: z.string().min(1),
-  modalityId: z.string().min(1),
-  planId: z.string().min(1),
-  monthlyValue: z.number().positive().max(100_000),
+  modalityId: z.string().min(1).optional(),
+  planId: z.string().min(1).optional(),
+  monthlyValue: z.number().positive().max(100_000).optional(),
   paymentMethod: z.enum(["CREDIT_CARD", "PIX", "BOLETO", "CASH", "TRANSFER", "OTHER"]),
   enrolledAt: z.string().date(),
+  /** null limpa o vencimento (sem controle); undefined mantém o atual. */
+  nextDueDate: z.string().date().nullable().optional(),
   observations: z.string().max(2000).nullable().optional(),
 });
 
@@ -161,19 +174,6 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
 
-  const [modality, plan] = await Promise.all([
-    prisma.modality.findFirst({
-      where: { id: parsed.data.modalityId, tenantId: tenant.id, active: true },
-      select: { id: true, name: true },
-    }),
-    prisma.plan.findFirst({
-      where: { id: parsed.data.planId, tenantId: tenant.id, active: true },
-      select: { id: true, name: true },
-    }),
-  ]);
-  if (!modality) return { ok: false, error: "modalidade inválida" };
-  if (!plan) return { ok: false, error: "plano inválido" };
-
   const previous = await prisma.enrollment.findUnique({
     where: { id: enrollment.id },
     select: {
@@ -182,6 +182,7 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
       monthlyValue: true,
       paymentMethod: true,
       enrolledAt: true,
+      nextDueDate: true,
       observations: true,
       modality: { select: { name: true } },
       plan: { select: { name: true } },
@@ -189,17 +190,63 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
   });
   if (!previous) return { ok: false, error: "matrícula desapareceu" };
 
+  // SELLER não mexe em campos financeiros — força os valores atuais,
+  // independente do que o client mandou.
+  const isSeller = membership.role === "SELLER";
+  const effectiveModalityId = isSeller
+    ? previous.modalityId
+    : (parsed.data.modalityId ?? previous.modalityId);
+  const effectivePlanId = isSeller
+    ? previous.planId
+    : (parsed.data.planId ?? previous.planId);
+  const effectiveMonthlyValue = isSeller
+    ? Number(previous.monthlyValue)
+    : (parsed.data.monthlyValue ?? Number(previous.monthlyValue));
+
+  // Modalidade + plano DO MESMO TENANT (proteção contra tampering) — só
+  // valida quando mudou (modalidade/plano podem ter sido desativados
+  // depois da matrícula; manter o atual continua válido).
+  let modalityName = previous.modality.name;
+  let planName = previous.plan.name;
+  if (effectiveModalityId !== previous.modalityId) {
+    const modality = await prisma.modality.findFirst({
+      where: { id: effectiveModalityId, tenantId: tenant.id, active: true },
+      select: { id: true, name: true },
+    });
+    if (!modality) return { ok: false, error: "modalidade inválida" };
+    modalityName = modality.name;
+  }
+  if (effectivePlanId !== previous.planId) {
+    const plan = await prisma.plan.findFirst({
+      where: { id: effectivePlanId, tenantId: tenant.id, active: true },
+      select: { id: true, name: true },
+    });
+    if (!plan) return { ok: false, error: "plano inválido" };
+    planName = plan.name;
+  }
+
   const newEnrolledAt = new Date(parsed.data.enrolledAt);
+  // undefined = campo não veio (mantém); null = limpar explicitamente.
+  const newNextDueDate =
+    parsed.data.nextDueDate === undefined
+      ? previous.nextDueDate
+      : parsed.data.nextDueDate === null
+        ? null
+        : new Date(parsed.data.nextDueDate);
+
+  const fmtDate = (d: Date | null) =>
+    d ? d.toLocaleDateString("pt-BR") : "—";
+
   const diffs: string[] = [];
-  if (previous.modalityId !== parsed.data.modalityId) {
-    diffs.push(`modalidade: ${previous.modality.name} → ${modality.name}`);
+  if (previous.modalityId !== effectiveModalityId) {
+    diffs.push(`modalidade: ${previous.modality.name} → ${modalityName}`);
   }
-  if (previous.planId !== parsed.data.planId) {
-    diffs.push(`plano: ${previous.plan.name} → ${plan.name}`);
+  if (previous.planId !== effectivePlanId) {
+    diffs.push(`plano: ${previous.plan.name} → ${planName}`);
   }
-  if (Number(previous.monthlyValue) !== parsed.data.monthlyValue) {
+  if (Number(previous.monthlyValue) !== effectiveMonthlyValue) {
     diffs.push(
-      `valor: R$ ${Number(previous.monthlyValue).toFixed(2)} → R$ ${parsed.data.monthlyValue.toFixed(2)}`,
+      `valor: R$ ${Number(previous.monthlyValue).toFixed(2)} → R$ ${effectiveMonthlyValue.toFixed(2)}`,
     );
   }
   if (previous.paymentMethod !== parsed.data.paymentMethod) {
@@ -212,6 +259,13 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
       `data: ${previous.enrolledAt.toLocaleDateString("pt-BR")} → ${newEnrolledAt.toLocaleDateString("pt-BR")}`,
     );
   }
+  if (
+    (previous.nextDueDate?.getTime() ?? null) !== (newNextDueDate?.getTime() ?? null)
+  ) {
+    diffs.push(
+      `vencimento: ${fmtDate(previous.nextDueDate)} → ${fmtDate(newNextDueDate)}`,
+    );
+  }
   const newObs = parsed.data.observations ?? null;
   if ((previous.observations ?? null) !== newObs) {
     diffs.push("observações atualizadas");
@@ -221,11 +275,12 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
     await tx.enrollment.update({
       where: { id: enrollment.id },
       data: {
-        modalityId: parsed.data.modalityId,
-        planId: parsed.data.planId,
-        monthlyValue: parsed.data.monthlyValue,
+        modalityId: effectiveModalityId,
+        planId: effectivePlanId,
+        monthlyValue: effectiveMonthlyValue,
         paymentMethod: parsed.data.paymentMethod,
         enrolledAt: newEnrolledAt,
+        nextDueDate: newNextDueDate,
         observations: newObs,
       },
     });
@@ -240,11 +295,12 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
           body: `Matrícula editada — ${diffs.join("; ")}`,
           metadata: {
             enrollmentId: enrollment.id,
-            modalityId: parsed.data.modalityId,
-            planId: parsed.data.planId,
-            monthlyValue: parsed.data.monthlyValue,
+            modalityId: effectiveModalityId,
+            planId: effectivePlanId,
+            monthlyValue: effectiveMonthlyValue,
             paymentMethod: parsed.data.paymentMethod,
             enrolledAt: parsed.data.enrolledAt,
+            nextDueDate: newNextDueDate?.toISOString() ?? null,
           },
         },
         tx,
@@ -254,6 +310,86 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
 
   revalidatePath("/matriculas");
   revalidatePath("/kanban");
+  revalidatePath("/dashboard");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Confirmar pagamento de mensalidade (v1.1-AB)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Qualquer role do tenant (inclusive SELLER) confirma — é a vendedora quem
+// cobra. Cria PaymentRecord (amount = snapshot do monthlyValue, sem expor
+// valor pra quem confirma) e avança o vencimento +1 mês a partir do
+// vencimento quitado (mantém o dia âncora; date-fns clampa dia 29-31 em
+// meses curtos). Aluno 2 meses atrasado que paga 1 continua inadimplente —
+// comportamento correto: cada confirmação quita UMA mensalidade.
+
+const confirmPaymentSchema = z.object({
+  enrollmentId: z.string().min(1),
+  /** Data em que o aluno pagou. Default: hoje. */
+  paidAt: z.string().date().optional(),
+});
+
+export async function confirmPayment(input: unknown): Promise<ActionResult> {
+  const parsed = confirmPaymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  if (enrollment.status !== "ACTIVE") {
+    return { ok: false, error: "só dá pra confirmar pagamento de matrícula ativa" };
+  }
+
+  const paidAt = parsed.data.paidAt ? new Date(parsed.data.paidAt) : new Date();
+  const settledDue = enrollment.nextDueDate;
+  const nextDue = addMonths(settledDue ?? paidAt, 1);
+
+  const fmt = (d: Date) => d.toLocaleDateString("pt-BR");
+
+  await prisma.$transaction(async (tx) => {
+    const payment = await tx.paymentRecord.create({
+      data: {
+        tenantId: tenant.id,
+        enrollmentId: enrollment.id,
+        dueDate: settledDue,
+        paidAt,
+        amount: enrollment.monthlyValue,
+        method: enrollment.paymentMethod,
+        confirmedById: user.id,
+      },
+    });
+
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: { nextDueDate: nextDue },
+    });
+
+    // Sem valor no body — o diário é visível pra SELLER (financeiro mascarado).
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "PAYMENT_CONFIRMED",
+        body: settledDue
+          ? `Pagamento confirmado (venc. ${fmt(settledDue)}) — próximo vencimento ${fmt(nextDue)}`
+          : `Pagamento confirmado — próximo vencimento ${fmt(nextDue)}`,
+        metadata: {
+          enrollmentId: enrollment.id,
+          paymentRecordId: payment.id,
+          paidAt: paidAt.toISOString(),
+          dueDate: settledDue?.toISOString() ?? null,
+          nextDueDate: nextDue.toISOString(),
+        },
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/dashboard");
   return { ok: true, enrollmentId: enrollment.id };
 }
 
