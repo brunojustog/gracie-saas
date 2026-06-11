@@ -189,20 +189,33 @@ export function CalendarBoard({
 
   const activeClass = activeClassId ? classes.find((c) => c.id === activeClassId) : null;
 
-  // Soma de aulas agendadas (SCHEDULED/CONFIRMED) dentro do range visível.
-  // Pedido do tenant: ao entrar na visão "semana", ver o total de agendados
-  // da semana corrente sem precisar contar célula por célula.
+  // Resumo do período visível (v1.1-AI). Os 6 chips fecham a conta:
+  //   total (sem canceladas) = compareceram + faltas + reagendadas
+  //                          + futuras + sem registro
+  // "Sem registro" = aula que já passou e ninguém marcou o resultado —
+  // sinal operacional pra equipe registrar comparecimento/falta.
+  // Canceladas ficam fora do total de propósito (ruído).
   const visibleStats = useMemo(() => {
     if (!visibleRange) return null;
+    const now = new Date();
     const inRange = classes.filter((c) => {
       const d = new Date(c.scheduledDate);
       return d >= visibleRange.start && d < visibleRange.end;
     });
+    const notCanceled = inRange.filter((c) => c.status !== "CANCELED");
+    const isOpen = (c: CalendarClass) =>
+      c.status === "SCHEDULED" || c.status === "CONFIRMED";
     return {
-      scheduled: inRange.filter(
-        (c) => c.status === "SCHEDULED" || c.status === "CONFIRMED",
+      total: notCanceled.length,
+      attended: notCanceled.filter((c) => c.status === "ATTENDED").length,
+      noShow: notCanceled.filter((c) => c.status === "NO_SHOW").length,
+      rescheduled: notCanceled.filter((c) => c.status === "RESCHEDULED").length,
+      upcoming: notCanceled.filter(
+        (c) => isOpen(c) && new Date(c.scheduledDate) > now,
       ).length,
-      attended: inRange.filter((c) => c.status === "ATTENDED").length,
+      unregistered: notCanceled.filter(
+        (c) => isOpen(c) && new Date(c.scheduledDate) <= now,
+      ).length,
       viewType: visibleRange.viewType,
     };
   }, [classes, visibleRange]);
@@ -218,13 +231,43 @@ export function CalendarBoard({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {visibleStats ? (
-          <div className="flex items-center gap-2 text-xs">
-            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">
-              {visibleStats.scheduled} agendada{visibleStats.scheduled === 1 ? "" : "s"} {periodLabel}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span
+              className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary"
+              title={`Total de aulas experimentais ${periodLabel} (canceladas não contam)`}
+            >
+              {visibleStats.total} {periodLabel}
             </span>
-            {visibleStats.attended > 0 ? (
-              <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
-                {visibleStats.attended} compareceu{visibleStats.attended === 1 ? "" : "ram"}
+            <span
+              className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+              title="Comparecimentos registrados"
+            >
+              ✓ {visibleStats.attended} compareceram
+            </span>
+            <span
+              className="rounded-full bg-red-100 px-2.5 py-1 font-medium text-red-800 dark:bg-red-900/40 dark:text-red-200"
+              title="Faltas registradas (no-show)"
+            >
+              ✗ {visibleStats.noShow} falta{visibleStats.noShow === 1 ? "" : "s"}
+            </span>
+            <span
+              className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+              title="Aulas remarcadas pra outra data"
+            >
+              ↻ {visibleStats.rescheduled} reagendada{visibleStats.rescheduled === 1 ? "" : "s"}
+            </span>
+            <span
+              className="rounded-full bg-sky-100 px-2.5 py-1 font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200"
+              title="Aulas agendadas/confirmadas que ainda vão acontecer"
+            >
+              → {visibleStats.upcoming} futura{visibleStats.upcoming === 1 ? "" : "s"}
+            </span>
+            {visibleStats.unregistered > 0 ? (
+              <span
+                className="rounded-full bg-zinc-200 px-2.5 py-1 font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                title="Aulas que já passaram sem resultado registrado — marque comparecimento ou falta clicando na aula"
+              >
+                ! {visibleStats.unregistered} sem registro
               </span>
             ) : null}
           </div>
