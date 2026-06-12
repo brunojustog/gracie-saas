@@ -143,10 +143,19 @@ export function SiteWebhookForm({
   "name": "Maria Silva",
   "phone": "(11) 99999-8888",
   "email": "maria@email.com",
+  "modality": "GB1",
+  "address": "Tatuapé, São Paulo",
   "message": "Quero saber sobre aulas pro meu filho de 6 anos",
   "source": "formulario-home"
 }`}
         </pre>
+        <p className="text-[11px] text-muted-foreground">
+          <code>modality</code> deve ser o nome EXATO de uma modalidade ativa
+          (Configurações → Modalidades) — vira a modalidade do card no kanban.
+          Nome desconhecido não dá erro: fica registrado no diário pro
+          atendente classificar. <code>address</code> e <code>message</code>{" "}
+          também vão pro diário do lead.
+        </p>
         <p className="text-[11px] text-muted-foreground">
           Exemplo de teste via terminal:
         </p>

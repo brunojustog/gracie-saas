@@ -31,6 +31,15 @@ export const siteLeadPayloadSchema = z
     message: z.string().max(5000).nullish(),
     /** Identificação da página/formulário de origem (ex: "lp-kids", "home"). */
     source: optionalTrimmed,
+    /**
+     * v1.1-AJ: nome da modalidade de interesse (select do formulário).
+     * Casado case-insensitive contra as modalidades ATIVAS do tenant →
+     * vira Lead.modalityId (badge no card do kanban). Nome desconhecido
+     * não quebra: fica só registrado no diário.
+     */
+    modality: optionalTrimmed,
+    /** v1.1-AJ: cidade/bairro do formulário — vai pro diário do lead. */
+    address: optionalTrimmed,
   })
   .passthrough();
 
@@ -63,8 +72,12 @@ export async function upsertLeadFromSite(
   // DÍGITOS (regexp_replace no banco) porque o formato armazenado varia —
   // "(11) 98888-7777" vs "11988887777" vs "+5511988887777". 8 últimos
   // dígitos = número local completo, com ou sem DDD/+55.
-  let existing: { id: string; email: string | null; phone: string | null } | null =
-    null;
+  let existing: {
+    id: string;
+    email: string | null;
+    phone: string | null;
+    modalityId: string | null;
+  } | null = null;
 
   if (email) {
     existing = await prisma.lead.findFirst({
@@ -73,15 +86,20 @@ export async function upsertLeadFromSite(
         deletedAt: null,
         email: { equals: email, mode: "insensitive" },
       },
-      select: { id: true, email: true, phone: true },
+      select: { id: true, email: true, phone: true, modalityId: true },
     });
   }
   if (!existing && phoneDigits) {
     const suffix = phoneDigits.slice(-8);
     const matches = await prisma.$queryRaw<
-      Array<{ id: string; email: string | null; phone: string | null }>
+      Array<{
+        id: string;
+        email: string | null;
+        phone: string | null;
+        modalityId: string | null;
+      }>
     >`
-      SELECT id, email, phone FROM "Lead"
+      SELECT id, email, phone, "modalityId" FROM "Lead"
       WHERE "tenantId" = ${tenantId}
         AND "deletedAt" IS NULL
         AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') LIKE ${"%" + suffix}
@@ -91,9 +109,30 @@ export async function upsertLeadFromSite(
     existing = matches[0] ?? null;
   }
 
-  const messageNote = payload.message?.trim()
-    ? `Novo contato pelo site${payload.source ? ` (${payload.source})` : ""}:\n${payload.message.trim()}`
-    : `Novo contato pelo site${payload.source ? ` (${payload.source})` : ""}`;
+  // Resolve a modalidade pelo nome (case-insensitive, só ativas do tenant).
+  const modality = payload.modality
+    ? await prisma.modality.findFirst({
+        where: {
+          tenantId,
+          active: true,
+          name: { equals: payload.modality, mode: "insensitive" },
+        },
+        select: { id: true, name: true },
+      })
+    : null;
+
+  const noteLines = [
+    `Novo contato pelo site${payload.source ? ` (${payload.source})` : ""}`,
+  ];
+  if (payload.modality) {
+    noteLines.push(
+      `• Modalidade de interesse: ${payload.modality}${modality ? "" : " (não encontrada no catálogo — definir no card)"}`,
+    );
+  }
+  if (payload.address) noteLines.push(`• Endereço: ${payload.address}`);
+  if (payload.message?.trim()) noteLines.push(`• Mensagem: ${payload.message.trim()}`);
+  const messageNote = noteLines.join("\n");
+  const hasNoteDetails = noteLines.length > 1;
 
   if (existing) {
     await prisma.$transaction(async (tx) => {
@@ -104,6 +143,9 @@ export async function upsertLeadFromSite(
           // Completa contatos que o lead não tinha — nunca sobrescreve.
           ...(email && !existing.email ? { email } : {}),
           ...(payload.phone && !existing.phone ? { phone: payload.phone } : {}),
+          ...(modality && !existing.modalityId
+            ? { modalityId: modality.id }
+            : {}),
         },
       });
       await appendLeadNote(
@@ -139,6 +181,7 @@ export async function upsertLeadFromSite(
         email,
         origin: "WEBSITE",
         originDetail: payload.source ?? null,
+        modalityId: modality?.id ?? null,
         firstInteractionAt: now,
         lastInteractionAt: now,
       },
@@ -150,7 +193,7 @@ export async function upsertLeadFromSite(
         notes: "Lead criado via formulário do site",
       },
     });
-    if (payload.message?.trim()) {
+    if (hasNoteDetails) {
       await appendLeadNote(
         {
           tenantId,
