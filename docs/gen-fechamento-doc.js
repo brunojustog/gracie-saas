@@ -53,46 +53,57 @@ const cell = (content, w, fill) =>
     ),
   });
 
-// ── Parte 1: tabela de coleta ──────────────────────────────────────────────
+// ── Parte 1: tabelas de coleta (base padronizada de perguntas) ─────────────
 const COLETA_W = [4226, 1400, 1400, 2000];
-const coletaRows = [
-  ["1. Quantos leads novos chegaram pra você hoje?"],
-  ["2. Quantos follow-ups você fez na coluna Novo Lead?"],
-  ["3. Quantos leads você moveu pra Potencial?"],
-  ["4. Quantos follow-ups você fez no Potencial?"],
-  ["5. Quantas aulas experimentais você agendou hoje?"],
-  ["6. Quantos comparecimentos teve hoje?"],
-  ["7. Quantas faltas teve hoje? O que foi feito com cada uma?"],
-  ["8. Quantas matrículas você fechou hoje?"],
-  ["9. Quantos cancelamentos / congelamentos teve hoje?"],
-  ["10. Quantos inadimplentes você cobrou hoje? Quantos pagamentos confirmou?"],
-];
-const coletaTable = new Table({
-  width: { size: CONTENT, type: WidthType.DXA },
-  columnWidths: COLETA_W,
-  rows: [
-    new TableRow({
-      tableHeader: true,
-      children: [
-        headCell("Pergunta (fazer ANTES de abrir o sistema)", COLETA_W[0]),
-        headCell("Ela disse", COLETA_W[1]),
-        headCell("Sistema", COLETA_W[2]),
-        headCell("Bate? / Por quê?", COLETA_W[3]),
-      ],
-    }),
-    ...coletaRows.map(
-      ([q], i) =>
-        new TableRow({
-          children: [
-            cell(q, COLETA_W[0], i % 2 ? "F3F4F6" : undefined),
-            cell("", COLETA_W[1], i % 2 ? "F3F4F6" : undefined),
-            cell("", COLETA_W[2], i % 2 ? "F3F4F6" : undefined),
-            cell("", COLETA_W[3], i % 2 ? "F3F4F6" : undefined),
-          ],
-        }),
-    ),
-  ],
-});
+const buildColetaTable = (rows) =>
+  new Table({
+    width: { size: CONTENT, type: WidthType.DXA },
+    columnWidths: COLETA_W,
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          headCell("Pergunta (fazer ANTES de abrir o sistema)", COLETA_W[0]),
+          headCell("Ela disse", COLETA_W[1]),
+          headCell("Sistema", COLETA_W[2]),
+          headCell("Bate? / Por quê?", COLETA_W[3]),
+        ],
+      }),
+      ...rows.map(
+        (q, i) =>
+          new TableRow({
+            children: [
+              cell(q, COLETA_W[0], i % 2 ? "F3F4F6" : undefined),
+              cell("", COLETA_W[1], i % 2 ? "F3F4F6" : undefined),
+              cell("", COLETA_W[2], i % 2 ? "F3F4F6" : undefined),
+              cell("", COLETA_W[3], i % 2 ? "F3F4F6" : undefined),
+            ],
+          }),
+      ),
+    ],
+  });
+
+// Bloco A — funil e aulas de HOJE
+const coletaTableA = buildColetaTable([
+  "1. Quantos leads novos chegaram pra você hoje?",
+  "2. Quantos follow-ups você fez na coluna Novo Lead?",
+  "3. Quantos leads você moveu pra Potencial?",
+  "4. Quantos follow-ups você fez no Potencial?",
+  "5. Quantas aulas experimentais você agendou hoje?",
+  "6. Quantos comparecimentos teve hoje?",
+  "7. Dos que compareceram, quantos fecharam matrícula NA HORA?",
+  "8. Quem compareceu e NÃO fechou: qual a justificativa de CADA um? Qual o próximo passo combinado (e ele está registrado no card)?",
+  "9. Quantas faltas teve hoje? TODOS os faltantes já foram contatados? Quantos remarcaram?",
+  "10. Quantas matrículas você fechou hoje (no total, incluindo de aulas de dias anteriores)?",
+]);
+
+// Bloco B — carteira e pendências (além do dia)
+const coletaTableB = buildColetaTable([
+  "11. Aulas experimentais da SEMANA PASSADA que ainda não viraram matrícula: qual o status de cada uma? (negociando / vai pensar / recusou — por quê? / sem retorno — quando é o próximo contato?)",
+  "12. Quantos cancelamentos / congelamentos de alunos teve hoje? Com qual motivo?",
+  "13. Quantos inadimplentes você cobrou hoje? Quantos pagamentos confirmou no sistema?",
+  "14. Algum aluno antigo sinalizou que quer sair / sumiu das aulas / pediu congelamento? O que foi combinado?",
+]);
 
 // ── Parte 2: onde conferir ─────────────────────────────────────────────────
 const ONDE_W = [3000, 6026];
@@ -104,7 +115,9 @@ const ondeRows = [
   ["Comparecimentos", "Agenda → chip verde “compareceram” (visão dia) + Dashboard → KPI “Comparecimentos”."],
   ["Faltas", "Agenda → chip vermelho “faltas” (visão dia)."],
   ["Matrículas", "Dashboard → KPI “Matrículas” + tela Matrículas (mais recentes no topo)."],
-  ["Cancelamentos / congelamentos", "Tela Matrículas → filtro de status “Cancelada” / “Congelada”."],
+  ["Compareceu e NÃO fechou", "Agenda (visão dia) → aulas VERDES de hoje. Pra cada uma, abrir o card do lead no kanban: tem matrícula? Se não tem, a justificativa + próximo passo devem estar no diário do lead."],
+  ["Pós-experimental da semana passada", "Agenda → voltar 1 semana (visão semana) → aulas VERDES. Cruzar com o kanban: quem ainda não está em “Matriculado” é pendência viva — status e próximo contato devem estar no diário."],
+  ["Cancelamentos / congelamentos", "Tela Matrículas → filtro de status “Cancelada” / “Congelada” (congeladas mostram a data prevista de retorno)."],
   ["Cobranças e pagamentos", "Tela Matrículas → filtro “Inadimplentes” (quem segue devendo). Pagamento confirmado aparece no diário do aluno e o vencimento avança 1 mês."],
 ];
 const ondeTable = new Table({
@@ -188,9 +201,13 @@ const doc = new Document({
         ]),
 
         h1("Parte 1 — Coleta (perguntar de viva voz, ANTES de abrir o sistema)"),
-        p("Pergunte e anote a resposta dela primeiro. Só depois abra o sistema e preencha a coluna ao lado. A ordem importa: se ela vir os números antes, a coleta não mede nada."),
-        coletaTable,
-        p([new TextRun({ text: "Atenção ao item de follow-ups: é o único número que o sistema não conta sozinho — só fica registrado se ela escrever a observação no diário do lead. Por isso a regra: follow sem registro = follow não feito.", italics: true, size: 20 })], { spacing: { before: 120, after: 0 } }),
+        p("Esta é a base padronizada de perguntas do fechamento. Pergunte e anote a resposta dela primeiro. Só depois abra o sistema e preencha a coluna ao lado. A ordem importa: se ela vir os números antes, a coleta não mede nada."),
+        h2("Bloco A — Funil e aulas de hoje"),
+        coletaTableA,
+        p([new TextRun({ text: "Atenção ao item de follow-ups: é o único número que o sistema não conta sozinho — só fica registrado se ela escrever a observação no diário do lead. Por isso a regra: follow sem registro = follow não feito.", italics: true, size: 20 })], { spacing: { before: 120, after: 120 } }),
+        h2("Bloco B — Carteira e pendências (além do dia)"),
+        p([new TextRun({ text: "O bloco B é onde a venda escapa sem ninguém ver: o lead que fez a aula, não fechou na hora e ninguém retomou. A pergunta 11 é a mais importante do fechamento — toda aula experimental da semana sem matrícula precisa ter dono, status e data do próximo contato.", size: 20 })]),
+        coletaTableB,
 
         new Paragraph({ pageBreakBefore: true, heading: HeadingLevel.HEADING_1, children: [new TextRun("Parte 2 — Onde conferir cada número no sistema")] }),
         p([r("Antes de chamar a vendedora, abra o "), b("Dashboard"), r(" e selecione: filtro de vendedora = ela, período = personalizado com a data de hoje nos dois campos. Os KPIs do topo já respondem a maioria das perguntas.")]),
@@ -205,6 +222,8 @@ const doc = new Document({
         check([r("Leads com "), b("bolinha vermelha"), r(" (5+ dias sem interação): qual é o plano pra cada um?")]),
         check([r("Cards com follow-up automático “"), b("Falhou"), r("” ou “"), b("Pausado"), r("” revisados — alguém assumiu a conversa?")]),
         check([r("Perdas do dia com "), b("motivo verdadeiro"), r(" (não genérico tipo “sem interesse” sem contexto).")]),
+        check([r("Todo "), b("comparecimento sem matrícula"), r(" (de hoje e da semana) tem justificativa + próximo passo registrados no diário do lead.")]),
+        check([r("Alunos "), b("congelados com data de retorno vencida"), r(" revisados — voltou? estende? cancela?")]),
         check([r("Pagamentos recebidos hoje "), b("confirmados no sistema"), r(" (botão verde na tela Matrículas) — senão o aluno aparece como inadimplente amanhã.")]),
 
         h1("Parte 4 — Como tratar as divergências"),
