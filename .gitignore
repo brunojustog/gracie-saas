@@ -43,3 +43,6 @@ next-env.d.ts
 
 # dados sensíveis (CSVs de import com PII — clientes reais)
 /data/
+
+# Config local do Claude Code (não versionar)
+.claude/
