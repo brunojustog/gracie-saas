@@ -19,6 +19,7 @@ export default async function ModalidadesPage() {
         description: m.description,
         ageRange: m.ageRange,
         color: m.color,
+        isKids: m.isKids,
         active: m.active,
       }))}
     />

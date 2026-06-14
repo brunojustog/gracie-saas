@@ -27,7 +27,7 @@ import {
   UserPlus,
   XCircle,
 } from "lucide-react";
-import type { LeadNoteKind, LeadOrigin, MessageJobStatus } from "@prisma/client";
+import type { Gender, LeadNoteKind, LeadOrigin, MessageJobStatus } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -109,6 +109,7 @@ const ORIGIN_ORDER: LeadOrigin[] = [
 
 const UNASSIGNED = "__unassigned__";
 const NO_MODALITY = "__none__";
+const GENDER_NONE = "__none__";
 
 type Stage = {
   id: string;
@@ -361,12 +362,14 @@ function OverviewTab({
   const [name, setName] = useState(lead.name);
   const [phone, setPhone] = useState(lead.phone ?? "");
   const [email, setEmail] = useState(lead.email ?? "");
+  const [gender, setGender] = useState<Gender | "">(lead.gender ?? "");
   const [notes, setNotes] = useState(lead.notes ?? "");
 
   const dirty =
     name !== lead.name ||
     (phone || "") !== (lead.phone ?? "") ||
     (email || "") !== (lead.email ?? "") ||
+    (gender || "") !== (lead.gender ?? "") ||
     (notes || "") !== (lead.notes ?? "");
 
   const handleSave = () => {
@@ -376,6 +379,7 @@ function OverviewTab({
         name,
         phone: phone || null,
         email: email || null,
+        gender: gender || null,
         notes: notes || null,
       });
       if (!result.ok) {
@@ -383,7 +387,7 @@ function OverviewTab({
         return;
       }
       toast.success("Dados atualizados");
-      onLeadChange({ ...lead, name, phone, email, notes });
+      onLeadChange({ ...lead, name, phone, email, gender: gender || null, notes });
       onLeadPatch(lead.id, { name, phone: phone || null });
     });
   };
@@ -648,10 +652,27 @@ function OverviewTab({
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-muted-foreground">Criado em</Label>
-          <div className="flex h-9 items-center text-sm">
-            {format(new Date(lead.firstInteractionAt), "dd/MM/yyyy")}
-          </div>
+          <Label htmlFor="gender">Gênero</Label>
+          <Select
+            value={gender === "" ? GENDER_NONE : gender}
+            onValueChange={(v) => setGender(v === GENDER_NONE ? "" : (v as Gender))}
+            disabled={pending}
+          >
+            <SelectTrigger id="gender" className="h-9">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={GENDER_NONE}>Não informado</SelectItem>
+              <SelectItem value="FEMALE">Feminino</SelectItem>
+              <SelectItem value="MALE">Masculino</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-muted-foreground">Criado em</Label>
+        <div className="flex h-9 items-center text-sm">
+          {format(new Date(lead.firstInteractionAt), "dd/MM/yyyy")}
         </div>
       </div>
 

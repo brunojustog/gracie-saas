@@ -1,5 +1,7 @@
 /* Gera docs/fechamento-diario-supervisor.docx — roteiro do fechamento
- * diário do supervisor comercial com as vendedoras (GB Anália Franco). */
+ * diário do supervisor comercial com as vendedoras (GB Anália Franco).
+ * Script de build standalone (node), não faz parte do bundle da app. */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require("fs");
 const path = require("path");
 const {

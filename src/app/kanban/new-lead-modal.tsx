@@ -1,8 +1,10 @@
 "use client";
 
-import { LeadOrigin } from "@prisma/client";
+import { Gender, LeadOrigin } from "@prisma/client";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+
+import { guessGender } from "@/server/gender";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +31,7 @@ import { ORIGIN_LABEL } from "./lead-card";
 
 const NO_MODALITY = "__none__";
 const UNASSIGNED = "__unassigned__";
+const GENDER_AUTO = "__auto__";
 
 const ORIGIN_ORDER: LeadOrigin[] = [
   "WHATSAPP",
@@ -103,6 +106,7 @@ function ModalBody({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [origin, setOrigin] = useState<LeadOrigin>("WALK_IN");
+  const [gender, setGender] = useState<Gender | "">("");
   const [modalityId, setModalityId] = useState<string>(NO_MODALITY);
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? UNASSIGNED);
   const [notes, setNotes] = useState("");
@@ -117,6 +121,8 @@ function ModalBody({
         phone: phone.trim() || null,
         email: email.trim() || null,
         origin,
+        // Em branco → adivinha pelo primeiro nome (vendedora revisa depois).
+        gender: gender || guessGender(name) || null,
         modalityId: modalityId === NO_MODALITY ? null : modalityId,
         assignedSellerId: sellerId === UNASSIGNED ? null : sellerId,
         notes: notes.trim() || null,
@@ -183,26 +189,45 @@ function ModalBody({
           </div>
         </div>
 
-        <div className="space-y-1">
-          <Label htmlFor="nl-origin">
-            Origem <span className="text-red-500">*</span>
-          </Label>
-          <Select
-            value={origin}
-            onValueChange={(v) => setOrigin(v as LeadOrigin)}
-            disabled={pending}
-          >
-            <SelectTrigger id="nl-origin">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ORIGIN_ORDER.map((o) => (
-                <SelectItem key={o} value={o}>
-                  {ORIGIN_LABEL[o]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="nl-origin">
+              Origem <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={origin}
+              onValueChange={(v) => setOrigin(v as LeadOrigin)}
+              disabled={pending}
+            >
+              <SelectTrigger id="nl-origin">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ORIGIN_ORDER.map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {ORIGIN_LABEL[o]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="nl-gender">Gênero</Label>
+            <Select
+              value={gender === "" ? GENDER_AUTO : gender}
+              onValueChange={(v) => setGender(v === GENDER_AUTO ? "" : (v as Gender))}
+              disabled={pending}
+            >
+              <SelectTrigger id="nl-gender">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={GENDER_AUTO}>Automático (pelo nome)</SelectItem>
+                <SelectItem value="FEMALE">Feminino</SelectItem>
+                <SelectItem value="MALE">Masculino</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

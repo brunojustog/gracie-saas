@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   Calendar,
   GraduationCap,
   Kanban,
@@ -27,6 +28,8 @@ const LINKS: NavLink[] = [
   { href: "/aulas", label: "Aulas", icon: Calendar },
   { href: "/matriculas", label: "Matrículas", icon: GraduationCap },
   { href: "/pdv", label: "Lojinha", icon: ShoppingBag },
+  // v1.1-AK: painel gerencial só pra ADMIN.
+  { href: "/quadro", label: "Quadro do Vitor", icon: BarChart3, adminOnly: true },
   // v1.1-AH: Config visível pra todos — SELLER acessa /settings/planos
   // (a nav lateral do settings filtra o resto por role).
   { href: "/settings", label: "Config", icon: Settings },

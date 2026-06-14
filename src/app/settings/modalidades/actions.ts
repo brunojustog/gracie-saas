@@ -13,6 +13,7 @@ const createSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   ageRange: z.string().max(50).nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  isKids: z.boolean().default(false),
 });
 
 export async function createModality(input: unknown): Promise<Result> {
@@ -33,6 +34,7 @@ export async function createModality(input: unknown): Promise<Result> {
       description: parsed.data.description ?? null,
       ageRange: parsed.data.ageRange ?? null,
       color: parsed.data.color ?? null,
+      isKids: parsed.data.isKids,
     },
   });
   revalidatePath("/settings/modalidades");
@@ -45,6 +47,7 @@ const updateSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   ageRange: z.string().max(50).nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  isKids: z.boolean().default(false),
   active: z.boolean(),
 });
 
@@ -65,11 +68,13 @@ export async function updateModality(input: unknown): Promise<Result> {
       description: parsed.data.description ?? null,
       ageRange: parsed.data.ageRange ?? null,
       color: parsed.data.color ?? null,
+      isKids: parsed.data.isKids,
       active: parsed.data.active,
     },
   });
   revalidatePath("/settings/modalidades");
   revalidatePath("/aulas");
   revalidatePath("/kanban");
+  revalidatePath("/quadro");
   return { ok: true };
 }

@@ -1,6 +1,6 @@
 "use server";
 
-import { LeadOrigin } from "@prisma/client";
+import { Gender, LeadOrigin } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -33,6 +33,7 @@ export async function getLeadDetails(leadId: string) {
       phone: true,
       email: true,
       origin: true,
+      gender: true,
       stageId: true,
       modalityId: true,
       assignedSellerId: true,
@@ -99,6 +100,7 @@ const updateInfoSchema = z.object({
   name: z.string().min(1).max(200),
   phone: z.string().max(50).nullable().optional(),
   email: z.string().email().max(200).nullable().or(z.literal("")).optional(),
+  gender: z.enum(Gender).nullable().optional(),
   notes: z.string().max(5000).nullable().optional(),
 });
 
@@ -120,11 +122,13 @@ export async function updateLeadInfo(input: unknown): Promise<ActionResult> {
       name: parsed.data.name,
       phone: parsed.data.phone ?? null,
       email: parsed.data.email ? parsed.data.email : null,
+      gender: parsed.data.gender ?? null,
       notes: parsed.data.notes ?? null,
     },
   });
 
   revalidatePath("/kanban");
+  revalidatePath("/quadro");
   return { ok: true };
 }
 
@@ -432,6 +436,7 @@ const createLeadSchema = z.object({
   phone: z.string().max(50).nullable().optional(),
   email: z.string().email().max(200).nullable().or(z.literal("")).optional(),
   origin: z.enum(LeadOrigin),
+  gender: z.enum(Gender).nullable().optional(),
   modalityId: z.string().min(1).nullable().optional(),
   assignedSellerId: z.string().min(1).nullable().optional(),
   notes: z.string().max(5000).nullable().optional(),
@@ -488,6 +493,7 @@ export async function createManualLead(input: unknown): Promise<CreateLeadResult
         phone: parsed.data.phone || null,
         email: parsed.data.email || null,
         origin: parsed.data.origin,
+        gender: parsed.data.gender ?? null,
         modalityId: parsed.data.modalityId || null,
         assignedSellerId: parsed.data.assignedSellerId || null,
         notes: parsed.data.notes || null,

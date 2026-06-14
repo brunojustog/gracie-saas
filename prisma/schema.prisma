@@ -218,6 +218,13 @@ model Modality {
   ageRange    String?
   /** Cor hex (#RRGGBB) usada no calendário pra pintar slots/aulas dessa modalidade. */
   color       String?
+  /**
+   * v1.1-AK: turma infantil. Usado no "Quadro do Vitor" pra separar
+   * adultos × kids na contagem de alunos ativos. Backfill da migration:
+   * true pras modalidades cujo nome começa com "GBK" (Gracie Barra Kids).
+   * ADMIN ajusta o resto em Configurações → Modalidades.
+   */
+  isKids      Boolean  @default(false)
   active      Boolean  @default(true)
 
   tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -290,6 +297,17 @@ enum LeadOrigin {
   OTHER
 }
 
+/**
+ * v1.1-AK: gênero do lead/aluno. Usado no "Quadro do Vitor" pra separar
+ * Mulheres/Homens (adultos) e Meninas/Meninos (kids). Null = não informado
+ * (cai num bucket "sem gênero" no quadro). Backfill da migration faz um
+ * palpite pelo primeiro nome (pt-BR); ADMIN revisa na ficha do lead.
+ */
+enum Gender {
+  FEMALE
+  MALE
+}
+
 model Lead {
   id           String     @id @default(cuid())
   tenantId     String
@@ -297,6 +315,7 @@ model Lead {
   name         String
   phone        String?
   email        String?
+  gender       Gender?
   origin       LeadOrigin @default(OTHER)
   originDetail String?
 

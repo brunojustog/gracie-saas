@@ -24,6 +24,7 @@ type Modality = {
   description: string | null;
   ageRange: string | null;
   color: string | null;
+  isKids: boolean;
   active: boolean;
 };
 
@@ -63,6 +64,11 @@ export function ModalitiesEditor({ modalities }: { modalities: Modality[] }) {
             <div className="min-w-0 flex-1">
               <div className="font-medium">
                 {m.name}
+                {m.isKids && (
+                  <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                    kids
+                  </span>
+                )}
                 {!m.active && (
                   <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px]">
                     inativa
@@ -129,6 +135,7 @@ function ModalityFormBody({
   const [description, setDescription] = useState(modality?.description ?? "");
   const [ageRange, setAgeRange] = useState(modality?.ageRange ?? "");
   const [color, setColor] = useState(modality?.color ?? "#6B7280");
+  const [isKids, setIsKids] = useState(modality?.isKids ?? false);
   const [active, setActive] = useState(modality?.active ?? true);
   const [pending, startTransition] = useTransition();
 
@@ -145,6 +152,7 @@ function ModalityFormBody({
             description: description.trim() || null,
             ageRange: ageRange.trim() || null,
             color,
+            isKids,
             active,
           })
         : await createModality({
@@ -152,6 +160,7 @@ function ModalityFormBody({
             description: description.trim() || null,
             ageRange: ageRange.trim() || null,
             color,
+            isKids,
           });
       if (!result.ok) {
         toast.error(result.error);
@@ -202,6 +211,15 @@ function ModalityFormBody({
               className="h-9 p-1"
             />
           </div>
+        </div>
+        <div className="flex items-center justify-between rounded border p-3">
+          <div>
+            <Label htmlFor="isKids">Turma infantil (kids)</Label>
+            <p className="text-xs text-muted-foreground">
+              Separa adultos × kids na contagem de alunos do Quadro do Vitor.
+            </p>
+          </div>
+          <Switch id="isKids" checked={isKids} onCheckedChange={setIsKids} />
         </div>
         {modality ? (
           <div className="flex items-center justify-between rounded border p-3">
