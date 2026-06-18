@@ -19,6 +19,7 @@ import {
 import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
+import { isOverdue } from "@/lib/overdue";
 import { getPrivateRevenue } from "@/server/private-packages";
 
 /** Percentual seguro (0 quando o denominador é 0). */
@@ -186,7 +187,7 @@ export async function getQuadroData(tenantId: string) {
   const byPayment = new Map<string, number>();
 
   for (const e of activeEnrollments) {
-    if (e.nextDueDate && e.nextDueDate < today) overdue++;
+    if (isOverdue(e.nextDueDate, now)) overdue++;
     monthlyRecurring += Number(e.monthlyValue);
     const bucket = e.modality.isKids ? kids : adults;
     if (e.lead.gender === "FEMALE") bucket.female++;

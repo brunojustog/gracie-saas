@@ -5,6 +5,8 @@ import { differenceInCalendarDays, format, startOfDay } from "date-fns";
 import { Banknote, PencilLine, Play, Snowflake, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+
+import { OVERDUE_GRACE_DAYS } from "@/lib/overdue";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -306,8 +308,10 @@ export function EnrollmentsTable({
 }
 
 /**
- * Vencimento + estado derivado: vermelho "venceu há Xd" (inadimplente),
- * âmbar "vence em Xd" quando está a ≤3 dias. Só matrícula ATIVA cobra.
+ * Vencimento + estado derivado (v1.1-AQ): vermelho "inadimplente" só após a
+ * carência de {OVERDUE_GRACE_DAYS} dias; dentro da carência fica âmbar
+ * "venceu há Xd · em carência"; âmbar "vence em Xd" quando está a ≤3 dias.
+ * Só matrícula ATIVA cobra.
  */
 function DueDateCell({ row }: { row: Row }) {
   if (!row.nextDueDate) {
@@ -315,16 +319,24 @@ function DueDateCell({ row }: { row: Row }) {
   }
   const due = new Date(row.nextDueDate);
   const days = differenceInCalendarDays(startOfDay(due), startOfDay(new Date()));
+  const daysPast = -days; // positivo quando já venceu
   const isBillable = row.status === "ACTIVE";
+  const inadimplente = isBillable && daysPast >= OVERDUE_GRACE_DAYS;
+  const emCarencia = isBillable && daysPast > 0 && daysPast < OVERDUE_GRACE_DAYS;
 
   return (
     <div className="flex flex-col gap-0.5">
-      <span className={isBillable && days < 0 ? "font-medium text-red-700 dark:text-red-300" : "text-muted-foreground"}>
+      <span className={inadimplente ? "font-medium text-red-700 dark:text-red-300" : "text-muted-foreground"}>
         {format(due, "dd/MM/yyyy")}
       </span>
-      {isBillable && days < 0 ? (
+      {inadimplente ? (
         <span className="inline-block w-fit rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-900 dark:bg-red-900/40 dark:text-red-200">
-          venceu há {Math.abs(days)}d
+          inadimplente · venceu há {daysPast}d
+        </span>
+      ) : null}
+      {emCarencia ? (
+        <span className="inline-block w-fit rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+          venceu há {daysPast}d · em carência
         </span>
       ) : null}
       {isBillable && days >= 0 && days <= 3 ? (

@@ -18,6 +18,7 @@ import type {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { overdueCutoff } from "@/lib/overdue";
 
 export function scopedEnrollmentWhere(
   membership: TenantUser,
@@ -74,7 +75,7 @@ export function buildEnrollmentListWhere(
     where.status = "ACTIVE";
     where.nextDueDate =
       filters.due === "overdue"
-        ? { not: null, lt: today }
+        ? { not: null, lt: overdueCutoff() } // inadimplente só após a carência
         : { not: null, gte: today, lt: addDays(today, 8) };
   }
 

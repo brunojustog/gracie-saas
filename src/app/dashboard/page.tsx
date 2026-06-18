@@ -158,7 +158,7 @@ export default async function DashboardPage({
         <section className="grid gap-4 lg:grid-cols-2">
           <Panel
             title={`Inadimplentes (${dueOverview.overdue.length})`}
-            subtitle="Mensalidade vencida e não confirmada — cobrar e registrar o pagamento em Matrículas"
+            subtitle="Vencida há 2+ dias e não confirmada (carência de 2 dias) — cobrar e registrar o pagamento em Matrículas"
           >
             <DueList
               rows={dueOverview.overdue}

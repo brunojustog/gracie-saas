@@ -13,6 +13,7 @@ import { addDays, differenceInCalendarDays, startOfDay } from "date-fns";
 import type { TenantUser } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { OVERDUE_GRACE_DAYS, overdueCutoff } from "@/lib/overdue";
 
 export type DueRow = {
   enrollmentId: string;
@@ -78,7 +79,10 @@ export async function getDueOverview(
   }));
 
   return {
-    overdue: mapped.filter((r) => r.daysOverdue > 0),
+    // Inadimplente só após a carência (v1.1-AQ). Quem venceu dentro da
+    // carência (daysOverdue 1) não entra em overdue NEM em upcoming —
+    // fica "aguardando baixa", sem cobrar ainda.
+    overdue: mapped.filter((r) => r.daysOverdue >= OVERDUE_GRACE_DAYS),
     upcoming: mapped.filter((r) => r.daysOverdue === 0),
     horizonDays,
   };
@@ -90,7 +94,7 @@ export async function countOverdue(membership: TenantUser): Promise<number> {
     where: {
       tenantId: membership.tenantId,
       status: "ACTIVE",
-      nextDueDate: { not: null, lt: startOfDay(new Date()) },
+      nextDueDate: { not: null, lt: overdueCutoff() },
     },
   });
 }
