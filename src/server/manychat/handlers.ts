@@ -11,6 +11,7 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { appendLeadNote } from "@/server/lead-notes";
+import { findLeadIdByPhone } from "@/server/leads";
 
 import {
   channelToOrigin,
@@ -100,6 +101,21 @@ export async function upsertLeadFromSubscriber(params: {
 
     await prisma.lead.update({ where: { id: existing.id }, data: update });
     return { kind: "updated", leadId: existing.id };
+  }
+
+  // v1.1-AS: dedup cross-canal por telefone (Instagram normalmente vem sem
+  // telefone, então isso só atua quando o ManyChat manda o número). Vincula
+  // a identidade ManyChat ao lead já existente em vez de duplicar.
+  const phoneMatchId = await findLeadIdByPhone(tenantId, subscriber.phone);
+  if (phoneMatchId) {
+    const update: Prisma.LeadUncheckedUpdateInput = {
+      lastInteractionAt: now,
+      manychatSubscriberId: subscriberId,
+    };
+    if (subscriber.email) update.email = subscriber.email;
+    if (subscriber.ig_username) update.manychatIgUsername = subscriber.ig_username;
+    await prisma.lead.update({ where: { id: phoneMatchId }, data: update });
+    return { kind: "updated", leadId: phoneMatchId };
   }
 
   const stageId = await getInitialStageId(tenantId);

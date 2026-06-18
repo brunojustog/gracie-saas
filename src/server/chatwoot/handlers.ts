@@ -12,6 +12,7 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { appendLeadNote } from "@/server/lead-notes";
+import { findLeadIdByPhone } from "@/server/leads";
 import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/messaging";
 
 import {
@@ -122,6 +123,18 @@ export async function upsertLeadFromContact(params: {
   if (existing) {
     await prisma.lead.update({ where: { id: existing.id }, data });
     return { kind: "updated", leadId: existing.id };
+  }
+
+  // v1.1-AS: dedup cross-canal. Antes de criar, procura um lead com o mesmo
+  // telefone (ex: pessoa já cadastrada via ManyChat/planilha). Se achar,
+  // VINCULA a identidade do Chatwoot a ele em vez de duplicar.
+  const phoneMatchId = await findLeadIdByPhone(tenantId, contact.phone_number);
+  if (phoneMatchId) {
+    await prisma.lead.update({
+      where: { id: phoneMatchId },
+      data: { ...data, chatwootContactId: contact.id },
+    });
+    return { kind: "updated", leadId: phoneMatchId };
   }
 
   const stageId = await getInitialStageId(tenantId);

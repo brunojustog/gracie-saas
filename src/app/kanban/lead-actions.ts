@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { appendLeadNote, listLeadNotes, type LeadNoteFilter, type LeadNoteRow } from "@/server/lead-notes";
-import { findLeadInScope, scopedLeadWhere } from "@/server/leads";
+import { findLeadIdByPhone, findLeadInScope, scopedLeadWhere } from "@/server/leads";
 import { enqueueWelcomeSequence, pauseLeadJobs } from "@/server/messaging";
 import { getLeadFollowUpStatus, type FollowUpStatus } from "@/server/messaging/status";
 import { requireTenantUser } from "@/server/tenant";
@@ -475,6 +475,22 @@ export async function createManualLead(input: unknown): Promise<CreateLeadResult
       },
     });
     if (!member?.active) return { ok: false, error: "vendedor inválido ou inativo" };
+  }
+
+  // v1.1-AS: dedup por telefone. Se já existe lead com esse número, NÃO cria
+  // duplicado — aponta o existente pra vendedora abrir/editar.
+  if (parsed.data.phone) {
+    const dupId = await findLeadIdByPhone(tenant.id, parsed.data.phone);
+    if (dupId) {
+      const dup = await prisma.lead.findUnique({
+        where: { id: dupId },
+        select: { name: true },
+      });
+      return {
+        ok: false,
+        error: `Já existe um lead com esse telefone: ${dup?.name ?? "(sem nome)"}. Abra o lead existente em vez de criar outro.`,
+      };
+    }
   }
 
   // Stage inicial = primeiro stage ativo por order ASC (mesma lógica do

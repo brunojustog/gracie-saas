@@ -2,7 +2,26 @@ import type { TenantUser } from "@prisma/client";
 
 import { describe, expect, it } from "vitest";
 
-import { buildKanbanWhere, scopedLeadWhere } from "../leads";
+import { buildKanbanWhere, phoneSuffix, scopedLeadWhere } from "../leads";
+
+describe("phoneSuffix (dedup cross-canal v1.1-AS)", () => {
+  it("extrai os últimos 8 dígitos ignorando máscara e DDI/DDD", () => {
+    expect(phoneSuffix("(11) 98888-7777")).toBe("88887777");
+    expect(phoneSuffix("+55 11 98888-7777")).toBe("88887777");
+    expect(phoneSuffix("11988887777")).toBe("88887777");
+  });
+
+  it("mesmo número em formatos diferentes gera o mesmo sufixo", () => {
+    expect(phoneSuffix("+55 (11) 98888-7777")).toBe(phoneSuffix("11 98888 7777"));
+  });
+
+  it("telefone curto/ausente vira null (não deduplica)", () => {
+    expect(phoneSuffix("1234")).toBeNull();
+    expect(phoneSuffix("")).toBeNull();
+    expect(phoneSuffix(null)).toBeNull();
+    expect(phoneSuffix(undefined)).toBeNull();
+  });
+});
 
 const membershipFactory = (
   overrides: Partial<TenantUser> = {},

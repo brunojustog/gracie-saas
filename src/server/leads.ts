@@ -34,6 +34,47 @@ export function scopedLeadWhere(
   return base;
 }
 
+/**
+ * v1.1-AS: deduplicação cross-canal por telefone.
+ *
+ * Cada integração só deduplicava dentro da própria chave (Chatwoot por
+ * contactId, ManyChat por subscriberId), então a mesma pessoa entrando por
+ * canais diferentes virava leads separados. `phoneSuffix` normaliza pra
+ * comparação (só dígitos, últimos 8 = número local sem DDI/DDD), e
+ * `findLeadIdByPhone` acha um lead existente com o mesmo número.
+ */
+export function phoneSuffix(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 8 ? digits.slice(-8) : null;
+}
+
+type QueryRawClient = Pick<typeof prisma, "$queryRaw">;
+
+/**
+ * Acha o id de um lead NÃO-deletado do tenant cujo telefone bate (mesmos 8
+ * dígitos finais), ignorando máscara. Mais antigo primeiro. `client` aceita
+ * um tx pra rodar dentro de transação. Null se não houver telefone válido
+ * ou match.
+ */
+export async function findLeadIdByPhone(
+  tenantId: string,
+  phone: string | null | undefined,
+  client: QueryRawClient = prisma,
+): Promise<string | null> {
+  const suffix = phoneSuffix(phone);
+  if (!suffix) return null;
+  const rows = await client.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "Lead"
+    WHERE "tenantId" = ${tenantId}
+      AND "deletedAt" IS NULL
+      AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') LIKE ${"%" + suffix}
+    ORDER BY "createdAt" ASC
+    LIMIT 1
+  `;
+  return rows[0]?.id ?? null;
+}
+
 export type KanbanFilters = {
   search?: string;
   modalityId?: string;
