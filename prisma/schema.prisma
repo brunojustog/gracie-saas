@@ -316,6 +316,14 @@ model Lead {
   phone        String?
   email        String?
   gender       Gender?
+  /**
+   * v1.1-AL: graduação (faixa) do aluno — vale pra lead, matrícula e aula
+   * particular. `belt` guarda o nome da faixa ("Azul", "Cinza", …) e
+   * `beltDegree` o nº de graus (0-4). Null = não informado. Usado pra ações
+   * e ofertas por faixa.
+   */
+  belt         String?
+  beltDegree   Int?
   origin       LeadOrigin @default(OTHER)
   originDetail String?
 
@@ -454,6 +462,9 @@ enum LeadNoteKind {
   MANYCHAT_EVENT
   // v1.1-AB: pagamento de mensalidade confirmado (PaymentRecord criado).
   PAYMENT_CONFIRMED
+  // v1.1-AL: registro de cobrança (ação tomada pela equipe de cobrança
+  // sobre um inadimplente). Vira histórico no diário do lead.
+  COLLECTION_NOTE
 }
 
 /**

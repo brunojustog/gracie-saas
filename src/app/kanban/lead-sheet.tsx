@@ -19,6 +19,7 @@ import {
   MessagesSquare,
   Pause,
   PencilLine,
+  PhoneCall,
   Play,
   Snowflake,
   SkipForward,
@@ -87,6 +88,8 @@ import {
   toggleLeadFollowUp,
   updateLeadInfo,
 } from "./lead-actions";
+import { BeltSelect } from "@/components/belt-select";
+
 import { moveLeadToStage } from "./actions";
 import { ORIGIN_LABEL } from "./lead-card";
 import { TagEditor } from "./tag-editor";
@@ -363,6 +366,8 @@ function OverviewTab({
   const [phone, setPhone] = useState(lead.phone ?? "");
   const [email, setEmail] = useState(lead.email ?? "");
   const [gender, setGender] = useState<Gender | "">(lead.gender ?? "");
+  const [belt, setBelt] = useState(lead.belt ?? "");
+  const [beltDegree, setBeltDegree] = useState(lead.beltDegree ?? 0);
   const [notes, setNotes] = useState(lead.notes ?? "");
 
   const dirty =
@@ -370,6 +375,8 @@ function OverviewTab({
     (phone || "") !== (lead.phone ?? "") ||
     (email || "") !== (lead.email ?? "") ||
     (gender || "") !== (lead.gender ?? "") ||
+    (belt || "") !== (lead.belt ?? "") ||
+    (belt ? beltDegree : 0) !== (lead.beltDegree ?? 0) ||
     (notes || "") !== (lead.notes ?? "");
 
   const handleSave = () => {
@@ -380,6 +387,8 @@ function OverviewTab({
         phone: phone || null,
         email: email || null,
         gender: gender || null,
+        belt: belt || null,
+        beltDegree: belt ? beltDegree : null,
         notes: notes || null,
       });
       if (!result.ok) {
@@ -387,7 +396,16 @@ function OverviewTab({
         return;
       }
       toast.success("Dados atualizados");
-      onLeadChange({ ...lead, name, phone, email, gender: gender || null, notes });
+      onLeadChange({
+        ...lead,
+        name,
+        phone,
+        email,
+        gender: gender || null,
+        belt: belt || null,
+        beltDegree: belt ? beltDegree : null,
+        notes,
+      });
       onLeadPatch(lead.id, { name, phone: phone || null });
     });
   };
@@ -669,6 +687,15 @@ function OverviewTab({
           </Select>
         </div>
       </div>
+      <BeltSelect
+        belt={belt}
+        degree={beltDegree}
+        onBeltChange={setBelt}
+        onDegreeChange={setBeltDegree}
+        disabled={pending}
+        idPrefix="ls"
+      />
+
       <div className="space-y-1">
         <Label className="text-muted-foreground">Criado em</Label>
         <div className="flex h-9 items-center text-sm">
@@ -1540,6 +1567,7 @@ const NOTE_ICON: Record<LeadNoteKind, typeof CheckCheck> = {
   LEAD_RESTORED: Play,
   MANYCHAT_EVENT: MessagesSquare,
   PAYMENT_CONFIRMED: Banknote,
+  COLLECTION_NOTE: PhoneCall,
 };
 
 const NOTE_TONE: Record<LeadNoteKind, string> = {
@@ -1563,6 +1591,7 @@ const NOTE_TONE: Record<LeadNoteKind, string> = {
   LEAD_RESTORED: "text-emerald-600 dark:text-emerald-400",
   MANYCHAT_EVENT: "text-fuchsia-600 dark:text-fuchsia-400",
   PAYMENT_CONFIRMED: "text-emerald-600 dark:text-emerald-400",
+  COLLECTION_NOTE: "text-orange-600 dark:text-orange-400",
 };
 
 function HistoryTab({ leadId }: { leadId: string }) {

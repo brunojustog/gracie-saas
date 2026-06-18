@@ -166,6 +166,11 @@ const updateSchema = z.object({
   /** null limpa o vencimento (sem controle); undefined mantém o atual. */
   nextDueDate: z.string().date().nullable().optional(),
   observations: z.string().max(2000).nullable().optional(),
+  // v1.1-AL: sexo + graduação são do ALUNO (Lead), editáveis a partir da
+  // matrícula. undefined = não mexe.
+  gender: z.enum(["FEMALE", "MALE"]).nullable().optional(),
+  belt: z.string().max(30).nullable().optional(),
+  beltDegree: z.number().int().min(0).max(4).nullable().optional(),
 });
 
 export async function updateEnrollment(input: unknown): Promise<ActionResult> {
@@ -283,6 +288,17 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
         observations: newObs,
       },
     });
+
+    // Sexo/graduação ficam no Lead — atualiza junto quando vierem no payload.
+    const leadData: Record<string, unknown> = {};
+    if (parsed.data.gender !== undefined) leadData.gender = parsed.data.gender;
+    if (parsed.data.belt !== undefined) {
+      leadData.belt = parsed.data.belt;
+      leadData.beltDegree = parsed.data.belt ? (parsed.data.beltDegree ?? 0) : null;
+    }
+    if (Object.keys(leadData).length > 0) {
+      await tx.lead.update({ where: { id: enrollment.leadId }, data: leadData });
+    }
 
     if (diffs.length > 0) {
       await appendLeadNote(

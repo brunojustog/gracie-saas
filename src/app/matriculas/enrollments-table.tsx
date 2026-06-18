@@ -53,6 +53,9 @@ type Row = {
     id: string;
     name: string;
     phone: string | null;
+    gender: "FEMALE" | "MALE" | null;
+    belt: string | null;
+    beltDegree: number | null;
     assignedSeller: { id: string; name: string | null; email: string } | null;
   };
   modality: { id: string; name: string; color: string | null };
@@ -109,6 +112,9 @@ export function EnrollmentsTable({
         ? new Date(row.nextDueDate).toISOString().slice(0, 10)
         : null,
       observations: row.observations,
+      gender: row.lead.gender,
+      belt: row.lead.belt,
+      beltDegree: row.lead.beltDegree,
     });
   };
 

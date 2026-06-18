@@ -4,6 +4,7 @@ import { Gender, LeadOrigin } from "@prisma/client";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { BeltSelect } from "@/components/belt-select";
 import { guessGender } from "@/server/gender";
 
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,8 @@ function ModalBody({
   const [email, setEmail] = useState("");
   const [origin, setOrigin] = useState<LeadOrigin>("WALK_IN");
   const [gender, setGender] = useState<Gender | "">("");
+  const [belt, setBelt] = useState("");
+  const [beltDegree, setBeltDegree] = useState(0);
   const [modalityId, setModalityId] = useState<string>(NO_MODALITY);
   const [sellerId, setSellerId] = useState<string>(defaultSellerId ?? UNASSIGNED);
   const [notes, setNotes] = useState("");
@@ -123,6 +126,8 @@ function ModalBody({
         origin,
         // Em branco → adivinha pelo primeiro nome (vendedora revisa depois).
         gender: gender || guessGender(name) || null,
+        belt: belt || null,
+        beltDegree: belt ? beltDegree : null,
         modalityId: modalityId === NO_MODALITY ? null : modalityId,
         assignedSellerId: sellerId === UNASSIGNED ? null : sellerId,
         notes: notes.trim() || null,
@@ -268,6 +273,15 @@ function ModalBody({
             </Select>
           </div>
         </div>
+
+        <BeltSelect
+          belt={belt}
+          degree={beltDegree}
+          onBeltChange={setBelt}
+          onDegreeChange={setBeltDegree}
+          disabled={pending}
+          idPrefix="nl"
+        />
 
         <div className="space-y-1">
           <Label htmlFor="nl-notes">Observações</Label>

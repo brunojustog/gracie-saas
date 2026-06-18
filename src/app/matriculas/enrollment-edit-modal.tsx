@@ -1,9 +1,10 @@
 "use client";
 
-import type { PaymentMethod } from "@prisma/client";
+import type { Gender, PaymentMethod } from "@prisma/client";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { BeltSelect } from "@/components/belt-select";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,6 +30,8 @@ import { getEnrollmentFormOptions, updateEnrollment } from "./actions";
 type Modality = { id: string; name: string; color: string | null };
 type Plan = { id: string; name: string; monthlyValue: number; modalityId: string | null };
 
+const GENDER_NONE = "__none__";
+
 const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> = [
   { value: "PIX", label: "Pix" },
   { value: "CREDIT_CARD", label: "Cartão de crédito" },
@@ -49,6 +52,10 @@ export type EditTarget = {
   enrolledAt: string; // ISO yyyy-mm-dd
   nextDueDate: string | null; // ISO yyyy-mm-dd
   observations: string | null;
+  // v1.1-AL: dados do aluno (Lead) editáveis daqui.
+  gender: Gender | null;
+  belt: string | null;
+  beltDegree: number | null;
 };
 
 type Props = {
@@ -117,6 +124,9 @@ function ModalBody({
   );
   const [enrolledAt, setEnrolledAt] = useState(target.enrolledAt);
   const [nextDueDate, setNextDueDate] = useState(target.nextDueDate ?? "");
+  const [gender, setGender] = useState<Gender | "">(target.gender ?? "");
+  const [belt, setBelt] = useState(target.belt ?? "");
+  const [beltDegree, setBeltDegree] = useState(target.beltDegree ?? 0);
   const [observations, setObservations] = useState(target.observations ?? "");
 
   useEffect(() => {
@@ -169,6 +179,9 @@ function ModalBody({
         enrolledAt,
         nextDueDate: nextDueDate || null,
         observations: observations.trim() ? observations.trim() : null,
+        gender: gender || null,
+        belt: belt || null,
+        beltDegree: belt ? beltDegree : null,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -307,6 +320,34 @@ function ModalBody({
             </p>
           </div>
         </div>
+
+        {/* Dados do aluno (v1.1-AL): sexo + graduação */}
+        <div className="space-y-1">
+          <Label htmlFor="edit-gender">Sexo</Label>
+          <Select
+            value={gender === "" ? GENDER_NONE : gender}
+            onValueChange={(v) => setGender(v === GENDER_NONE ? "" : (v as Gender))}
+            disabled={pending}
+          >
+            <SelectTrigger id="edit-gender">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={GENDER_NONE}>Não informado</SelectItem>
+              <SelectItem value="FEMALE">Feminino</SelectItem>
+              <SelectItem value="MALE">Masculino</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <BeltSelect
+          belt={belt}
+          degree={beltDegree}
+          onBeltChange={setBelt}
+          onDegreeChange={setBeltDegree}
+          disabled={pending}
+          idPrefix="edit"
+        />
 
         <div className="space-y-1">
           <Label htmlFor="edit-obs">Observações</Label>
