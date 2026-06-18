@@ -252,7 +252,8 @@ export async function getDashboardData(
         lastInteractionAt: {
           lt: new Date(Date.now() - STAGNATED_DAYS * 24 * 60 * 60 * 1000),
         },
-        stage: { isWon: false, isLost: false, active: true },
+        // Aula Particular (isPrivate) é terminal — não é gargalo de funil.
+        stage: { isWon: false, isLost: false, isPrivate: false, active: true },
       },
       _count: { _all: true },
     }),
@@ -261,7 +262,7 @@ export async function getDashboardData(
   const [stages, modalities, sellerEnrollments, sellerUsers] = await Promise.all([
     prisma.stage.findMany({
       where: { tenantId },
-      select: { id: true, name: true, color: true, order: true, isWon: true, isLost: true },
+      select: { id: true, name: true, color: true, order: true, isWon: true, isLost: true, isPrivate: true },
       orderBy: { order: "asc" },
     }),
     prisma.modality.findMany({
@@ -409,7 +410,7 @@ export async function getDashboardData(
 
   // Estágios parados: enriquecer com nome/color do stage (ordem do funil)
   const stagnatedByStage = stages
-    .filter((s) => !s.isWon && !s.isLost)
+    .filter((s) => !s.isWon && !s.isLost && !s.isPrivate)
     .map((s) => ({
       stageId: s.id,
       name: s.name,

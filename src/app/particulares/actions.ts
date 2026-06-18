@@ -97,12 +97,35 @@ export async function createPrivatePackage(input: unknown): Promise<Result> {
     // Tag "Particular" no lead (sem duplicar).
     const cur = await tx.lead.findUnique({
       where: { id: lead.id },
-      select: { tags: true },
+      select: { tags: true, stageId: true },
     });
     if (cur && !cur.tags.includes(PARTICULAR_TAG)) {
       await tx.lead.update({
         where: { id: lead.id },
         data: { tags: [...cur.tags, PARTICULAR_TAG], lastInteractionAt: new Date() },
+      });
+    }
+
+    // v1.1-AR: move o lead pro estágio terminal "Aula Particular" (se
+    // existir), pra sair do funil de mensalistas sem contar como matrícula.
+    const privateStage = await tx.stage.findFirst({
+      where: { tenantId: tenant.id, isPrivate: true, active: true },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+    if (privateStage && cur && cur.stageId !== privateStage.id) {
+      await tx.lead.update({
+        where: { id: lead.id },
+        data: { stageId: privateStage.id, lastInteractionAt: new Date() },
+      });
+      await tx.stageHistory.create({
+        data: {
+          leadId: lead.id,
+          fromStageId: cur.stageId,
+          toStageId: privateStage.id,
+          changedById: user.id,
+          notes: "Movido para Aula Particular (pacote criado)",
+        },
       });
     }
 

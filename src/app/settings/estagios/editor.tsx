@@ -42,6 +42,7 @@ type Stage = {
   isLost: boolean;
   isScheduling: boolean;
   isAttendance: boolean;
+  isPrivate: boolean;
   active: boolean;
 };
 
@@ -188,6 +189,11 @@ function SortableStage({
               comparecimento
             </span>
           )}
+          {stage.isPrivate && (
+            <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] text-indigo-900">
+              aula particular
+            </span>
+          )}
           {!stage.active && (
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
               inativo
@@ -216,6 +222,7 @@ function StageFormBody({
   const [isLost, setIsLost] = useState(stage?.isLost ?? false);
   const [isScheduling, setIsScheduling] = useState(stage?.isScheduling ?? false);
   const [isAttendance, setIsAttendance] = useState(stage?.isAttendance ?? false);
+  const [isPrivate, setIsPrivate] = useState(stage?.isPrivate ?? false);
   const [active, setActive] = useState(stage?.active ?? true);
   const [pending, startTransition] = useTransition();
 
@@ -237,6 +244,7 @@ function StageFormBody({
         isLost,
         isScheduling,
         isAttendance,
+        isPrivate,
         active,
       });
       if (!result.ok) {
@@ -349,6 +357,24 @@ function StageFormBody({
             checked={isAttendance}
             disabled={isWon || isLost}
             onCheckedChange={setIsAttendance}
+          />
+        </div>
+        <div className="flex items-start justify-between rounded border p-3">
+          <div>
+            <Label htmlFor="private" className="text-sm">
+              Estágio de aula particular
+            </Label>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Estágio terminal pra quem comprou pacote de aula particular.
+              Criar um pacote move o lead pra cá. NÃO conta como matrícula
+              nem entra na conversão de mensalistas.
+            </p>
+          </div>
+          <Switch
+            id="private"
+            checked={isPrivate}
+            disabled={isWon || isLost || isScheduling || isAttendance}
+            onCheckedChange={setIsPrivate}
           />
         </div>
         {stage ? (

@@ -18,6 +18,7 @@ export default async function EstagiosPage() {
       isLost: true,
       isScheduling: true,
       isAttendance: true,
+      isPrivate: true,
       active: true,
     },
   });

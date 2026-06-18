@@ -16,6 +16,7 @@ const stageSchema = z.object({
   isLost: z.boolean().default(false),
   isScheduling: z.boolean().default(false),
   isAttendance: z.boolean().default(false),
+  isPrivate: z.boolean().default(false),
   active: z.boolean().default(true),
 });
 
@@ -24,6 +25,17 @@ export async function upsertStage(input: unknown): Promise<Result> {
   if (!parsed.success) return { ok: false, error: "input inválido" };
   if (parsed.data.isWon && parsed.data.isLost) {
     return { ok: false, error: "stage não pode ser won e lost ao mesmo tempo" };
+  }
+  // Aula Particular (isPrivate) é terminal próprio — não combina com os
+  // outros comportamentos de drag/funil.
+  if (
+    parsed.data.isPrivate &&
+    (parsed.data.isWon || parsed.data.isLost || parsed.data.isScheduling || parsed.data.isAttendance)
+  ) {
+    return {
+      ok: false,
+      error: "estágio 'Aula Particular' não pode ter outros comportamentos marcados",
+    };
   }
   // Estágios terminais (Ganho/Perda) já têm interceptação própria no drag:
   // - isWon  → abre modal de matrícula
@@ -52,6 +64,7 @@ export async function upsertStage(input: unknown): Promise<Result> {
         isLost: parsed.data.isLost,
         isScheduling: parsed.data.isScheduling,
         isAttendance: parsed.data.isAttendance,
+        isPrivate: parsed.data.isPrivate,
         active: parsed.data.active,
       },
     });
@@ -70,6 +83,7 @@ export async function upsertStage(input: unknown): Promise<Result> {
         isLost: parsed.data.isLost,
         isScheduling: parsed.data.isScheduling,
         isAttendance: parsed.data.isAttendance,
+        isPrivate: parsed.data.isPrivate,
         order: (max._max.order ?? 0) + 1,
       },
     });

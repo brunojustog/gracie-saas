@@ -202,6 +202,12 @@ model Stage {
    * No-op se o lead não tem aula SCHEDULED/CONFIRMED.
    */
   isAttendance Boolean @default(false)
+  /**
+   * v1.1-AR: estágio terminal de aula particular. Criar um pacote move o
+   * lead pra cá automaticamente. NÃO conta como matrícula nem entra na
+   * conversão de mensalistas (separado de isWon de propósito).
+   */
+  isPrivate Boolean @default(false)
   active   Boolean @default(true)
 
   tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
