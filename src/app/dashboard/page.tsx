@@ -11,6 +11,8 @@ import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getDashboardData } from "@/server/analytics";
 import { getDueOverview, type DueRow } from "@/server/payments";
+
+import { CollectionNotesButton } from "./collection-notes";
 import { getPdvKpis } from "@/server/pdv";
 import { requireTenantUser } from "@/server/tenant";
 
@@ -307,6 +309,9 @@ function DueList({
             {hideFinancials ? null : (
               <th className="px-2 py-1.5 text-right font-medium">Valor</th>
             )}
+            {overdue ? (
+              <th className="px-2 py-1.5 text-right font-medium">Cobrança</th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -340,6 +345,14 @@ function DueList({
                   })}
                 </td>
               )}
+              {overdue ? (
+                <td className="px-2 py-1.5 text-right">
+                  <CollectionNotesButton
+                    enrollmentId={r.enrollmentId}
+                    leadName={r.leadName}
+                  />
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
