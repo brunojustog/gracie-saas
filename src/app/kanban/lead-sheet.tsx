@@ -24,6 +24,7 @@ import {
   Snowflake,
   SkipForward,
   Sparkles,
+  Ticket,
   Trash2,
   UserPlus,
   XCircle,
@@ -1568,6 +1569,9 @@ const NOTE_ICON: Record<LeadNoteKind, typeof CheckCheck> = {
   MANYCHAT_EVENT: MessagesSquare,
   PAYMENT_CONFIRMED: Banknote,
   COLLECTION_NOTE: PhoneCall,
+  PRIVATE_PACKAGE_CREATED: Ticket,
+  PRIVATE_PACKAGE_COMPLETED: CheckCheck,
+  PRIVATE_PACKAGE_CANCELED: XCircle,
 };
 
 const NOTE_TONE: Record<LeadNoteKind, string> = {
@@ -1592,6 +1596,9 @@ const NOTE_TONE: Record<LeadNoteKind, string> = {
   MANYCHAT_EVENT: "text-fuchsia-600 dark:text-fuchsia-400",
   PAYMENT_CONFIRMED: "text-emerald-600 dark:text-emerald-400",
   COLLECTION_NOTE: "text-orange-600 dark:text-orange-400",
+  PRIVATE_PACKAGE_CREATED: "text-indigo-600 dark:text-indigo-400",
+  PRIVATE_PACKAGE_COMPLETED: "text-emerald-600 dark:text-emerald-400",
+  PRIVATE_PACKAGE_CANCELED: "text-red-600 dark:text-red-400",
 };
 
 function HistoryTab({ leadId }: { leadId: string }) {

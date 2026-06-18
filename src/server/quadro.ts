@@ -19,6 +19,7 @@ import {
 import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
+import { getPrivateRevenue } from "@/server/private-packages";
 
 /** Percentual seguro (0 quando o denominador é 0). */
 export function ratePct(part: number, total: number): number {
@@ -50,6 +51,9 @@ export async function getQuadroData(tenantId: string) {
   const since30 = new Date(today.getTime() - 30 * 86400_000);
   const since7 = new Date(today.getTime() - 7 * 86400_000);
 
+  const monthStart = startOfMonth(now);
+  const nextMonthStart = startOfMonth(subMonths(now, -1));
+
   const [
     activeEnrollments,
     canceledCount,
@@ -58,6 +62,7 @@ export async function getQuadroData(tenantId: string) {
     attendedClasses,
     posExpLeads,
     agendaClasses,
+    privateRevenue,
   ] = await Promise.all([
     // Matrículas ativas (gênero + kids + plano + pagamento + vencimento)
     prisma.enrollment.findMany({
@@ -65,6 +70,7 @@ export async function getQuadroData(tenantId: string) {
       select: {
         nextDueDate: true,
         paymentMethod: true,
+        monthlyValue: true,
         plan: { select: { id: true, name: true } },
         modality: { select: { isKids: true } },
         lead: { select: { gender: true } },
@@ -136,17 +142,21 @@ export async function getQuadroData(tenantId: string) {
       },
       orderBy: { scheduledDate: "asc" },
     }),
+    // Receita de aulas particulares (v1.1-AO)
+    getPrivateRevenue(tenantId, monthStart, nextMonthStart),
   ]);
 
   // ── Bloco "Número de matrículas" ─────────────────────────────────────────
   const adults = emptySplit();
   const kids = emptySplit();
   let overdue = 0;
+  let monthlyRecurring = 0;
   const byPlan = new Map<string, number>();
   const byPayment = new Map<string, number>();
 
   for (const e of activeEnrollments) {
     if (e.nextDueDate && e.nextDueDate < today) overdue++;
+    monthlyRecurring += Number(e.monthlyValue);
     const bucket = e.modality.isKids ? kids : adults;
     if (e.lead.gender === "FEMALE") bucket.female++;
     else if (e.lead.gender === "MALE") bucket.male++;
@@ -285,6 +295,14 @@ export async function getQuadroData(tenantId: string) {
     posExperimental,
     posExpLastWeek,
     agenda,
+    // Receita (v1.1-AO): mensalidades recorrentes + aulas particulares.
+    revenue: {
+      monthlyRecurring,
+      privateThisMonth: privateRevenue.thisMonth,
+      privateAllTime: privateRevenue.allTime,
+      privateActiveCount: privateRevenue.activeCount,
+      globalThisMonth: monthlyRecurring + privateRevenue.thisMonth,
+    },
   };
 }
 

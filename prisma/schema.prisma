@@ -38,6 +38,7 @@ model User {
   salesAsSeller     Sale[]          @relation("SaleSeller")
   authoredLeadNotes LeadNote[]
   confirmedPayments PaymentRecord[] @relation("PaymentConfirmedBy")
+  soldPrivatePackages PrivatePackage[] @relation("PrivatePackageSeller")
 }
 
 model Account {
@@ -153,6 +154,7 @@ model Tenant {
   sales               Sale[]
   leadNotes           LeadNote[]
   paymentRecords      PaymentRecord[]
+  privatePackages     PrivatePackage[]
 }
 
 enum Role {
@@ -232,6 +234,7 @@ model Modality {
   leads               Lead[]
   experimentalClasses ExperimentalClass[]
   enrollments         Enrollment[]
+  privatePackages     PrivatePackage[]
   classSchedules      ClassSchedule[]
 
   @@index([tenantId])
@@ -400,6 +403,7 @@ model Lead {
   messageJobs         MessageJob[]
   sales               Sale[]
   leadNotes           LeadNote[]
+  privatePackages     PrivatePackage[]
 
   @@index([tenantId])
   @@index([tenantId, stageId])
@@ -465,6 +469,10 @@ enum LeadNoteKind {
   // v1.1-AL: registro de cobrança (ação tomada pela equipe de cobrança
   // sobre um inadimplente). Vira histórico no diário do lead.
   COLLECTION_NOTE
+  // v1.1-AO: eventos de pacote de aulas particulares.
+  PRIVATE_PACKAGE_CREATED
+  PRIVATE_PACKAGE_COMPLETED
+  PRIVATE_PACKAGE_CANCELED
 }
 
 /**
@@ -635,6 +643,75 @@ model PaymentRecord {
 
   @@index([tenantId, paidAt])
   @@index([enrollmentId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Aulas particulares (v1.1-AO) — pacotes avulsos, NÃO contam como matrícula
+// ──────────────────────────────────────────────────────────────────────────
+
+enum PrivatePackageStatus {
+  ACTIVE     // pacote em andamento (aulas a dar)
+  COMPLETED  // todas as aulas contratadas foram concluídas
+  CANCELED   // cancelado antes de concluir
+}
+
+/**
+ * Pacote de aulas particulares comprado por um aluno NÃO-mensalista.
+ *
+ * Decisão de produto: esses alunos seguem no kanban como leads (processo
+ * comercial normal) mas NUNCA viram Enrollment — pra não inflar a contagem
+ * de matriculados. Um lead pode ter VÁRIOS pacotes ao longo do tempo
+ * (compra, termina, compra de novo).
+ *
+ * Progresso: `totalClasses` contratadas vs sessões concluídas (PrivateSession
+ * com completedAt). Quando concluídas == contratadas → status COMPLETED.
+ * `value` é a receita do pacote (entra na receita global do Quadro do Vitor).
+ */
+model PrivatePackage {
+  id            String               @id @default(cuid())
+  tenantId      String
+  leadId        String
+  modalityId    String?
+  totalClasses  Int
+  value         Decimal              @db.Decimal(10, 2)
+  paymentMethod PaymentMethod?
+  status        PrivatePackageStatus @default(ACTIVE)
+  startDate     DateTime             @default(now())
+  endDate       DateTime?            // previsão/limite de término
+  canceledAt    DateTime?
+  soldById      String?              // vendedora que fechou (User)
+  notes         String?              @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead     Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  modality Modality?        @relation(fields: [modalityId], references: [id])
+  soldBy   User?            @relation("PrivatePackageSeller", fields: [soldById], references: [id])
+  sessions PrivateSession[]
+
+  @@index([tenantId, status])
+  @@index([leadId])
+}
+
+/**
+ * 1 aula dentro de um pacote particular. `scheduledDate` = data agendada;
+ * `completedAt` = quando a aula foi efetivamente dada (null = ainda não).
+ */
+model PrivateSession {
+  id            String    @id @default(cuid())
+  packageId     String
+  scheduledDate DateTime?
+  completedAt   DateTime?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  package PrivatePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@index([packageId])
 }
 
 // ──────────────────────────────────────────────────────────────────────────

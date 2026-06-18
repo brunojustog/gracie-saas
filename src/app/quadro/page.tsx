@@ -123,6 +123,38 @@ export default async function QuadroPage() {
           </div>
         </section>
 
+        {/* 8) Receita global (mensalidades + aulas particulares) — v1.1-AO */}
+        <Panel
+          title="Receita"
+          subtitle="Mensalidades recorrentes + aulas particulares"
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
+            <RevenueCard
+              label="Mensalidades ativas"
+              value={data.revenue.monthlyRecurring}
+              hint="recorrente por mês"
+            />
+            <RevenueCard
+              label="Aulas particulares (mês)"
+              value={data.revenue.privateThisMonth}
+              hint={`${data.revenue.privateActiveCount} pacote(s) em andamento`}
+            />
+            <RevenueCard
+              label="Receita global do mês"
+              value={data.revenue.globalThisMonth}
+              hint="mensalidades + particulares"
+              strong
+            />
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Particulares acumulado (todos os pacotes não cancelados):{" "}
+            {data.revenue.privateAllTime.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}
+          </p>
+        </Panel>
+
         {/* 4 + 6) Crescimento e churn mês a mês */}
         <Panel
           title="Crescimento e churn (mês a mês)"
@@ -364,6 +396,28 @@ function KeyValueList({
         ))}
       </tbody>
     </table>
+  );
+}
+
+function RevenueCard({
+  label,
+  value,
+  hint,
+  strong,
+}: {
+  label: string;
+  value: number;
+  hint?: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className={`rounded border p-3 ${strong ? "bg-primary/5" : "bg-muted/40"}`}>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 font-semibold ${strong ? "text-2xl" : "text-xl"}`}>
+        {value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+      </div>
+      {hint ? <div className="text-[11px] text-muted-foreground">{hint}</div> : null}
+    </div>
   );
 }
 

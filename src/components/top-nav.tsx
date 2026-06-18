@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Settings,
   ShoppingBag,
+  Ticket,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -27,6 +28,7 @@ const LINKS: NavLink[] = [
   { href: "/kanban", label: "Kanban", icon: Kanban },
   { href: "/aulas", label: "Aulas", icon: Calendar },
   { href: "/matriculas", label: "Matrículas", icon: GraduationCap },
+  { href: "/particulares", label: "Particulares", icon: Ticket },
   { href: "/pdv", label: "Lojinha", icon: ShoppingBag },
   // v1.1-AK: painel gerencial só pra ADMIN.
   { href: "/quadro", label: "Quadro do Vitor", icon: BarChart3, adminOnly: true },
