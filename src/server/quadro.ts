@@ -34,6 +34,37 @@ export function lastMonthStarts(now: Date, n: number): Date[] {
   return out;
 }
 
+/**
+ * v1.1-AP: matrícula "ativa" numa data — MESMA definição do número grande
+ * do quadro (status ACTIVE). Conta como ativa em `date` se:
+ *   - já estava matriculada (enrolledAt <= date);
+ *   - não estava cancelada (canceledAt null ou posterior a date);
+ *   - não estava congelada (não é SUSPENDED com suspendedAt <= date).
+ *
+ * Sem isso, congelados (SUSPENDED) inflavam o crescimento e a conta
+ * "início + novas − cancelamentos" não batia com os ativos de hoje —
+ * faltava o fluxo de congelamentos. `suspendedAt` guarda só a última
+ * suspensão (reativar limpa), então meses passados são aproximação; o mês
+ * corrente reconcilia exato com o número grande.
+ */
+export type GrowthEnrollment = {
+  enrolledAt: Date;
+  canceledAt: Date | null;
+  status: string;
+  suspendedAt: Date | null;
+};
+
+export function isActiveAt(e: GrowthEnrollment, date: Date): boolean {
+  if (e.enrolledAt > date) return false;
+  if (e.canceledAt && e.canceledAt <= date) return false;
+  if (e.status === "SUSPENDED" && e.suspendedAt && e.suspendedAt <= date) return false;
+  return true;
+}
+
+export function countActiveAt(enrollments: GrowthEnrollment[], date: Date): number {
+  return enrollments.filter((e) => isActiveAt(e, date)).length;
+}
+
 type GenderSplit = { female: number; male: number; unknown: number };
 
 function emptySplit(): GenderSplit {
@@ -81,7 +112,7 @@ export async function getQuadroData(tenantId: string) {
     // Todas as matrículas (pra crescimento + churn mês a mês)
     prisma.enrollment.findMany({
       where: { tenantId },
-      select: { enrolledAt: true, canceledAt: true, status: true },
+      select: { enrolledAt: true, canceledAt: true, status: true, suspendedAt: true },
     }),
     // Matrículas dos últimos 6 meses pra ranking por vendedora
     prisma.enrollment.findMany({
@@ -170,27 +201,32 @@ export async function getQuadroData(tenantId: string) {
 
   // ── Crescimento (ativos no 1º dia de cada mês) + churn mensal ────────────
   const months = lastMonthStarts(now, 6);
-  const activeAt = (date: Date) =>
-    allEnrollments.filter(
-      (e) => e.enrolledAt <= date && (!e.canceledAt || e.canceledAt > date),
-    ).length;
   const growth = months.map((mStart, i) => {
     const monthEnd =
       i + 1 < months.length
         ? months[i + 1]!
         : startOfMonth(subMonths(now, -1)); // início do próximo mês
-    const activeStart = activeAt(mStart);
+    const activeStart = countActiveAt(allEnrollments, mStart);
     const canceledInMonth = allEnrollments.filter(
       (e) => e.canceledAt && e.canceledAt >= mStart && e.canceledAt < monthEnd,
     ).length;
     const newInMonth = allEnrollments.filter(
       (e) => e.enrolledAt >= mStart && e.enrolledAt < monthEnd,
     ).length;
+    // Congelamentos no mês (3º fluxo: nem novo, nem cancelamento).
+    const frozenInMonth = allEnrollments.filter(
+      (e) =>
+        e.status === "SUSPENDED" &&
+        e.suspendedAt &&
+        e.suspendedAt >= mStart &&
+        e.suspendedAt < monthEnd,
+    ).length;
     return {
       label: format(mStart, "MMM/yy", { locale: ptBR }),
       activeStart,
       newInMonth,
       canceledInMonth,
+      frozenInMonth,
       churnPct: ratePct(canceledInMonth, activeStart),
     };
   });

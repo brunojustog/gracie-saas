@@ -158,7 +158,7 @@ export default async function QuadroPage() {
         {/* 4 + 6) Crescimento e churn mês a mês */}
         <Panel
           title="Crescimento e churn (mês a mês)"
-          subtitle="Alunos ativos no 1º dia de cada mês, novas matrículas, cancelamentos e churn"
+          subtitle="Ativos = matrículas ativas (congelados não contam, igual ao número grande). Conta: início + novas − cancelamentos − congelados ≈ ativos no fim."
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -168,6 +168,7 @@ export default async function QuadroPage() {
                   <th className="px-2 py-2 text-right font-medium">Ativos no início</th>
                   <th className="px-2 py-2 text-right font-medium">Novas matrículas</th>
                   <th className="px-2 py-2 text-right font-medium">Cancelamentos</th>
+                  <th className="px-2 py-2 text-right font-medium">Congelados</th>
                   <th className="px-2 py-2 text-right font-medium">Churn</th>
                 </tr>
               </thead>
@@ -181,6 +182,9 @@ export default async function QuadroPage() {
                     </td>
                     <td className="px-2 py-2 text-right text-red-700 dark:text-red-300">
                       −{m.canceledInMonth}
+                    </td>
+                    <td className="px-2 py-2 text-right text-amber-700 dark:text-amber-300">
+                      −{m.frozenInMonth}
                     </td>
                     <td className="px-2 py-2 text-right">{fmtPct(m.churnPct)}</td>
                   </tr>
