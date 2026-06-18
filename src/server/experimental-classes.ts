@@ -46,6 +46,59 @@ export async function getClassesForCalendar(
   });
 }
 
+/**
+ * v1.1-AL: visão em LISTA de aulas experimentais com filtros (estilo aba
+ * Matrículas). Janela padrão controlada pelo caller via `range`.
+ */
+export type ClassListFilters = {
+  search?: string;
+  status?: Prisma.ExperimentalClassWhereInput["status"];
+  modalityId?: string;
+  from?: Date;
+  to?: Date;
+};
+
+export async function getClassesForList(
+  membership: TenantUser,
+  filters: ClassListFilters = {},
+) {
+  const where: Prisma.ExperimentalClassWhereInput = scopedClassWhere(membership);
+  if (filters.status) where.status = filters.status;
+  if (filters.modalityId) where.modalityId = filters.modalityId;
+  if (filters.from || filters.to) {
+    where.scheduledDate = {
+      ...(filters.from ? { gte: filters.from } : {}),
+      ...(filters.to ? { lt: filters.to } : {}),
+    };
+  }
+  if (filters.search?.trim()) {
+    where.lead = { name: { contains: filters.search.trim(), mode: "insensitive" } };
+  }
+
+  return prisma.experimentalClass.findMany({
+    where,
+    select: {
+      id: true,
+      scheduledDate: true,
+      status: true,
+      attendedAt: true,
+      modality: { select: { id: true, name: true, color: true } },
+      lead: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          assignedSeller: { select: { name: true, email: true } },
+        },
+      },
+    },
+    orderBy: { scheduledDate: "desc" },
+    take: 500,
+  });
+}
+
+export type ClassListRow = Awaited<ReturnType<typeof getClassesForList>>[number];
+
 /** Slots da grade fixa do tenant (background events do calendar). */
 export async function getScheduleSlots(tenantId: string) {
   return prisma.classSchedule.findMany({

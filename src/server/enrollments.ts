@@ -11,6 +11,7 @@
 import { addDays, startOfDay } from "date-fns";
 import type {
   EnrollmentStatus,
+  Gender,
   PaymentMethod,
   Prisma,
   TenantUser,
@@ -34,11 +35,16 @@ export type DueFilter = "overdue" | "due7";
 
 export type EnrollmentListFilters = {
   search?: string;
-  modalityId?: string;
+  /** v1.1-AL: multi-seleção. Vazio/ausente = todas as modalidades. */
+  modalityIds?: string[];
   planId?: string;
   paymentMethod?: PaymentMethod;
   status?: EnrollmentStatus;
   due?: DueFilter;
+  /** v1.1-AL: sexo do aluno. */
+  gender?: Gender;
+  /** v1.1-AL: dia do mês do vencimento (1-31). Filtrado em JS pós-fetch. */
+  dueDay?: number;
 };
 
 export function buildEnrollmentListWhere(
@@ -49,10 +55,19 @@ export function buildEnrollmentListWhere(
     tenantId: membership.tenantId,
   };
 
-  if (filters.modalityId) where.modalityId = filters.modalityId;
+  if (filters.modalityIds && filters.modalityIds.length > 0) {
+    where.modalityId = { in: filters.modalityIds };
+  }
   if (filters.planId) where.planId = filters.planId;
   if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
   if (filters.status) where.status = filters.status;
+
+  // Filtros que recaem no Lead (sexo + busca) compartilham o mesmo objeto.
+  const leadWhere: Prisma.LeadWhereInput = {};
+  if (filters.gender) leadWhere.gender = filters.gender;
+  if (filters.search?.trim()) {
+    leadWhere.name = { contains: filters.search.trim(), mode: "insensitive" };
+  }
 
   if (filters.due) {
     const today = startOfDay(new Date());
@@ -63,11 +78,7 @@ export function buildEnrollmentListWhere(
         : { not: null, gte: today, lt: addDays(today, 8) };
   }
 
-  if (filters.search?.trim()) {
-    where.lead = {
-      name: { contains: filters.search.trim(), mode: "insensitive" },
-    };
-  }
+  if (Object.keys(leadWhere).length > 0) where.lead = leadWhere;
 
   return where;
 }
@@ -95,6 +106,9 @@ export async function getEnrollmentsForList(
           id: true,
           name: true,
           phone: true,
+          gender: true,
+          belt: true,
+          beltDegree: true,
           assignedSeller: { select: { id: true, name: true, email: true } },
         },
       },
@@ -104,10 +118,15 @@ export async function getEnrollmentsForList(
     orderBy: { enrolledAt: "desc" },
   });
 
+  // Dia de vencimento filtra em JS (Prisma não filtra por EXTRACT(day)).
+  const filtered = filters.dueDay
+    ? rows.filter((r) => r.nextDueDate?.getDate() === filters.dueDay)
+    : rows;
+
   // SELLER não vê valor de matrícula — mascara no payload pra não vazar via
   // RSC stream / DevTools. UI espelha com `hideFinancials`.
   const isSeller = membership.role === "SELLER";
-  return rows.map((r) => ({
+  return filtered.map((r) => ({
     ...r,
     monthlyValue: isSeller ? null : r.monthlyValue,
   }));

@@ -91,17 +91,42 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
 
   it("filtros combinados (modality + plan + payment + status) coexistem", () => {
     const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
-      modalityId: "mod_jiujitsu",
+      modalityIds: ["mod_jiujitsu"],
       planId: "plan_mensal",
       paymentMethod: "BOLETO",
       status: "ACTIVE",
     });
     expect(where).toMatchObject({
       tenantId: "tenant_gracie",
-      modalityId: "mod_jiujitsu",
+      modalityId: { in: ["mod_jiujitsu"] },
       planId: "plan_mensal",
       paymentMethod: "BOLETO",
       status: "ACTIVE",
+    });
+  });
+
+  it("multi-seleção de modalidade vira modalityId IN [...]", () => {
+    const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
+      modalityIds: ["gb1", "gbf"],
+    });
+    expect(where.modalityId).toEqual({ in: ["gb1", "gbf"] });
+  });
+
+  it("filtro de sexo recai em lead.gender", () => {
+    const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
+      gender: "FEMALE",
+    });
+    expect(where.lead).toMatchObject({ gender: "FEMALE" });
+  });
+
+  it("sexo + busca coexistem no mesmo objeto lead", () => {
+    const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
+      gender: "MALE",
+      search: "Pedro",
+    });
+    expect(where.lead).toEqual({
+      gender: "MALE",
+      name: { contains: "Pedro", mode: "insensitive" },
     });
   });
 });

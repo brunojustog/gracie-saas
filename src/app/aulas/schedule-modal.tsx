@@ -3,10 +3,19 @@
 import type { ExperimentalClassStatus } from "@prisma/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -25,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 import { scheduleClass } from "./actions";
 
@@ -111,6 +122,7 @@ function ModalBody({
   }, [defaultDate, scheduleSlots]);
 
   const [leadId, setLeadId] = useState("");
+  const [leadPickerOpen, setLeadPickerOpen] = useState(false);
   const [modalityId, setModalityId] = useState(
     suggestedModalityIds.length === 1 ? suggestedModalityIds[0]! : "",
   );
@@ -131,6 +143,10 @@ function ModalBody({
   const sortedLeads = useMemo(
     () => [...leads].sort((a, b) => a.name.localeCompare(b.name)),
     [leads],
+  );
+  const selectedLead = useMemo(
+    () => leads.find((l) => l.id === leadId) ?? null,
+    [leads, leadId],
   );
 
   const handleSubmit = () => {
@@ -192,21 +208,59 @@ function ModalBody({
         <div className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor="lead">Lead</Label>
-            <Select value={leadId} onValueChange={setLeadId} disabled={pending}>
-              <SelectTrigger id="lead">
-                <SelectValue placeholder="Escolha um lead…" />
-              </SelectTrigger>
-              <SelectContent>
-                {sortedLeads.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.name}
-                    {l.phone ? (
-                      <span className="ml-2 text-xs text-muted-foreground">{l.phone}</span>
-                    ) : null}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={leadPickerOpen} onOpenChange={setLeadPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="lead"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={leadPickerOpen}
+                  disabled={pending}
+                  className="w-full justify-between font-normal"
+                >
+                  <span className={cn("truncate", !selectedLead && "text-muted-foreground")}>
+                    {selectedLead ? selectedLead.name : "Buscar lead pelo nome…"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command
+                  filter={(value, search) =>
+                    value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+                  }
+                >
+                  <CommandInput placeholder="Digite o nome…" />
+                  <CommandList>
+                    <CommandEmpty>Nenhum lead encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {sortedLeads.map((l) => (
+                        <CommandItem
+                          key={l.id}
+                          // value alimenta o filtro de busca — nome + telefone
+                          value={`${l.name} ${l.phone ?? ""}`}
+                          onSelect={() => {
+                            setLeadId(l.id);
+                            setLeadPickerOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              leadId === l.id ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          <span className="flex-1 truncate">{l.name}</span>
+                          {l.phone ? (
+                            <span className="ml-2 text-xs text-muted-foreground">{l.phone}</span>
+                          ) : null}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-1">

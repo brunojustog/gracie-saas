@@ -1,12 +1,13 @@
 "use client";
 
 import type { PaymentMethod } from "@prisma/client";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition, type ChangeEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -38,11 +39,13 @@ type Props = {
   leads: Lead[];
   initial: {
     search?: string;
-    modalityId?: string;
+    modalityIds?: string[];
     planId?: string;
     paymentMethod?: PaymentMethod;
     status?: string;
     due?: string;
+    gender?: string;
+    dueDay?: number;
   };
 };
 
@@ -67,10 +70,25 @@ export function EnrollmentsToolbar({
     });
   };
 
+  const selectedModalities = initial.modalityIds ?? [];
+  const toggleModality = (id: string) => {
+    const set = new Set(selectedModalities);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    setParam("modality", set.size > 0 ? [...set].join(",") : undefined);
+  };
+
   const onSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
     setParam("q", e.target.value);
   };
+
+  const modalityLabel =
+    selectedModalities.length === 0
+      ? "Todas modalidades"
+      : selectedModalities.length === 1
+        ? (modalities.find((m) => m.id === selectedModalities[0])?.name ?? "1 modalidade")
+        : `${selectedModalities.length} modalidades`;
 
   return (
     <>
@@ -80,31 +98,54 @@ export function EnrollmentsToolbar({
           value={search}
           onChange={onSearchChange}
           placeholder="Buscar por nome do aluno…"
-          className="h-9 w-72"
+          className="h-9 w-64"
         />
 
-        <Select
-          value={initial.modalityId ?? ALL}
-          onValueChange={(v) => setParam("modality", v)}
-        >
-          <SelectTrigger className="h-9 w-44">
-            <SelectValue placeholder="Modalidade" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todas modalidades</SelectItem>
-            {modalities.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Multi-seleção de modalidade (v1.1-AL) */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-9 w-48 justify-between font-normal">
+              <span className="truncate">{modalityLabel}</span>
+              <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-56 p-2">
+            <div className="max-h-64 space-y-0.5 overflow-y-auto">
+              {modalities.map((m) => {
+                const checked = selectedModalities.includes(m.id);
+                return (
+                  <label
+                    key={m.id}
+                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleModality(m.id)}
+                      className="h-4 w-4"
+                    />
+                    {m.name}
+                  </label>
+                );
+              })}
+            </div>
+            {selectedModalities.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setParam("modality", undefined)}
+                className="mt-1 w-full rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-accent"
+              >
+                Limpar seleção
+              </button>
+            ) : null}
+          </PopoverContent>
+        </Popover>
 
         <Select
           value={initial.planId ?? ALL}
           onValueChange={(v) => setParam("plan", v)}
         >
-          <SelectTrigger className="h-9 w-44">
+          <SelectTrigger className="h-9 w-40">
             <SelectValue placeholder="Plano" />
           </SelectTrigger>
           <SelectContent>
@@ -118,10 +159,24 @@ export function EnrollmentsToolbar({
         </Select>
 
         <Select
+          value={initial.gender ?? ALL}
+          onValueChange={(v) => setParam("gender", v)}
+        >
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue placeholder="Sexo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Ambos sexos</SelectItem>
+            <SelectItem value="FEMALE">Feminino</SelectItem>
+            <SelectItem value="MALE">Masculino</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
           value={initial.paymentMethod ?? ALL}
           onValueChange={(v) => setParam("payment", v)}
         >
-          <SelectTrigger className="h-9 w-44">
+          <SelectTrigger className="h-9 w-40">
             <SelectValue placeholder="Pagamento" />
           </SelectTrigger>
           <SelectContent>
@@ -138,7 +193,7 @@ export function EnrollmentsToolbar({
           value={initial.status ?? ALL}
           onValueChange={(v) => setParam("status", v)}
         >
-          <SelectTrigger className="h-9 w-44">
+          <SelectTrigger className="h-9 w-40">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -149,18 +204,35 @@ export function EnrollmentsToolbar({
           </SelectContent>
         </Select>
 
-        {/* v1.1-AB: recorte por vencimento — sempre implica matrícula ativa. */}
         <Select
           value={initial.due ?? ALL}
           onValueChange={(v) => setParam("due", v)}
         >
-          <SelectTrigger className="h-9 w-48">
+          <SelectTrigger className="h-9 w-44">
             <SelectValue placeholder="Vencimento" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Qualquer vencimento</SelectItem>
             <SelectItem value="overdue">Inadimplentes</SelectItem>
             <SelectItem value="due7">Vence em 7 dias</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Dia do mês do vencimento (1-31) */}
+        <Select
+          value={initial.dueDay ? String(initial.dueDay) : ALL}
+          onValueChange={(v) => setParam("dueDay", v)}
+        >
+          <SelectTrigger className="h-9 w-40">
+            <SelectValue placeholder="Dia de vencimento" />
+          </SelectTrigger>
+          <SelectContent className="max-h-64">
+            <SelectItem value={ALL}>Qualquer dia</SelectItem>
+            {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+              <SelectItem key={d} value={String(d)}>
+                Dia {d}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 

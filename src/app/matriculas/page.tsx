@@ -1,4 +1,4 @@
-import type { EnrollmentStatus, PaymentMethod } from "@prisma/client";
+import type { EnrollmentStatus, Gender, PaymentMethod } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/top-nav";
@@ -22,11 +22,13 @@ const VALID_PAYMENT_METHODS: PaymentMethod[] = [
 
 type SearchParams = Promise<{
   q?: string;
-  modality?: string;
+  modality?: string; // CSV multi-seleção: "id1,id2"
   plan?: string;
   payment?: string;
   status?: EnrollmentStatus;
   due?: string;
+  gender?: string;
+  dueDay?: string;
 }>;
 
 export default async function MatriculasPage({
@@ -45,13 +47,26 @@ export default async function MatriculasPage({
   const due: DueFilter | undefined =
     sp.due === "overdue" || sp.due === "due7" ? sp.due : undefined;
 
+  const modalityIds = sp.modality
+    ? sp.modality.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined;
+  const gender: Gender | undefined =
+    sp.gender === "FEMALE" || sp.gender === "MALE" ? sp.gender : undefined;
+  const dueDayNum = sp.dueDay ? Number(sp.dueDay) : NaN;
+  const dueDay =
+    Number.isInteger(dueDayNum) && dueDayNum >= 1 && dueDayNum <= 31
+      ? dueDayNum
+      : undefined;
+
   const filters = {
     search: sp.q,
-    modalityId: sp.modality,
+    modalityIds,
     planId: sp.plan,
     paymentMethod,
     status: sp.status,
     due,
+    gender,
+    dueDay,
   };
 
   const [rows, overdueCount, modalities, plans, leadsForPicker] = await Promise.all([
@@ -156,11 +171,13 @@ export default async function MatriculasPage({
           leads={leadsForPicker}
           initial={{
             search: filters.search,
-            modalityId: filters.modalityId,
+            modalityIds: filters.modalityIds,
             planId: filters.planId,
             paymentMethod: filters.paymentMethod,
             status: filters.status,
             due: filters.due,
+            gender: filters.gender,
+            dueDay: filters.dueDay,
           }}
         />
 
