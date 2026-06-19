@@ -20,7 +20,7 @@ import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
 import { isOverdue } from "@/lib/overdue";
-import { getPrivateRevenue } from "@/server/private-packages";
+import { getPrivatePackageCounts, getPrivateRevenue } from "@/server/private-packages";
 
 /** Percentual seguro (0 quando o denominador é 0). */
 export function ratePct(part: number, total: number): number {
@@ -95,6 +95,7 @@ export async function getQuadroData(tenantId: string) {
     posExpLeads,
     agendaClasses,
     privateRevenue,
+    privateCounts,
   ] = await Promise.all([
     // Matrículas ativas (gênero + kids + plano + pagamento + vencimento)
     prisma.enrollment.findMany({
@@ -178,6 +179,7 @@ export async function getQuadroData(tenantId: string) {
     }),
     // Receita de aulas particulares (v1.1-AO)
     getPrivateRevenue(tenantId, monthStart, nextMonthStart),
+    getPrivatePackageCounts(tenantId),
   ]);
 
   // ── Bloco "Número de matrículas" ─────────────────────────────────────────
@@ -324,6 +326,13 @@ export async function getQuadroData(tenantId: string) {
       .map(([method, count]) => ({ method, count }))
       .sort((a, b) => b.count - a.count),
     cancelamentos: canceledCount,
+    // Aulas particulares (v1.1-AV) — SEPARADO dos mensalistas + total geral.
+    particulares: {
+      ativos: privateCounts.active,
+      concluidos: privateCounts.completed,
+      cancelados: privateCounts.canceled,
+    },
+    totalGeralAlunos: totalActive + privateCounts.active,
     growth,
     salesMonthLabels: salesMonths.map((m) => format(m, "MMM/yy", { locale: ptBR })),
     sellerRanking,

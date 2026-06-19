@@ -155,6 +155,40 @@ export default async function QuadroPage() {
           </p>
         </Panel>
 
+        {/* Aulas particulares (v1.1-AV) — separado dos mensalistas + total geral */}
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Panel
+            title="Aulas particulares"
+            subtitle="Pacotes avulsos — NÃO contam como matrícula/mensalista"
+          >
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded border bg-muted/40 p-3">
+                <div className="text-2xl font-semibold">{data.particulares.ativos}</div>
+                <div className="text-[11px] uppercase text-muted-foreground">Em andamento</div>
+              </div>
+              <div className="rounded border bg-muted/40 p-3">
+                <div className="text-2xl font-semibold">{data.particulares.concluidos}</div>
+                <div className="text-[11px] uppercase text-muted-foreground">Concluídos</div>
+              </div>
+              <div className="rounded border bg-muted/40 p-3">
+                <div className="text-2xl font-semibold">{data.particulares.cancelados}</div>
+                <div className="text-[11px] uppercase text-muted-foreground">Cancelados</div>
+              </div>
+            </div>
+          </Panel>
+          <Panel
+            title="Total geral de alunos"
+            subtitle="Mensalistas ativos + alunos de aula particular (visão somada)"
+          >
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold">{data.totalGeralAlunos}</span>
+              <span className="text-xs text-muted-foreground">
+                {data.matriculas.totalActive} mensalistas + {data.particulares.ativos} particulares
+              </span>
+            </div>
+          </Panel>
+        </section>
+
         {/* 4 + 6) Crescimento e churn mês a mês */}
         <Panel
           title="Crescimento e churn (mês a mês)"

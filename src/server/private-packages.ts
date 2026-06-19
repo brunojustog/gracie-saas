@@ -121,3 +121,16 @@ export async function getPrivateRevenue(
   }
   return { thisMonth, allTime, activeCount };
 }
+
+/**
+ * Contagens de pacotes particulares por situação (v1.1-AV) — pro Quadro do
+ * Vitor, SEPARADAS das matrículas (nunca somadas nos números de mensalista).
+ */
+export async function getPrivatePackageCounts(tenantId: string) {
+  const [active, completed, canceled] = await Promise.all([
+    prisma.privatePackage.count({ where: { tenantId, status: "ACTIVE" } }),
+    prisma.privatePackage.count({ where: { tenantId, status: "COMPLETED" } }),
+    prisma.privatePackage.count({ where: { tenantId, status: "CANCELED" } }),
+  ]);
+  return { active, completed, canceled };
+}
