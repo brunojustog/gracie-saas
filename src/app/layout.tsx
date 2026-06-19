@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 
+import { getCurrentTenant } from "@/server/tenant";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,10 +16,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Gracie SaaS",
-  description: "Gestão comercial para academias — Simplifica Online",
-};
+// Título da aba dinâmico (v1.1-AZ): usa o nome do tenant do domínio.
+export async function generateMetadata(): Promise<Metadata> {
+  const tenant = await getCurrentTenant();
+  return {
+    title: tenant?.name ?? "Gracie Barra Anália Franco",
+    description: "Gestão comercial para academias — Simplifica Online",
+  };
+}
 
 export default function RootLayout({
   children,

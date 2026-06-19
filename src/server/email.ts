@@ -8,7 +8,8 @@
 import { Resend } from "resend";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const EMAIL_FROM = process.env.EMAIL_FROM ?? "Gracie SaaS <noreply@example.com>";
+const EMAIL_FROM =
+  process.env.EMAIL_FROM ?? "Gracie Barra Anália Franco <noreply@example.com>";
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
@@ -56,7 +57,7 @@ export async function sendInviteEmail(params: {
   const subject = `Convite para acessar ${tenantName}`;
   const text = `Olá!
 
-${inviterName} convidou você para participar do sistema da ${tenantName} no Gracie SaaS.
+${inviterName} convidou você para participar do sistema da ${tenantName}.
 
 Para criar sua senha e ativar seu acesso, clique no link abaixo:
 
@@ -64,7 +65,7 @@ ${inviteUrl}
 
 Esse link expira em 7 dias. Se você não esperava esse convite, ignore este email.
 
-— Gracie SaaS`;
+— Equipe ${tenantName}`;
 
   const html = `<!doctype html>
 <html lang="pt-BR">
@@ -72,9 +73,9 @@ Esse link expira em 7 dias. Se você não esperava esse convite, ignore este ema
     <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;border:1px solid #e5e7eb;padding:32px">
       <h1 style="margin:0 0 16px;font-size:20px">Convite para ${escapeHtml(tenantName)}</h1>
       <p>Olá!</p>
-      <p><strong>${escapeHtml(inviterName)}</strong> convidou você para participar do sistema da <strong>${escapeHtml(tenantName)}</strong> no Gracie SaaS.</p>
+      <p><strong>${escapeHtml(inviterName)}</strong> convidou você para participar do sistema da <strong>${escapeHtml(tenantName)}</strong>.</p>
       <p style="margin:24px 0">
-        <a href="${inviteUrl}" style="display:inline-block;padding:10px 20px;background:#C8102E;color:#fff;text-decoration:none;border-radius:6px;font-weight:500">
+        <a href="${inviteUrl}" style="display:inline-block;padding:10px 20px;background:#DB2777;color:#fff;text-decoration:none;border-radius:6px;font-weight:500">
           Aceitar convite
         </a>
       </p>

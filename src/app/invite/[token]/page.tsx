@@ -1,3 +1,5 @@
+import { getCurrentTenant } from "@/server/tenant";
+
 import { checkInviteStatus } from "./actions";
 import { InviteAcceptForm } from "./form";
 
@@ -8,6 +10,8 @@ export const dynamic = "force-dynamic";
 export default async function InvitePage({ params }: { params: Params }) {
   const { token } = await params;
   const status = await checkInviteStatus(token);
+  const tenant = await getCurrentTenant();
+  const tenantName = tenant?.name ?? "Gracie Barra Anália Franco";
 
   if (status.kind === "missing") {
     return (
@@ -29,7 +33,7 @@ export default async function InvitePage({ params }: { params: Params }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-md items-center justify-center p-6">
       <div className="w-full rounded-lg border bg-card p-8">
-        <h1 className="mb-1 text-lg font-semibold">Bem-vinda(o) ao Gracie SaaS</h1>
+        <h1 className="mb-1 text-lg font-semibold">Bem-vinda(o) à {tenantName}</h1>
         <p className="mb-6 text-sm text-muted-foreground">
           Você foi convidada(o) com o email{" "}
           <span className="font-medium text-foreground">{status.identifier}</span>.
