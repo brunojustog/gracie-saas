@@ -23,10 +23,13 @@ export default async function KanbanPage({
   const { tenant, membership, user } = await requireTenantUser();
   const sp = await searchParams;
 
+  // Filtros multi-seleção (v1.1-AX): modalidade e vendedora como CSV.
+  const csv = (v: string | undefined): string[] =>
+    v ? v.split(",").map((s) => s.trim()).filter(Boolean) : [];
   const filters = {
     search: sp.q,
-    modalityId: sp.modality,
-    assignedSellerId: sp.seller,
+    modalityIds: csv(sp.modality),
+    assignedSellerIds: csv(sp.seller),
   };
 
   // URL base do Chatwoot pronta pra concatenar com conversationId (v1.1-T).

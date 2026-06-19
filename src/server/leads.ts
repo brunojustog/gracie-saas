@@ -77,8 +77,9 @@ export async function findLeadIdByPhone(
 
 export type KanbanFilters = {
   search?: string;
-  modalityId?: string;
-  assignedSellerId?: string;
+  /** v1.1-AX: multi-seleção. Vazio/ausente = todas. */
+  modalityIds?: string[];
+  assignedSellerIds?: string[];
 };
 
 /**
@@ -100,12 +101,12 @@ export function buildKanbanWhere(
     ];
   }
 
-  if (filters.modalityId) {
-    where.modalityId = filters.modalityId;
+  if (filters.modalityIds?.length) {
+    where.modalityId = { in: filters.modalityIds };
   }
 
-  if (filters.assignedSellerId) {
-    where.assignedSellerId = filters.assignedSellerId;
+  if (filters.assignedSellerIds?.length) {
+    where.assignedSellerId = { in: filters.assignedSellerIds };
   }
 
   return { ...where, ...scopedLeadWhere(membership) };

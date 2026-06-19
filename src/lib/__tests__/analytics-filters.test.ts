@@ -10,13 +10,19 @@ describe("parseDashboardFilters", () => {
     expect(parseDashboardFilters({})).toEqual({});
   });
 
-  it("aceita origem válida do enum LeadOrigin", () => {
+  it("aceita origem válida do enum LeadOrigin (single → array)", () => {
     expect(parseDashboardFilters({ origin: "WHATSAPP" })).toEqual({
-      origin: "WHATSAPP",
+      origins: ["WHATSAPP"],
     });
     expect(parseDashboardFilters({ origin: "INSTAGRAM_DIRECT" })).toEqual({
-      origin: "INSTAGRAM_DIRECT",
+      origins: ["INSTAGRAM_DIRECT"],
     });
+  });
+
+  it("aceita várias origens via CSV, descartando inválidas", () => {
+    expect(
+      parseDashboardFilters({ origin: "WHATSAPP,TIKTOK,INSTAGRAM_DIRECT" }),
+    ).toEqual({ origins: ["WHATSAPP", "INSTAGRAM_DIRECT"] });
   });
 
   it("ignora origem inválida (silently)", () => {
@@ -25,21 +31,21 @@ describe("parseDashboardFilters", () => {
     expect(parseDashboardFilters({ origin: "WHATSAPP_LOWERCASE" })).toEqual({});
   });
 
-  it("trim em IDs e tag, ignora vazios/whitespace", () => {
+  it("trim e dedup em IDs e tags, ignora vazios/whitespace", () => {
     expect(
       parseDashboardFilters({
-        modality: "  mod_gb1  ",
+        modality: "  mod_gb1 , mod_gb1 ,mod_gb2 ",
         seller: " user_anna ",
-        tag: "  Quente  ",
+        tag: "  Quente , Frio ",
       }),
     ).toEqual({
-      modalityId: "mod_gb1",
-      sellerId: "user_anna",
-      tag: "Quente",
+      modalityIds: ["mod_gb1", "mod_gb2"],
+      sellerIds: ["user_anna"],
+      tags: ["Quente", "Frio"],
     });
 
     expect(
-      parseDashboardFilters({ modality: "   ", seller: "", tag: "  " }),
+      parseDashboardFilters({ modality: "  , ", seller: "", tag: "  " }),
     ).toEqual({});
   });
 
@@ -52,10 +58,10 @@ describe("parseDashboardFilters", () => {
         tag: "Quente",
       }),
     ).toEqual({
-      origin: "WHATSAPP",
-      modalityId: "mod_x",
-      sellerId: "user_y",
-      tag: "Quente",
+      origins: ["WHATSAPP"],
+      modalityIds: ["mod_x"],
+      sellerIds: ["user_y"],
+      tags: ["Quente"],
     });
   });
 });
@@ -63,13 +69,13 @@ describe("parseDashboardFilters", () => {
 describe("activeFilterCount", () => {
   it("conta filtros presentes", () => {
     expect(activeFilterCount({})).toBe(0);
-    expect(activeFilterCount({ origin: "WHATSAPP" })).toBe(1);
+    expect(activeFilterCount({ origins: ["WHATSAPP"] })).toBe(1);
     expect(
       activeFilterCount({
-        origin: "WHATSAPP",
-        modalityId: "x",
-        sellerId: "y",
-        tag: "z",
+        origins: ["WHATSAPP"],
+        modalityIds: ["x"],
+        sellerIds: ["y"],
+        tags: ["z"],
       }),
     ).toBe(4);
   });

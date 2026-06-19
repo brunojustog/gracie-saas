@@ -23,13 +23,16 @@ export default async function ParticularesPage({
   const sp = await searchParams;
   const isSeller = membership.role === "SELLER";
 
-  const status =
-    sp.status && VALID_STATUS.includes(sp.status as PrivatePackageStatus)
-      ? (sp.status as PrivatePackageStatus)
-      : undefined;
+  // Filtro multi-seleção (v1.1-AX): status como CSV.
+  const statuses = (sp.status ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is PrivatePackageStatus =>
+      VALID_STATUS.includes(s as PrivatePackageStatus),
+    );
 
   const [rows, options] = await Promise.all([
-    getPrivatePackagesForList(membership, { status, search: sp.q }),
+    getPrivatePackagesForList(membership, { statuses, search: sp.q }),
     getPrivateFormOptions(),
   ]);
 
@@ -89,7 +92,7 @@ export default async function ParticularesPage({
 
         <PrivateToolbar
           options={options}
-          initial={{ q: sp.q, status: sp.status }}
+          initial={{ q: sp.q, statuses }}
         />
 
         <PackagesTable rows={rows} options={options} hideFinancials={isSeller} />

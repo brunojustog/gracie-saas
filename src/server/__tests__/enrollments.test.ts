@@ -79,11 +79,11 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
     expect(sellerW.lead).toEqual(expectedLead);
   });
 
-  it("filtro planId é aplicado direto no where", () => {
+  it("multi-seleção de plano vira planId IN [...]", () => {
     const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
-      planId: "plan_anual",
+      planIds: ["plan_anual", "plan_mensal"],
     });
-    expect(where.planId).toBe("plan_anual");
+    expect(where.planId).toEqual({ in: ["plan_anual", "plan_mensal"] });
   });
 
   it("multi-seleção de pagamento vira paymentMethod IN [...]", () => {
@@ -96,13 +96,13 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
   it("filtros combinados (modality + plan + payment) coexistem", () => {
     const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
       modalityIds: ["mod_jiujitsu"],
-      planId: "plan_mensal",
+      planIds: ["plan_mensal"],
       paymentMethods: ["BOLETO"],
     });
     expect(where).toMatchObject({
       tenantId: "tenant_gracie",
       modalityId: { in: ["mod_jiujitsu"] },
-      planId: "plan_mensal",
+      planId: { in: ["plan_mensal"] },
       paymentMethod: { in: ["BOLETO"] },
     });
   });

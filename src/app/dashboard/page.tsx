@@ -143,10 +143,10 @@ export default async function DashboardPage({
           sellers={sellerOptions}
           tags={tagOptions}
           current={{
-            origin: filters.origin,
-            modality: filters.modalityId,
-            seller: filters.sellerId,
-            tag: filters.tag,
+            origins: filters.origins ?? [],
+            modalities: filters.modalityIds ?? [],
+            sellers: filters.sellerIds ?? [],
+            tags: filters.tags ?? [],
           }}
         />
 

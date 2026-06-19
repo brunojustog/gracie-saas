@@ -38,13 +38,15 @@ export async function getDashboardData(
   // filtros da toolbar (origem, modalidade, vendedora, tag). Visibilidade
   // SELLER não restringe agregados — política v1.1-O.
   const filterWhere: Prisma.LeadWhereInput = {};
-  if (filters.origin) filterWhere.origin = filters.origin;
-  if (filters.modalityId) filterWhere.modalityId = filters.modalityId;
-  if (filters.sellerId && !isSeller) {
-    // SELLER não pode escolher outra vendedora via URL — tampering ignora.
-    filterWhere.assignedSellerId = filters.sellerId;
+  if (filters.origins?.length) filterWhere.origin = { in: filters.origins };
+  if (filters.modalityIds?.length) {
+    filterWhere.modalityId = { in: filters.modalityIds };
   }
-  if (filters.tag) filterWhere.tags = { has: filters.tag };
+  if (filters.sellerIds?.length && !isSeller) {
+    // SELLER não pode escolher outra vendedora via URL — tampering ignora.
+    filterWhere.assignedSellerId = { in: filters.sellerIds };
+  }
+  if (filters.tags?.length) filterWhere.tags = { hasSome: filters.tags };
 
   const leadWhereBase: Prisma.LeadWhereInput = {
     ...scopedLeadWhere(membership),
@@ -61,17 +63,20 @@ export async function getDashboardData(
   const buildLeadSqlFilter = (tablePrefix = ""): Prisma.Sql => {
     const p = Prisma.raw(tablePrefix); // identifier safe (sem aspas)
     const conds: Prisma.Sql[] = [];
-    if (filters.origin) {
-      conds.push(Prisma.sql`${p}"origin"::text = ${filters.origin}`);
+    if (filters.origins?.length) {
+      conds.push(Prisma.sql`${p}"origin"::text = ANY(${filters.origins})`);
     }
-    if (filters.modalityId) {
-      conds.push(Prisma.sql`${p}"modalityId" = ${filters.modalityId}`);
+    if (filters.modalityIds?.length) {
+      conds.push(Prisma.sql`${p}"modalityId" = ANY(${filters.modalityIds})`);
     }
-    if (filters.sellerId && !isSeller) {
-      conds.push(Prisma.sql`${p}"assignedSellerId" = ${filters.sellerId}`);
+    if (filters.sellerIds?.length && !isSeller) {
+      conds.push(
+        Prisma.sql`${p}"assignedSellerId" = ANY(${filters.sellerIds})`,
+      );
     }
-    if (filters.tag) {
-      conds.push(Prisma.sql`${filters.tag} = ANY(${p}"tags")`);
+    if (filters.tags?.length) {
+      // Overlap: o lead casa se compartilhar ao menos uma das tags escolhidas.
+      conds.push(Prisma.sql`${p}"tags" && ${filters.tags}::text[]`);
     }
     return conds.length > 0
       ? Prisma.sql` AND ${Prisma.join(conds, ` AND `)}`

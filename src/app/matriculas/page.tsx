@@ -60,6 +60,7 @@ export default async function MatriculasPage({
     sp.due === "overdue" || sp.due === "due7" ? sp.due : undefined;
 
   const modalityIds = csv(sp.modality);
+  const planIds = csv(sp.plan);
   const gender: Gender | undefined =
     sp.gender === "FEMALE" || sp.gender === "MALE" ? sp.gender : undefined;
   const dueDayNum = sp.dueDay ? Number(sp.dueDay) : NaN;
@@ -71,7 +72,7 @@ export default async function MatriculasPage({
   const filters = {
     search: sp.q,
     modalityIds,
-    planId: sp.plan,
+    planIds,
     paymentMethods,
     statusViews,
     due,
@@ -191,7 +192,7 @@ export default async function MatriculasPage({
           initial={{
             search: filters.search,
             modalityIds: filters.modalityIds,
-            planId: filters.planId,
+            planIds: filters.planIds,
             paymentMethods: filters.paymentMethods,
             statusViews: filters.statusViews,
             due: filters.due,

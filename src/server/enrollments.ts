@@ -60,7 +60,8 @@ export type EnrollmentListFilters = {
   search?: string;
   /** v1.1-AL: multi-seleção. Vazio/ausente = todas as modalidades. */
   modalityIds?: string[];
-  planId?: string;
+  /** v1.1-AX: multi-seleção. Vazio/ausente = todos os planos. */
+  planIds?: string[];
   /** v1.1-AV: multi-seleção. */
   paymentMethods?: PaymentMethod[];
   /** v1.1-AV: multi-seleção de status (visão derivada). */
@@ -83,7 +84,9 @@ export function buildEnrollmentListWhere(
   if (filters.modalityIds && filters.modalityIds.length > 0) {
     where.modalityId = { in: filters.modalityIds };
   }
-  if (filters.planId) where.planId = filters.planId;
+  if (filters.planIds && filters.planIds.length > 0) {
+    where.planId = { in: filters.planIds };
+  }
   if (filters.paymentMethods && filters.paymentMethods.length > 0) {
     where.paymentMethod = { in: filters.paymentMethods };
   }

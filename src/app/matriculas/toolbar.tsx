@@ -47,7 +47,7 @@ type Props = {
   initial: {
     search?: string;
     modalityIds?: string[];
-    planId?: string;
+    planIds?: string[];
     paymentMethods?: PaymentMethod[];
     statusViews?: string[];
     due?: string;
@@ -111,19 +111,13 @@ export function EnrollmentsToolbar({ modalities, plans, leads, initial }: Props)
           width="w-40"
         />
 
-        <Select value={initial.planId ?? ALL} onValueChange={(v) => setParam("plan", v)}>
-          <SelectTrigger className="h-9 w-40">
-            <SelectValue placeholder="Plano" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos planos</SelectItem>
-            {plans.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectPopover
+          options={plans.map((p) => ({ value: p.id, label: p.name }))}
+          selected={initial.planIds ?? []}
+          onChange={(v) => setMulti("plan", v)}
+          allLabel="Todos planos"
+          width="w-40"
+        />
 
         <Select value={initial.gender ?? ALL} onValueChange={(v) => setParam("gender", v)}>
           <SelectTrigger className="h-9 w-36">

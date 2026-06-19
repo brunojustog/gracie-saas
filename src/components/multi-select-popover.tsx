@@ -18,12 +18,14 @@ export function MultiSelectPopover({
   onChange,
   allLabel,
   width = "w-48",
+  triggerClassName = "h-9",
 }: {
   options: MultiOption[];
   selected: string[];
   onChange: (next: string[]) => void;
   allLabel: string;
   width?: string;
+  triggerClassName?: string;
 }) {
   const toggle = (value: string) => {
     const set = new Set(selected);
@@ -42,7 +44,10 @@ export function MultiSelectPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" className={`h-9 ${width} justify-between font-normal`}>
+        <Button
+          variant="outline"
+          className={`${triggerClassName} ${width} justify-between font-normal`}
+        >
           <span className="truncate">{label}</span>
           <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
         </Button>

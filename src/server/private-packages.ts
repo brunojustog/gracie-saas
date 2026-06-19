@@ -32,12 +32,12 @@ export function deriveStatus(
 
 export async function getPrivatePackagesForList(
   membership: TenantUser,
-  filters: { status?: PrivatePackageStatus; search?: string } = {},
+  filters: { statuses?: PrivatePackageStatus[]; search?: string } = {},
 ) {
   const rows = await prisma.privatePackage.findMany({
     where: {
       tenantId: membership.tenantId,
-      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.statuses?.length ? { status: { in: filters.statuses } } : {}),
       ...(filters.search?.trim()
         ? { lead: { name: { contains: filters.search.trim(), mode: "insensitive" } } }
         : {}),

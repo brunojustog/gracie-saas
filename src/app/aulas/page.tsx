@@ -114,16 +114,23 @@ export default async function AulasPage({
   );
 
   if (isList) {
-    const status =
-      sp.status && VALID_STATUS.includes(sp.status as ExperimentalClassStatus)
-        ? (sp.status as ExperimentalClassStatus)
-        : undefined;
+    // Filtros multi-seleção (v1.1-AX): status e modalidade vêm como CSV.
+    const statuses = (sp.status ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s): s is ExperimentalClassStatus =>
+        VALID_STATUS.includes(s as ExperimentalClassStatus),
+      );
+    const modalityIds = (sp.modality ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     // Janela ampla pra lista: últimos 120 dias + próximos 60.
     const now = new Date();
     const rows = await getClassesForList(membership, {
       search: sp.q,
-      status,
-      modalityId: sp.modality,
+      statuses,
+      modalityIds,
       from: addDays(now, -120),
       to: addDays(now, 60),
     });
@@ -144,7 +151,7 @@ export default async function AulasPage({
 
           <ExpListToolbar
             modalities={modalities.map((m) => ({ id: m.id, name: m.name }))}
-            initial={{ q: sp.q, status: sp.status, modality: sp.modality }}
+            initial={{ q: sp.q, statuses, modalityIds }}
           />
 
           {rows.length === 0 ? (

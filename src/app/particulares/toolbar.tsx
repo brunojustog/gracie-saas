@@ -6,24 +6,22 @@ import { useState, useTransition, type ChangeEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MultiSelectPopover } from "@/components/multi-select-popover";
 
 import { PackageModal, type FormOptions } from "./package-modal";
 
-const ALL = "__all__";
+const STATUS_OPTIONS = [
+  { value: "ACTIVE", label: "Em andamento" },
+  { value: "COMPLETED", label: "Concluído" },
+  { value: "CANCELED", label: "Cancelado" },
+];
 
 export function PrivateToolbar({
   options,
   initial,
 }: {
   options: FormOptions;
-  initial: { q?: string; status?: string };
+  initial: { q?: string; statuses?: string[] };
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -33,10 +31,12 @@ export function PrivateToolbar({
 
   const setParam = (key: string, value: string | undefined) => {
     const next = new URLSearchParams(params.toString());
-    if (value && value !== ALL) next.set(key, value);
+    if (value) next.set(key, value);
     else next.delete(key);
     startTransition(() => router.replace(`/particulares?${next.toString()}`));
   };
+  const setMulti = (key: string, values: string[]) =>
+    setParam(key, values.length > 0 ? values.join(",") : undefined);
 
   const onSearch = (e: ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
@@ -53,17 +53,13 @@ export function PrivateToolbar({
           placeholder="Buscar por nome do aluno…"
           className="h-9 w-64"
         />
-        <Select value={initial.status ?? ALL} onValueChange={(v) => setParam("status", v)}>
-          <SelectTrigger className="h-9 w-44">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos status</SelectItem>
-            <SelectItem value="ACTIVE">Em andamento</SelectItem>
-            <SelectItem value="COMPLETED">Concluído</SelectItem>
-            <SelectItem value="CANCELED">Cancelado</SelectItem>
-          </SelectContent>
-        </Select>
+        <MultiSelectPopover
+          options={STATUS_OPTIONS}
+          selected={initial.statuses ?? []}
+          onChange={(v) => setMulti("status", v)}
+          allLabel="Todos status"
+          width="w-44"
+        />
 
         <div className="ml-auto">
           <Button onClick={() => setModalOpen(true)}>

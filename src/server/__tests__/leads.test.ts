@@ -89,26 +89,26 @@ describe("buildKanbanWhere — combinando filtros UI com scope", () => {
     expect(where).not.toHaveProperty("OR");
   });
 
-  it("filtro de modalityId é aplicado pra todos os roles", () => {
+  it("filtro de modalityIds é aplicado pra todos os roles (multi)", () => {
     const adminW = buildKanbanWhere(membershipFactory({ role: "ADMIN" }), {
-      modalityId: "mod_gb1",
+      modalityIds: ["mod_gb1", "mod_gb2"],
     });
     const sellerW = buildKanbanWhere(membershipFactory({ role: "SELLER" }), {
-      modalityId: "mod_gb1",
+      modalityIds: ["mod_gb1"],
     });
-    expect(adminW.modalityId).toBe("mod_gb1");
-    expect(sellerW.modalityId).toBe("mod_gb1");
+    expect(adminW.modalityId).toEqual({ in: ["mod_gb1", "mod_gb2"] });
+    expect(sellerW.modalityId).toEqual({ in: ["mod_gb1"] });
   });
 
-  it("assignedSellerId arbitrário é honrado pra qualquer role (v1.1-O)", () => {
+  it("assignedSellerIds arbitrário é honrado pra qualquer role (v1.1-O)", () => {
     const adminW = buildKanbanWhere(membershipFactory({ role: "ADMIN" }), {
-      assignedSellerId: "user_evelyn",
+      assignedSellerIds: ["user_evelyn"],
     });
     const sellerW = buildKanbanWhere(
       membershipFactory({ role: "SELLER", userId: "user_anna" }),
-      { assignedSellerId: "user_evelyn" },
+      { assignedSellerIds: ["user_evelyn"] },
     );
-    expect(adminW.assignedSellerId).toBe("user_evelyn");
-    expect(sellerW.assignedSellerId).toBe("user_evelyn");
+    expect(adminW.assignedSellerId).toEqual({ in: ["user_evelyn"] });
+    expect(sellerW.assignedSellerId).toEqual({ in: ["user_evelyn"] });
   });
 });

@@ -6,13 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MultiSelectPopover } from "@/components/multi-select-popover";
 
 type Option = { value: string; label: string };
 
@@ -32,17 +26,15 @@ const ORIGIN_OPTIONS: Array<{ value: LeadOrigin; label: string }> = [
   { value: "OTHER", label: "Outros" },
 ];
 
-const ALL_VALUE = "__all__";
-
 type Props = {
   modalities: Option[];
   sellers: Option[]; // vazio quando role=SELLER
   tags: string[];
   current: {
-    origin?: string;
-    modality?: string;
-    seller?: string;
-    tag?: string;
+    origins: string[];
+    modalities: string[];
+    sellers: string[];
+    tags: string[];
   };
 };
 
@@ -51,13 +43,10 @@ export function DashboardFilters({ modalities, sellers, tags, current }: Props) 
   const params = useSearchParams();
   const [, startTransition] = useTransition();
 
-  const setParam = (key: string, value: string | null) => {
+  const setMulti = (key: string, values: string[]) => {
     const next = new URLSearchParams(params.toString());
-    if (value === null || value === "" || value === ALL_VALUE) {
-      next.delete(key);
-    } else {
-      next.set(key, value);
-    }
+    if (values.length > 0) next.set(key, values.join(","));
+    else next.delete(key);
     startTransition(() => {
       router.replace(`/dashboard?${next.toString()}`);
     });
@@ -74,9 +63,11 @@ export function DashboardFilters({ modalities, sellers, tags, current }: Props) 
     });
   };
 
-  const activeCount = [current.origin, current.modality, current.seller, current.tag].filter(
-    Boolean,
-  ).length;
+  const activeCount =
+    (current.origins.length > 0 ? 1 : 0) +
+    (current.modalities.length > 0 ? 1 : 0) +
+    (current.sellers.length > 0 ? 1 : 0) +
+    (current.tags.length > 0 ? 1 : 0);
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
@@ -84,76 +75,44 @@ export function DashboardFilters({ modalities, sellers, tags, current }: Props) 
         Filtros
       </span>
 
-      <Select
-        value={current.origin ?? ALL_VALUE}
-        onValueChange={(v) => setParam("origin", v)}
-      >
-        <SelectTrigger className="h-8 w-[150px] text-xs">
-          <SelectValue placeholder="Origem" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>Todas as origens</SelectItem>
-          {ORIGIN_OPTIONS.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <MultiSelectPopover
+        options={ORIGIN_OPTIONS}
+        selected={current.origins}
+        onChange={(v) => setMulti("origin", v)}
+        allLabel="Todas as origens"
+        width="w-[150px]"
+        triggerClassName="h-8 text-xs"
+      />
 
-      <Select
-        value={current.modality ?? ALL_VALUE}
-        onValueChange={(v) => setParam("modality", v)}
-      >
-        <SelectTrigger className="h-8 w-[150px] text-xs">
-          <SelectValue placeholder="Modalidade" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>Todas as modalidades</SelectItem>
-          {modalities.map((m) => (
-            <SelectItem key={m.value} value={m.value}>
-              {m.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <MultiSelectPopover
+        options={modalities}
+        selected={current.modalities}
+        onChange={(v) => setMulti("modality", v)}
+        allLabel="Todas as modalidades"
+        width="w-[150px]"
+        triggerClassName="h-8 text-xs"
+      />
 
       {sellers.length > 0 ? (
-        <Select
-          value={current.seller ?? ALL_VALUE}
-          onValueChange={(v) => setParam("seller", v)}
-        >
-          <SelectTrigger className="h-8 w-[150px] text-xs">
-            <SelectValue placeholder="Vendedora" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todas as vendedoras</SelectItem>
-            {sellers.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectPopover
+          options={sellers}
+          selected={current.sellers}
+          onChange={(v) => setMulti("seller", v)}
+          allLabel="Todas as vendedoras"
+          width="w-[150px]"
+          triggerClassName="h-8 text-xs"
+        />
       ) : null}
 
       {tags.length > 0 ? (
-        <Select
-          value={current.tag ?? ALL_VALUE}
-          onValueChange={(v) => setParam("tag", v)}
-        >
-          <SelectTrigger className="h-8 w-[150px] text-xs">
-            <SelectValue placeholder="Tag" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todas as tags</SelectItem>
-            {tags.map((t) => (
-              <SelectItem key={t} value={t}>
-                {t}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectPopover
+          options={tags.map((t) => ({ value: t, label: t }))}
+          selected={current.tags}
+          onChange={(v) => setMulti("tag", v)}
+          allLabel="Todas as tags"
+          width="w-[150px]"
+          triggerClassName="h-8 text-xs"
+        />
       ) : null}
 
       {activeCount > 0 ? (

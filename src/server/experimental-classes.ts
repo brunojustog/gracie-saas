@@ -4,7 +4,11 @@
  * Política de visibilidade (v1.1-O): qualquer role do tenant vê todas
  * as aulas do tenant. Espelha leads.ts/enrollments.ts.
  */
-import type { Prisma, TenantUser } from "@prisma/client";
+import type {
+  ExperimentalClassStatus,
+  Prisma,
+  TenantUser,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -52,8 +56,8 @@ export async function getClassesForCalendar(
  */
 export type ClassListFilters = {
   search?: string;
-  status?: Prisma.ExperimentalClassWhereInput["status"];
-  modalityId?: string;
+  statuses?: ExperimentalClassStatus[];
+  modalityIds?: string[];
   from?: Date;
   to?: Date;
 };
@@ -63,8 +67,10 @@ export async function getClassesForList(
   filters: ClassListFilters = {},
 ) {
   const where: Prisma.ExperimentalClassWhereInput = scopedClassWhere(membership);
-  if (filters.status) where.status = filters.status;
-  if (filters.modalityId) where.modalityId = filters.modalityId;
+  if (filters.statuses?.length) where.status = { in: filters.statuses };
+  if (filters.modalityIds?.length) {
+    where.modalityId = { in: filters.modalityIds };
+  }
   if (filters.from || filters.to) {
     where.scheduledDate = {
       ...(filters.from ? { gte: filters.from } : {}),
