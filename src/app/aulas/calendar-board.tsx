@@ -14,6 +14,8 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import type { ExperimentalClassStatus } from "@prisma/client";
 import { useMemo, useState } from "react";
 
+import { DrillNumber, type DrillItem } from "@/components/drill-number";
+
 import { ClassActionsModal } from "./class-actions-modal";
 import { ManageScheduleModal } from "./manage-schedule-modal";
 import { ScheduleModal } from "./schedule-modal";
@@ -205,17 +207,41 @@ export function CalendarBoard({
     const notCanceled = inRange.filter((c) => c.status !== "CANCELED");
     const isOpen = (c: CalendarClass) =>
       c.status === "SCHEDULED" || c.status === "CONFIRMED";
+    // Drill-down (v1.1-AY): cada chip vira clicável e abre os nomes.
+    const toItem = (c: CalendarClass): DrillItem => ({
+      id: c.id,
+      name: c.lead.name,
+      sub: `${new Date(c.scheduledDate).toLocaleString("pt-BR", {
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })} · ${c.modality.name}`,
+      href: `/kanban?q=${encodeURIComponent(c.lead.name)}`,
+    });
+    const attended = notCanceled.filter((c) => c.status === "ATTENDED");
+    const noShow = notCanceled.filter((c) => c.status === "NO_SHOW");
+    const rescheduled = notCanceled.filter((c) => c.status === "RESCHEDULED");
+    const upcoming = notCanceled.filter(
+      (c) => isOpen(c) && new Date(c.scheduledDate) > now,
+    );
+    const unregistered = notCanceled.filter(
+      (c) => isOpen(c) && new Date(c.scheduledDate) <= now,
+    );
     return {
       total: notCanceled.length,
-      attended: notCanceled.filter((c) => c.status === "ATTENDED").length,
-      noShow: notCanceled.filter((c) => c.status === "NO_SHOW").length,
-      rescheduled: notCanceled.filter((c) => c.status === "RESCHEDULED").length,
-      upcoming: notCanceled.filter(
-        (c) => isOpen(c) && new Date(c.scheduledDate) > now,
-      ).length,
-      unregistered: notCanceled.filter(
-        (c) => isOpen(c) && new Date(c.scheduledDate) <= now,
-      ).length,
+      totalItems: notCanceled.map(toItem),
+      attended: attended.length,
+      attendedItems: attended.map(toItem),
+      noShow: noShow.length,
+      noShowItems: noShow.map(toItem),
+      rescheduled: rescheduled.length,
+      rescheduledItems: rescheduled.map(toItem),
+      upcoming: upcoming.length,
+      upcomingItems: upcoming.map(toItem),
+      unregistered: unregistered.length,
+      unregisteredItems: unregistered.map(toItem),
       viewType: visibleRange.viewType,
     };
   }, [classes, visibleRange]);
@@ -232,43 +258,49 @@ export function CalendarBoard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         {visibleStats ? (
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span
+            <DrillNumber
+              variant="plain"
+              title={`Aulas ${periodLabel}`}
+              items={visibleStats.totalItems}
               className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary"
-              title={`Total de aulas experimentais ${periodLabel} (canceladas não contam)`}
-            >
-              {visibleStats.total} {periodLabel}
-            </span>
-            <span
+              value={`${visibleStats.total} ${periodLabel}`}
+            />
+            <DrillNumber
+              variant="plain"
+              title="Compareceram"
+              items={visibleStats.attendedItems}
               className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-              title="Comparecimentos registrados"
-            >
-              ✓ {visibleStats.attended} compareceram
-            </span>
-            <span
+              value={`✓ ${visibleStats.attended} compareceram`}
+            />
+            <DrillNumber
+              variant="plain"
+              title="Faltas"
+              items={visibleStats.noShowItems}
               className="rounded-full bg-red-100 px-2.5 py-1 font-medium text-red-800 dark:bg-red-900/40 dark:text-red-200"
-              title="Faltas registradas (no-show)"
-            >
-              ✗ {visibleStats.noShow} falta{visibleStats.noShow === 1 ? "" : "s"}
-            </span>
-            <span
+              value={`✗ ${visibleStats.noShow} falta${visibleStats.noShow === 1 ? "" : "s"}`}
+            />
+            <DrillNumber
+              variant="plain"
+              title="Reagendadas"
+              items={visibleStats.rescheduledItems}
               className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-              title="Aulas remarcadas pra outra data"
-            >
-              ↻ {visibleStats.rescheduled} reagendada{visibleStats.rescheduled === 1 ? "" : "s"}
-            </span>
-            <span
+              value={`↻ ${visibleStats.rescheduled} reagendada${visibleStats.rescheduled === 1 ? "" : "s"}`}
+            />
+            <DrillNumber
+              variant="plain"
+              title="Futuras"
+              items={visibleStats.upcomingItems}
               className="rounded-full bg-sky-100 px-2.5 py-1 font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200"
-              title="Aulas agendadas/confirmadas que ainda vão acontecer"
-            >
-              → {visibleStats.upcoming} futura{visibleStats.upcoming === 1 ? "" : "s"}
-            </span>
+              value={`→ ${visibleStats.upcoming} futura${visibleStats.upcoming === 1 ? "" : "s"}`}
+            />
             {visibleStats.unregistered > 0 ? (
-              <span
+              <DrillNumber
+                variant="plain"
+                title="Sem registro — marque comparecimento ou falta"
+                items={visibleStats.unregisteredItems}
                 className="rounded-full bg-zinc-200 px-2.5 py-1 font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                title="Aulas que já passaram sem resultado registrado — marque comparecimento ou falta clicando na aula"
-              >
-                ! {visibleStats.unregistered} sem registro
-              </span>
+                value={`! ${visibleStats.unregistered} sem registro`}
+              />
             ) : null}
           </div>
         ) : (

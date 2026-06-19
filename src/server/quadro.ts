@@ -88,7 +88,7 @@ export async function getQuadroData(tenantId: string) {
 
   const [
     activeEnrollments,
-    canceledCount,
+    canceledEnrollments,
     allEnrollments,
     salesEnrollments,
     attendedClasses,
@@ -96,22 +96,34 @@ export async function getQuadroData(tenantId: string) {
     agendaClasses,
     privateRevenue,
     privateCounts,
+    privateActiveRows,
   ] = await Promise.all([
-    // Matrículas ativas (gênero + kids + plano + pagamento + vencimento)
+    // Matrículas ativas (gênero + kids + plano + pagamento + vencimento +
+    // nome do aluno pro drill-down v1.1-AY).
     prisma.enrollment.findMany({
       where: { tenantId, status: "ACTIVE" },
       select: {
+        id: true,
         nextDueDate: true,
         paymentMethod: true,
         monthlyValue: true,
         plan: { select: { id: true, name: true } },
         modality: { select: { isKids: true } },
-        lead: { select: { gender: true } },
+        lead: { select: { name: true, gender: true } },
       },
+      orderBy: { lead: { name: "asc" } },
     }),
     // Cancelamentos na vida da academia — inclui JUDICIAL (v1.1-AU).
-    prisma.enrollment.count({
+    // findMany (em vez de count) pra alimentar o drill-down de nomes.
+    prisma.enrollment.findMany({
       where: { tenantId, status: { in: ["CANCELED", "JUDICIAL"] } },
+      select: {
+        id: true,
+        status: true,
+        canceledAt: true,
+        lead: { select: { name: true } },
+      },
+      orderBy: { canceledAt: "desc" },
     }),
     // Todas as matrículas (pra crescimento + churn mês a mês)
     prisma.enrollment.findMany({
@@ -180,9 +192,26 @@ export async function getQuadroData(tenantId: string) {
     // Receita de aulas particulares (v1.1-AO)
     getPrivateRevenue(tenantId, monthStart, nextMonthStart),
     getPrivatePackageCounts(tenantId),
+    // Pacotes particulares em andamento — nomes pro drill-down (v1.1-AY).
+    prisma.privatePackage.findMany({
+      where: { tenantId, status: "ACTIVE" },
+      select: {
+        id: true,
+        totalClasses: true,
+        lead: { select: { name: true } },
+        modality: { select: { name: true } },
+      },
+      orderBy: { startDate: "desc" },
+    }),
   ]);
 
   // ── Bloco "Número de matrículas" ─────────────────────────────────────────
+  // Drill-down (v1.1-AY): além das contagens, junta os NOMES por bucket pra
+  // o número clicável abrir a lista de quem está por trás dele.
+  type Name = { id: string; name: string; sub?: string | null; href?: string };
+  const enrollHref = (name: string) =>
+    `/matriculas?q=${encodeURIComponent(name)}`;
+
   const adults = emptySplit();
   const kids = emptySplit();
   let overdue = 0;
@@ -190,19 +219,84 @@ export async function getQuadroData(tenantId: string) {
   const byPlan = new Map<string, number>();
   const byPayment = new Map<string, number>();
 
+  const activeNames: Name[] = [];
+  const overdueNames: Name[] = [];
+  const adultsNames: { female: Name[]; male: Name[]; unknown: Name[] } = {
+    female: [],
+    male: [],
+    unknown: [],
+  };
+  const kidsNames: { female: Name[]; male: Name[]; unknown: Name[] } = {
+    female: [],
+    male: [],
+    unknown: [],
+  };
+  const planNames = new Map<string, Name[]>();
+  const paymentNames = new Map<string, Name[]>();
+
   for (const e of activeEnrollments) {
-    if (isOverdue(e.nextDueDate, now)) overdue++;
+    const item: Name = {
+      id: e.id,
+      name: e.lead.name,
+      sub: e.plan.name,
+      href: enrollHref(e.lead.name),
+    };
+    activeNames.push(item);
+    if (isOverdue(e.nextDueDate, now)) {
+      overdue++;
+      overdueNames.push({
+        ...item,
+        sub: e.nextDueDate
+          ? `venceu ${format(e.nextDueDate, "dd/MM", { locale: ptBR })}`
+          : "sem vencimento",
+      });
+    }
     monthlyRecurring += Number(e.monthlyValue);
-    const bucket = e.modality.isKids ? kids : adults;
-    if (e.lead.gender === "FEMALE") bucket.female++;
-    else if (e.lead.gender === "MALE") bucket.male++;
-    else bucket.unknown++;
+
+    const isKids = e.modality.isKids;
+    const bucket = isKids ? kids : adults;
+    const namesBucket = isKids ? kidsNames : adultsNames;
+    if (e.lead.gender === "FEMALE") {
+      bucket.female++;
+      namesBucket.female.push(item);
+    } else if (e.lead.gender === "MALE") {
+      bucket.male++;
+      namesBucket.male.push(item);
+    } else {
+      bucket.unknown++;
+      namesBucket.unknown.push(item);
+    }
+
     byPlan.set(e.plan.name, (byPlan.get(e.plan.name) ?? 0) + 1);
+    if (!planNames.has(e.plan.name)) planNames.set(e.plan.name, []);
+    planNames.get(e.plan.name)!.push(item);
+
     byPayment.set(e.paymentMethod, (byPayment.get(e.paymentMethod) ?? 0) + 1);
+    if (!paymentNames.has(e.paymentMethod)) paymentNames.set(e.paymentMethod, []);
+    paymentNames.get(e.paymentMethod)!.push(item);
   }
   const totalActive = activeEnrollments.length;
   const totalAdults = adults.female + adults.male + adults.unknown;
   const totalKids = kids.female + kids.male + kids.unknown;
+
+  // Nomes de cancelados/judicial e particulares ativos (drill-down).
+  const STATUS_PT: Record<string, string> = {
+    CANCELED: "Cancelada",
+    JUDICIAL: "Judicial",
+  };
+  const canceledNames: Name[] = canceledEnrollments.map((e) => ({
+    id: e.id,
+    name: e.lead.name,
+    sub: e.canceledAt
+      ? `${STATUS_PT[e.status] ?? e.status} · ${format(e.canceledAt, "dd/MM/yy", { locale: ptBR })}`
+      : (STATUS_PT[e.status] ?? e.status),
+    href: enrollHref(e.lead.name),
+  }));
+  const privateActiveNames: Name[] = privateActiveRows.map((p) => ({
+    id: p.id,
+    name: p.lead.name,
+    sub: `${p.modality?.name ?? "—"} · ${p.totalClasses} aulas`,
+  }));
 
   // ── Crescimento (ativos no 1º dia de cada mês) + churn mensal ────────────
   const months = lastMonthStarts(now, 6);
@@ -325,7 +419,7 @@ export async function getQuadroData(tenantId: string) {
     pagamento: [...byPayment.entries()]
       .map(([method, count]) => ({ method, count }))
       .sort((a, b) => b.count - a.count),
-    cancelamentos: canceledCount,
+    cancelamentos: canceledEnrollments.length,
     // Aulas particulares (v1.1-AV) — SEPARADO dos mensalistas + total geral.
     particulares: {
       ativos: privateCounts.active,
@@ -333,6 +427,17 @@ export async function getQuadroData(tenantId: string) {
       cancelados: privateCounts.canceled,
     },
     totalGeralAlunos: totalActive + privateCounts.active,
+    // Drill-down (v1.1-AY): nomes por trás de cada número clicável do Quadro.
+    names: {
+      ativos: activeNames,
+      overdue: overdueNames,
+      adults: adultsNames,
+      kids: kidsNames,
+      byPlan: Object.fromEntries(planNames),
+      byPayment: Object.fromEntries(paymentNames),
+      cancelamentos: canceledNames,
+      particularesAtivos: privateActiveNames,
+    },
     growth,
     salesMonthLabels: salesMonths.map((m) => format(m, "MMM/yy", { locale: ptBR })),
     sellerRanking,

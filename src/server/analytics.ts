@@ -296,6 +296,88 @@ export async function getDashboardData(
         }),
   ]);
 
+  // Drill-down (v1.1-AY): nomes por trás dos 4 KPIs baseados em entidade,
+  // só do período corrente. Cada item linka pro lead/matrícula.
+  const [
+    leadsNewRows,
+    classesScheduledRows,
+    attendedRows,
+    enrollmentRows,
+  ] = await Promise.all([
+    prisma.lead.findMany({
+      where: { ...leadWhereBase, firstInteractionAt: { gte: period.from, lte: period.to } },
+      select: { id: true, name: true },
+      orderBy: { firstInteractionAt: "desc" },
+    }),
+    prisma.experimentalClass.findMany({
+      where: { tenantId, ...leadFilter, scheduledDate: { gte: period.from, lte: period.to } },
+      select: {
+        id: true,
+        scheduledDate: true,
+        lead: { select: { name: true } },
+        modality: { select: { name: true } },
+      },
+      orderBy: { scheduledDate: "desc" },
+    }),
+    prisma.experimentalClass.findMany({
+      where: {
+        tenantId,
+        ...leadFilter,
+        status: "ATTENDED",
+        attendedAt: { gte: period.from, lte: period.to },
+      },
+      select: {
+        id: true,
+        attendedAt: true,
+        lead: { select: { name: true } },
+        modality: { select: { name: true } },
+      },
+      orderBy: { attendedAt: "desc" },
+    }),
+    prisma.enrollment.findMany({
+      where: {
+        tenantId,
+        ...leadFilter,
+        status: "ACTIVE",
+        enrolledAt: { gte: period.from, lte: period.to },
+      },
+      select: {
+        id: true,
+        lead: { select: { name: true } },
+        plan: { select: { name: true } },
+      },
+      orderBy: { enrolledAt: "desc" },
+    }),
+  ]);
+
+  const fmtDay = (d: Date | null) =>
+    d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : null;
+  const kpiNames = {
+    leadsNew: leadsNewRows.map((l) => ({
+      id: l.id,
+      name: l.name,
+      href: `/kanban?q=${encodeURIComponent(l.name)}`,
+    })),
+    classesScheduled: classesScheduledRows.map((c) => ({
+      id: c.id,
+      name: c.lead.name,
+      sub: `${fmtDay(c.scheduledDate)} · ${c.modality.name}`,
+      href: `/kanban?q=${encodeURIComponent(c.lead.name)}`,
+    })),
+    attended: attendedRows.map((c) => ({
+      id: c.id,
+      name: c.lead.name,
+      sub: `${fmtDay(c.attendedAt)} · ${c.modality.name}`,
+      href: `/kanban?q=${encodeURIComponent(c.lead.name)}`,
+    })),
+    enrollments: enrollmentRows.map((e) => ({
+      id: e.id,
+      name: e.lead.name,
+      sub: e.plan.name,
+      href: `/matriculas?q=${encodeURIComponent(e.lead.name)}`,
+    })),
+  };
+
   const leadsToSeller = isSeller
     ? new Map<string, string>()
     : await prisma.lead
@@ -442,6 +524,7 @@ export async function getDashboardData(
         leadsPrev > 0 ? (enrollmentsPrev / leadsPrev) * 100 : null,
       avgFirstResponseSeconds,
     },
+    kpiNames,
     funnel,
     conversionFunnel,
     conversionByOrigin,

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { DrillNumber, type DrillItem } from "@/components/drill-number";
 import { TopNav } from "@/components/top-nav";
 import { parseDashboardFilters } from "@/lib/analytics-filters";
 import {
@@ -391,7 +392,7 @@ function KPICards({
   data: Awaited<ReturnType<typeof getDashboardData>>;
   isSeller: boolean;
 }) {
-  const { kpis } = data;
+  const { kpis, kpiNames } = data;
   // Layout: pra ADMIN/MANAGER são 7 KPIs (cabe em 4+3 nos breakpoints xl).
   // Pra SELLER são 6 (sem receita). Em sm/lg cresce em colunas menores.
   return (
@@ -404,6 +405,7 @@ function KPICards({
         label="Leads novos"
         value={kpis.leadsNew.current}
         previous={kpis.leadsNew.previous}
+        items={kpiNames.leadsNew}
       />
       <KPI
         label="Tempo de resposta"
@@ -415,16 +417,19 @@ function KPICards({
         label="Aulas agendadas"
         value={kpis.classesScheduled.current}
         previous={kpis.classesScheduled.previous}
+        items={kpiNames.classesScheduled}
       />
       <KPI
         label="Comparecimentos"
         value={kpis.attended.current}
         previous={kpis.attended.previous}
+        items={kpiNames.attended}
       />
       <KPI
         label="Matrículas"
         value={kpis.enrollments.current}
         previous={kpis.enrollments.previous}
+        items={kpiNames.enrollments}
       />
       <KPI
         label="Conversão"
@@ -452,6 +457,7 @@ function KPI({
   format = "number",
   formatRaw,
   hint,
+  items,
 }: {
   label: string;
   value: number | null;
@@ -459,6 +465,8 @@ function KPI({
   format?: "number" | "currency" | "percent";
   formatRaw?: (v: number | null) => string;
   hint?: string;
+  /** v1.1-AY: nomes pro drill-down ao clicar no número. */
+  items?: DrillItem[];
 }) {
   const display = formatRaw
     ? formatRaw(value)
@@ -480,7 +488,13 @@ function KPI({
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
-      <div className="mt-1 text-2xl font-semibold leading-tight">{display}</div>
+      <div className="mt-1 text-2xl font-semibold leading-tight">
+        {items && items.length > 0 ? (
+          <DrillNumber value={display} title={label} items={items} />
+        ) : (
+          display
+        )}
+      </div>
       <div className="mt-1 text-[11px] text-muted-foreground">
         {variation === null ? (
           hint ?? <span>&nbsp;</span>

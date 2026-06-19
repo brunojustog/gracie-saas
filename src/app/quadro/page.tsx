@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
+import { DrillNumber, type DrillItem } from "@/components/drill-number";
 import { TopNav } from "@/components/top-nav";
 import { signOut } from "@/server/auth";
 import { getQuadroData } from "@/server/quadro";
@@ -67,26 +68,27 @@ export default async function QuadroPage() {
           <Panel title="Número de matrículas">
             <table className="w-full text-sm">
               <tbody>
-                <Row label="Total de alunos ativos" value={data.matriculas.totalActive} strong />
+                <Row label="Total de alunos ativos" value={data.matriculas.totalActive} strong items={data.names.ativos} />
                 <Row
                   label="Ativos inadimplentes"
                   value={data.matriculas.overdue}
                   hint="estão dentro do total acima"
                   tone={data.matriculas.overdue > 0 ? "red" : undefined}
+                  items={data.names.overdue}
                 />
                 <Spacer />
-                <Row label="Total adultos" value={data.matriculas.adults.total} strong />
-                <Row label="Mulheres" value={data.matriculas.adults.female} indent />
-                <Row label="Homens" value={data.matriculas.adults.male} indent />
+                <Row label="Total adultos" value={data.matriculas.adults.total} strong items={[...data.names.adults.female, ...data.names.adults.male, ...data.names.adults.unknown]} />
+                <Row label="Mulheres" value={data.matriculas.adults.female} indent items={data.names.adults.female} />
+                <Row label="Homens" value={data.matriculas.adults.male} indent items={data.names.adults.male} />
                 {data.matriculas.adults.unknown > 0 ? (
-                  <Row label="Sem gênero informado" value={data.matriculas.adults.unknown} indent muted />
+                  <Row label="Sem gênero informado" value={data.matriculas.adults.unknown} indent muted items={data.names.adults.unknown} />
                 ) : null}
                 <Spacer />
-                <Row label="Total kids" value={data.matriculas.kids.total} strong />
-                <Row label="Meninas" value={data.matriculas.kids.female} indent />
-                <Row label="Meninos" value={data.matriculas.kids.male} indent />
+                <Row label="Total kids" value={data.matriculas.kids.total} strong items={[...data.names.kids.female, ...data.names.kids.male, ...data.names.kids.unknown]} />
+                <Row label="Meninas" value={data.matriculas.kids.female} indent items={data.names.kids.female} />
+                <Row label="Meninos" value={data.matriculas.kids.male} indent items={data.names.kids.male} />
                 {data.matriculas.kids.unknown > 0 ? (
-                  <Row label="Sem gênero informado" value={data.matriculas.kids.unknown} indent muted />
+                  <Row label="Sem gênero informado" value={data.matriculas.kids.unknown} indent muted items={data.names.kids.unknown} />
                 ) : null}
               </tbody>
             </table>
@@ -99,7 +101,11 @@ export default async function QuadroPage() {
           <div className="space-y-4">
             <Panel title="Planos" subtitle="Matrículas ativas por plano">
               <KeyValueList
-                rows={data.planos.map((p) => ({ label: p.name, value: p.count }))}
+                rows={data.planos.map((p) => ({
+                  label: p.name,
+                  value: p.count,
+                  items: data.names.byPlan[p.name] ?? [],
+                }))}
                 emptyLabel="Nenhuma matrícula ativa."
               />
             </Panel>
@@ -108,13 +114,19 @@ export default async function QuadroPage() {
                 rows={data.pagamento.map((p) => ({
                   label: PAYMENT_LABEL[p.method] ?? p.method,
                   value: p.count,
+                  items: data.names.byPayment[p.method] ?? [],
                 }))}
                 emptyLabel="Nenhuma matrícula ativa."
               />
             </Panel>
             <Panel title="Cancelamentos">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-semibold">{data.cancelamentos}</span>
+                <DrillNumber
+                  value={data.cancelamentos}
+                  title="Cancelamentos"
+                  items={data.names.cancelamentos}
+                  className="text-3xl font-semibold"
+                />
                 <span className="text-xs text-muted-foreground">
                   total na vida da academia
                 </span>
@@ -163,7 +175,12 @@ export default async function QuadroPage() {
           >
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="rounded border bg-muted/40 p-3">
-                <div className="text-2xl font-semibold">{data.particulares.ativos}</div>
+                <DrillNumber
+                  value={data.particulares.ativos}
+                  title="Aulas particulares em andamento"
+                  items={data.names.particularesAtivos}
+                  className="text-2xl font-semibold"
+                />
                 <div className="text-[11px] uppercase text-muted-foreground">Em andamento</div>
               </div>
               <div className="rounded border bg-muted/40 p-3">
@@ -181,7 +198,12 @@ export default async function QuadroPage() {
             subtitle="Mensalistas ativos + alunos de aula particular (visão somada)"
           >
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-semibold">{data.totalGeralAlunos}</span>
+              <DrillNumber
+                value={data.totalGeralAlunos}
+                title="Total geral de alunos"
+                items={[...data.names.ativos, ...data.names.particularesAtivos]}
+                className="text-3xl font-semibold"
+              />
               <span className="text-xs text-muted-foreground">
                 {data.matriculas.totalActive} mensalistas + {data.particulares.ativos} particulares
               </span>
@@ -287,7 +309,17 @@ export default async function QuadroPage() {
             subtitle="Fizeram aula experimental, ainda sem matrícula e não perdidos"
           >
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-semibold">{data.posExperimental.length}</span>
+              <DrillNumber
+                value={data.posExperimental.length}
+                title="Pós-experimental em conversa"
+                items={data.posExperimental.map((l) => ({
+                  id: l.id,
+                  name: l.name,
+                  sub: l.stage,
+                  href: `/kanban?q=${encodeURIComponent(l.name)}`,
+                }))}
+                className="text-3xl font-semibold"
+              />
               <span className="text-xs text-muted-foreground">
                 em conversa · {data.posExpLastWeek} fizeram aula na última semana
               </span>
@@ -383,6 +415,7 @@ function Row({
   muted,
   hint,
   tone,
+  items,
 }: {
   label: string;
   value: number;
@@ -391,6 +424,8 @@ function Row({
   muted?: boolean;
   hint?: string;
   tone?: "red";
+  /** v1.1-AY: nomes pro drill-down ao clicar no número. */
+  items?: DrillItem[];
 }) {
   return (
     <tr className="border-b last:border-0">
@@ -399,7 +434,11 @@ function Row({
         {hint ? <span className="ml-1 text-[11px] text-muted-foreground">({hint})</span> : null}
       </td>
       <td className={`py-1.5 text-right tabular-nums ${strong ? "font-semibold" : ""} ${tone === "red" ? "text-red-700 dark:text-red-300" : ""}`}>
-        {value}
+        {items ? (
+          <DrillNumber value={value} title={label} items={items} />
+        ) : (
+          value
+        )}
       </td>
     </tr>
   );
@@ -417,7 +456,7 @@ function KeyValueList({
   rows,
   emptyLabel,
 }: {
-  rows: Array<{ label: string; value: number }>;
+  rows: Array<{ label: string; value: number; items?: DrillItem[] }>;
   emptyLabel: string;
 }) {
   if (rows.length === 0) {
@@ -429,7 +468,13 @@ function KeyValueList({
         {rows.map((r) => (
           <tr key={r.label} className="border-b last:border-0">
             <td className="py-1.5">{r.label}</td>
-            <td className="py-1.5 text-right font-medium tabular-nums">{r.value}</td>
+            <td className="py-1.5 text-right font-medium tabular-nums">
+              {r.items ? (
+                <DrillNumber value={r.value} title={r.label} items={r.items} />
+              ) : (
+                r.value
+              )}
+            </td>
           </tr>
         ))}
       </tbody>
