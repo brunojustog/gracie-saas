@@ -1,6 +1,6 @@
 "use server";
 
-import { addMonths } from "date-fns";
+import { addDays, addMonths, differenceInCalendarDays, startOfDay } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -496,14 +496,18 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Congelar matrícula (= "aluno afastado")
+// Congelar matrícula (v1.1-AT) — continua ATIVA e cobrando; só marca o
+// período pra repor os dias no fim do contrato.
 // ──────────────────────────────────────────────────────────────────────────
 
-const SUSPENDED_TAG = "Congelado";
+const FROZEN_TAG = "Congelado";
+const FERIAS_LIMIT_DAYS = 30;
 
 const suspendSchema = z.object({
   enrollmentId: z.string().min(1),
   reason: z.string().min(1).max(2000),
+  /** DOENCA = repõe o tempo do atestado; FERIAS = limite de 30 dias. */
+  frozenKind: z.enum(["DOENCA", "FERIAS"]),
   /** Data prevista de retorno. ISO yyyy-mm-dd; null/undefined = sem prazo. */
   expectedReturnAt: z.string().date().nullable().optional(),
 });
@@ -516,55 +520,55 @@ export async function suspendEnrollment(input: unknown): Promise<ActionResult> {
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
   if (enrollment.status !== "ACTIVE") {
-    return {
-      ok: false,
-      error:
-        enrollment.status === "SUSPENDED"
-          ? "matrícula já está congelada"
-          : "só dá pra congelar matrícula ativa",
-    };
+    return { ok: false, error: "só dá pra congelar matrícula ativa" };
+  }
+  if (enrollment.suspendedAt) {
+    return { ok: false, error: "matrícula já está congelada" };
   }
 
   const expectedReturn = parsed.data.expectedReturnAt
     ? new Date(parsed.data.expectedReturnAt)
     : null;
+  const kindLabel = parsed.data.frozenKind === "FERIAS" ? "férias" : "doença";
 
   await prisma.$transaction(async (tx) => {
+    // Status PERMANECE ACTIVE — congelado só marca o período (segue contando
+    // como ativo e segue sendo cobrado). v1.1-AT.
     await tx.enrollment.update({
       where: { id: enrollment.id },
       data: {
-        status: "SUSPENDED",
         suspendedAt: new Date(),
         suspensionReason: parsed.data.reason,
+        frozenKind: parsed.data.frozenKind,
         expectedReturnAt: expectedReturn,
       },
     });
 
-    // Tag visual no lead pra deixar claro no kanban que o aluno está afastado.
     const lead = await tx.lead.findUnique({
       where: { id: enrollment.leadId },
       select: { tags: true },
     });
-    if (lead && !lead.tags.includes(SUSPENDED_TAG)) {
+    if (lead && !lead.tags.includes(FROZEN_TAG)) {
       await tx.lead.update({
         where: { id: enrollment.leadId },
-        data: { tags: [...lead.tags, SUSPENDED_TAG] },
+        data: { tags: [...lead.tags, FROZEN_TAG] },
       });
     }
 
     const returnLabel = expectedReturn
       ? ` (retorno previsto: ${expectedReturn.toLocaleDateString("pt-BR")})`
-      : " (sem prazo de retorno)";
+      : "";
     await appendLeadNote(
       {
         tenantId: tenant.id,
         leadId: enrollment.leadId,
         authorId: user.id,
         kind: "ENROLLMENT_SUSPENDED",
-        body: `Matrícula congelada — ${parsed.data.reason}${returnLabel}`,
+        body: `Congelado (${kindLabel}) — ${parsed.data.reason}${returnLabel}. Segue ativo e cobrando; dias serão repostos no fim do contrato.`,
         metadata: {
           enrollmentId: enrollment.id,
           reason: parsed.data.reason,
+          frozenKind: parsed.data.frozenKind,
           expectedReturnAt: expectedReturn?.toISOString() ?? null,
         },
       },
@@ -574,11 +578,12 @@ export async function suspendEnrollment(input: unknown): Promise<ActionResult> {
 
   revalidatePath("/matriculas");
   revalidatePath("/kanban");
+  revalidatePath("/quadro");
   return { ok: true, enrollmentId: enrollment.id };
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Reativar matrícula (sai de SUSPENDED → ACTIVE)
+// Descongelar (v1.1-AT) — acumula os dias congelados e estende o contrato.
 // ──────────────────────────────────────────────────────────────────────────
 
 const reactivateSchema = z.object({
@@ -592,36 +597,44 @@ export async function reactivateEnrollment(input: unknown): Promise<ActionResult
   const { tenant, user, membership } = await requireTenantUser();
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
-  if (enrollment.status !== "SUSPENDED") {
-    return {
-      ok: false,
-      error:
-        enrollment.status === "ACTIVE"
-          ? "matrícula já está ativa"
-          : "matrícula cancelada não pode ser reativada — crie uma nova",
-    };
+  if (!enrollment.suspendedAt) {
+    return { ok: false, error: "matrícula não está congelada" };
   }
+
+  // Dias congelados (calendário). Férias é limitada a 30 dias; doença usa o
+  // período real (= tempo do atestado).
+  const rawDays = Math.max(
+    0,
+    differenceInCalendarDays(startOfDay(new Date()), startOfDay(enrollment.suspendedAt)),
+  );
+  const frozenDays =
+    enrollment.frozenKind === "FERIAS" ? Math.min(rawDays, FERIAS_LIMIT_DAYS) : rawDays;
+  const newTotal = enrollment.frozenDaysUsed + frozenDays;
+  const newContractEnd = enrollment.contractEndAt
+    ? addDays(enrollment.contractEndAt, frozenDays)
+    : null;
 
   await prisma.$transaction(async (tx) => {
     await tx.enrollment.update({
       where: { id: enrollment.id },
       data: {
-        status: "ACTIVE",
         suspendedAt: null,
         suspensionReason: null,
+        frozenKind: null,
         expectedReturnAt: null,
+        frozenDaysUsed: newTotal,
+        ...(newContractEnd ? { contractEndAt: newContractEnd } : {}),
       },
     });
 
-    // Remove a tag "Congelado" se estiver presente.
     const lead = await tx.lead.findUnique({
       where: { id: enrollment.leadId },
       select: { tags: true },
     });
-    if (lead?.tags.includes(SUSPENDED_TAG)) {
+    if (lead?.tags.includes(FROZEN_TAG)) {
       await tx.lead.update({
         where: { id: enrollment.leadId },
-        data: { tags: lead.tags.filter((t) => t !== SUSPENDED_TAG) },
+        data: { tags: lead.tags.filter((t) => t !== FROZEN_TAG) },
       });
     }
 
@@ -631,8 +644,8 @@ export async function reactivateEnrollment(input: unknown): Promise<ActionResult
         leadId: enrollment.leadId,
         authorId: user.id,
         kind: "ENROLLMENT_REACTIVATED",
-        body: "Matrícula reativada",
-        metadata: { enrollmentId: enrollment.id },
+        body: `Descongelado — ${frozenDays} dia(s) a repor (total acumulado: ${newTotal})${newContractEnd ? `; novo fim de contrato ${newContractEnd.toLocaleDateString("pt-BR")}` : ""}.`,
+        metadata: { enrollmentId: enrollment.id, frozenDays, frozenDaysTotal: newTotal },
       },
       tx,
     );
@@ -640,6 +653,64 @@ export async function reactivateEnrollment(input: unknown): Promise<ActionResult
 
   revalidatePath("/matriculas");
   revalidatePath("/kanban");
+  revalidatePath("/quadro");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Marcar como Judicial (v1.1-AU) — aluno que sumiu devendo (perda). Sai dos
+// ativos, conta como cancelamento, vai pra carteira jurídica separada.
+// ──────────────────────────────────────────────────────────────────────────
+
+const judicialSchema = z.object({
+  enrollmentId: z.string().min(1),
+  reason: z.string().max(2000).optional(),
+});
+
+export async function markEnrollmentJudicial(input: unknown): Promise<ActionResult> {
+  const parsed = judicialSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  if (enrollment.status === "JUDICIAL") {
+    return { ok: false, error: "matrícula já está em cobrança judicial" };
+  }
+  if (enrollment.status === "CANCELED") {
+    return { ok: false, error: "matrícula cancelada — não dá pra mover pra judicial" };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
+        status: "JUDICIAL",
+        canceledAt: enrollment.canceledAt ?? new Date(),
+        // descongela se estava congelada
+        suspendedAt: null,
+        suspensionReason: null,
+        frozenKind: null,
+      },
+    });
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "ENROLLMENT_CANCELED",
+        body: parsed.data.reason
+          ? `Movido para cobrança judicial — ${parsed.data.reason}`
+          : "Movido para cobrança judicial (aluno sumiu devendo)",
+        metadata: { enrollmentId: enrollment.id, judicial: true, reason: parsed.data.reason ?? null },
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/quadro");
+  revalidatePath("/dashboard");
   return { ok: true, enrollmentId: enrollment.id };
 }
 

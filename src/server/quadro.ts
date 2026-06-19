@@ -108,8 +108,10 @@ export async function getQuadroData(tenantId: string) {
         lead: { select: { gender: true } },
       },
     }),
-    // Cancelamentos na vida da academia
-    prisma.enrollment.count({ where: { tenantId, status: "CANCELED" } }),
+    // Cancelamentos na vida da academia — inclui JUDICIAL (v1.1-AU).
+    prisma.enrollment.count({
+      where: { tenantId, status: { in: ["CANCELED", "JUDICIAL"] } },
+    }),
     // Todas as matrículas (pra crescimento + churn mês a mês)
     prisma.enrollment.findMany({
       where: { tenantId },
@@ -214,13 +216,10 @@ export async function getQuadroData(tenantId: string) {
     const newInMonth = allEnrollments.filter(
       (e) => e.enrolledAt >= mStart && e.enrolledAt < monthEnd,
     ).length;
-    // Congelamentos no mês (3º fluxo: nem novo, nem cancelamento).
+    // Congelamentos no mês (3º fluxo: nem novo, nem cancelamento). v1.1-AT:
+    // congelado é ACTIVE + suspendedAt, então conta por suspendedAt no mês.
     const frozenInMonth = allEnrollments.filter(
-      (e) =>
-        e.status === "SUSPENDED" &&
-        e.suspendedAt &&
-        e.suspendedAt >= mStart &&
-        e.suspendedAt < monthEnd,
+      (e) => e.suspendedAt && e.suspendedAt >= mStart && e.suspendedAt < monthEnd,
     ).length;
     return {
       label: format(mStart, "MMM/yy", { locale: ptBR }),

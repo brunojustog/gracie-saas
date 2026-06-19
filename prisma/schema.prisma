@@ -564,7 +564,14 @@ enum PaymentMethod {
 enum EnrollmentStatus {
   ACTIVE
   CANCELED
-  SUSPENDED
+  SUSPENDED // legado (v1.1-AT): congelado NÃO usa mais status — ver doc abaixo
+  /**
+   * v1.1-AU: aluno que sumiu devendo, não rescindiu (não pagou multa) e foi
+   * dado como perda. Sai dos ativos, CONTA como cancelamento no total, mas
+   * fica numa carteira separada pra cobrança jurídica (fora dos inadimplentes
+   * recuperáveis do dia-a-dia).
+   */
+  JUDICIAL
 }
 
 model Enrollment {
@@ -581,21 +588,29 @@ model Enrollment {
   observations  String?          @db.Text
 
   /**
-   * Congelamento de matrícula (= "aluno afastado" no vocabulário do tenant).
-   * Ciclo: ACTIVE → SUSPENDED (com motivo + retorno previsto) → ACTIVE de novo
-   *  ou → CANCELED se nunca voltar.
+   * Congelamento (v1.1-AT, redesenhado). REGRA NOVA: congelar é pra aluno
+   * com atestado (doença) ou férias e NÃO muda o status — a matrícula segue
+   * ACTIVE, continua contando como aluno ativo e continua sendo cobrada
+   * (não pausa vencimento). O sistema só acumula os DIAS congelados pra
+   * repor ao final do contrato.
    *
-   *   - suspendedAt: timestamp da última suspensão (null quando ACTIVE/CANCELED).
-   *   - suspensionReason: motivo livre (lesão, viagem, financeiro, …).
-   *   - expectedReturnAt: data prevista de retorno, opcional. Sem ela o card
-   *     fica "congelado sem prazo".
-   *
-   * Para histórico de múltiplos congelamentos, a sessão de "histórico de
-   * observações" (próxima) vai registrar cada evento separadamente.
+   *   - suspendedAt: início do congelamento atual (null = não está congelado).
+   *     "Congelado agora" = status ACTIVE && suspendedAt != null.
+   *   - suspensionReason: motivo livre.
+   *   - frozenKind: "DOENCA" (limite = tempo do atestado) ou "FERIAS" (limite 30d).
+   *   - expectedReturnAt: retorno previsto.
+   *   - frozenDaysUsed: total acumulado de dias já congelados (somado a cada
+   *     descongelamento) — é o que deve ser reposto no fim do contrato.
+   *   - contractEndAt: fim do contrato; ao descongelar, é estendido pelos
+   *     dias congelados. Null = sem data de fim (ex: mensal recorrente) —
+   *     nesse caso só o frozenDaysUsed importa como "dias a repor".
    */
   suspendedAt      DateTime?
   suspensionReason String?
+  frozenKind       String?
   expectedReturnAt DateTime?
+  frozenDaysUsed   Int       @default(0)
+  contractEndAt    DateTime?
 
   /**
    * v1.1-AB: próximo vencimento da mensalidade. Confirmar um pagamento

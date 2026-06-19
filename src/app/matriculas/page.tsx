@@ -1,10 +1,15 @@
-import type { EnrollmentStatus, Gender, PaymentMethod } from "@prisma/client";
+import type { Gender, PaymentMethod } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/top-nav";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
-import { getEnrollmentsForList, type DueFilter } from "@/server/enrollments";
+import {
+  getEnrollmentsForList,
+  getEnrollmentStatusCounts,
+  type DueFilter,
+  type StatusView,
+} from "@/server/enrollments";
 import { countOverdue } from "@/server/payments";
 import { requireTenantUser } from "@/server/tenant";
 
@@ -19,17 +24,21 @@ const VALID_PAYMENT_METHODS: PaymentMethod[] = [
   "TRANSFER",
   "OTHER",
 ];
+const VALID_STATUS_VIEWS: StatusView[] = ["ATIVA", "CONGELADA", "CANCELADA", "JUDICIAL"];
 
 type SearchParams = Promise<{
   q?: string;
-  modality?: string; // CSV multi-seleção: "id1,id2"
+  modality?: string; // CSV multi-seleção
   plan?: string;
-  payment?: string;
-  status?: EnrollmentStatus;
+  payment?: string; // CSV multi-seleção
+  status?: string; // CSV multi-seleção (ATIVA,CONGELADA,...)
   due?: string;
   gender?: string;
   dueDay?: string;
 }>;
+
+const csv = (v: string | undefined): string[] | undefined =>
+  v ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
 
 export default async function MatriculasPage({
   searchParams,
@@ -40,16 +49,17 @@ export default async function MatriculasPage({
   const sp = await searchParams;
   const isSeller = membership.role === "SELLER";
 
-  const paymentMethod = VALID_PAYMENT_METHODS.includes(sp.payment as PaymentMethod)
-    ? (sp.payment as PaymentMethod)
-    : undefined;
+  const paymentMethods = csv(sp.payment)?.filter((p): p is PaymentMethod =>
+    VALID_PAYMENT_METHODS.includes(p as PaymentMethod),
+  );
+  const statusViews = csv(sp.status)?.filter((s): s is StatusView =>
+    VALID_STATUS_VIEWS.includes(s as StatusView),
+  );
 
   const due: DueFilter | undefined =
     sp.due === "overdue" || sp.due === "due7" ? sp.due : undefined;
 
-  const modalityIds = sp.modality
-    ? sp.modality.split(",").map((s) => s.trim()).filter(Boolean)
-    : undefined;
+  const modalityIds = csv(sp.modality);
   const gender: Gender | undefined =
     sp.gender === "FEMALE" || sp.gender === "MALE" ? sp.gender : undefined;
   const dueDayNum = sp.dueDay ? Number(sp.dueDay) : NaN;
@@ -62,16 +72,17 @@ export default async function MatriculasPage({
     search: sp.q,
     modalityIds,
     planId: sp.plan,
-    paymentMethod,
-    status: sp.status,
+    paymentMethods,
+    statusViews,
     due,
     gender,
     dueDay,
   };
 
-  const [rows, overdueCount, modalities, plans, leadsForPicker] = await Promise.all([
+  const [rows, overdueCount, counts, modalities, plans, leadsForPicker] = await Promise.all([
     getEnrollmentsForList(membership, filters),
     countOverdue(membership),
+    getEnrollmentStatusCounts(membership),
     prisma.modality.findMany({
       where: { tenantId: tenant.id, active: true },
       orderBy: { name: "asc" },
@@ -94,14 +105,10 @@ export default async function MatriculasPage({
     }),
   ]);
 
-  const totalActive = rows.filter((r) => r.status === "ACTIVE").length;
-  // monthlyValue vem null pra SELLER (mascarado em getEnrollmentsForList);
-  // o reduce abaixo só roda pra ADMIN/MANAGER de qualquer forma.
-  const monthlyRevenue = isSeller
-    ? 0
-    : rows
-        .filter((r) => r.status === "ACTIVE")
-        .reduce((sum, r) => sum + Number(r.monthlyValue ?? 0), 0);
+  // KPIs globais (independem do filtro) — v1.1-AV. "Ativos" inclui congelados
+  // (que seguem ativos). "Cancelados" inclui judicial.
+  const totalActive = counts.totalAtivos;
+  const monthlyRevenue = isSeller ? 0 : counts.monthlyRevenue;
 
   return (
     <>
@@ -135,6 +142,11 @@ export default async function MatriculasPage({
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs uppercase text-muted-foreground">Ativas</div>
           <div className="mt-1 text-2xl font-semibold">{totalActive}</div>
+          {counts.congeladas > 0 ? (
+            <div className="text-[11px] text-muted-foreground">
+              inclui {counts.congeladas} congelada{counts.congeladas === 1 ? "" : "s"}
+            </div>
+          ) : null}
         </div>
         <a
           href="/matriculas?due=overdue"
@@ -157,12 +169,19 @@ export default async function MatriculasPage({
             </div>
           </div>
         )}
-        <div className="rounded-lg border bg-card p-4">
-          <div className="text-xs uppercase text-muted-foreground">Canceladas</div>
-          <div className="mt-1 text-2xl font-semibold">
-            {rows.filter((r) => r.status === "CANCELED").length}
-          </div>
-        </div>
+        <a
+          href="/matriculas?status=CANCELADA,JUDICIAL"
+          className="rounded-lg border bg-card p-4 transition-colors hover:bg-muted/40"
+          title="Ver canceladas e judiciais"
+        >
+          <div className="text-xs uppercase text-muted-foreground">Cancelamentos</div>
+          <div className="mt-1 text-2xl font-semibold">{counts.cancelamentosTotal}</div>
+          {counts.judicial > 0 ? (
+            <div className="text-[11px] text-muted-foreground">
+              {counts.judicial} judicial
+            </div>
+          ) : null}
+        </a>
       </section>
 
         <EnrollmentsToolbar
@@ -173,8 +192,8 @@ export default async function MatriculasPage({
             search: filters.search,
             modalityIds: filters.modalityIds,
             planId: filters.planId,
-            paymentMethod: filters.paymentMethod,
-            status: filters.status,
+            paymentMethods: filters.paymentMethods,
+            statusViews: filters.statusViews,
             due: filters.due,
             gender: filters.gender,
             dueDay: filters.dueDay,

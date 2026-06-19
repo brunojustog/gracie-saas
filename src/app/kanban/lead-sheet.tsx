@@ -1028,9 +1028,10 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
         : "border-amber-500/40 bg-amber-50 dark:bg-amber-950/30";
 
   const STATUS_LABEL: Record<typeof e.status, string> = {
-    ACTIVE: "ativa",
+    ACTIVE: e.suspendedAt ? "congelada" : "ativa",
     SUSPENDED: "congelada",
     CANCELED: "cancelada",
+    JUDICIAL: "judicial",
   };
 
   const handleReactivate = () => {
@@ -1072,13 +1073,11 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
           </span>
         </div>
 
-        {e.status === "SUSPENDED" ? (
+        {e.suspendedAt ? (
           <div className="space-y-0.5 border-t border-current/20 pt-2 text-xs">
             <div>
               <span className="text-muted-foreground">Congelada em:</span>{" "}
-              {e.suspendedAt
-                ? format(new Date(e.suspendedAt), "dd/MM/yyyy")
-                : "—"}
+              {format(new Date(e.suspendedAt), "dd/MM/yyyy")}
             </div>
             {e.suspensionReason ? (
               <div>
@@ -1100,9 +1099,18 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
           </div>
         ) : null}
 
-        {e.status !== "CANCELED" ? (
+        {e.status === "ACTIVE" ? (
           <div className="flex flex-wrap gap-2 border-t border-current/20 pt-2">
-            {e.status === "ACTIVE" ? (
+            {e.suspendedAt ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleReactivate}
+                disabled={pending}
+              >
+                {pending ? "Descongelando…" : "Descongelar"}
+              </Button>
+            ) : (
               <>
                 <Button
                   size="sm"
@@ -1122,15 +1130,6 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
                   Cancelar matrícula
                 </Button>
               </>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleReactivate}
-                disabled={pending}
-              >
-                {pending ? "Reativando…" : "Reativar"}
-              </Button>
             )}
           </div>
         ) : null}
@@ -1200,6 +1199,7 @@ function SuspendDialogBody({
   // Mount-on-open: o pai só renderiza este componente quando `open=true`,
   // então o state inicial vale a cada abertura sem precisar de useEffect.
   const [reason, setReason] = useState("");
+  const [frozenKind, setFrozenKind] = useState<"DOENCA" | "FERIAS">("DOENCA");
   const [expectedReturnAt, setExpectedReturnAt] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -1212,6 +1212,7 @@ function SuspendDialogBody({
       const result = await suspendEnrollment({
         enrollmentId,
         reason: reason.trim(),
+        frozenKind,
         expectedReturnAt: expectedReturnAt || null,
       });
       if (!result.ok) {
@@ -1228,11 +1229,28 @@ function SuspendDialogBody({
       <DialogHeader>
         <DialogTitle>Congelar matrícula</DialogTitle>
         <DialogDescription>
-          {leadName} — fica pausado até reativar manualmente. Lead recebe a tag &quot;Congelado&quot; no kanban.
+          {leadName} — continua ativo e cobrando; os dias congelados são
+          repostos no fim do contrato. Lead recebe a tag &quot;Congelado&quot;.
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="freeze-kind">Tipo</Label>
+          <Select
+            value={frozenKind}
+            onValueChange={(v) => setFrozenKind(v as "DOENCA" | "FERIAS")}
+            disabled={pending}
+          >
+            <SelectTrigger id="freeze-kind">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="DOENCA">Doença (repõe o tempo do atestado)</SelectItem>
+              <SelectItem value="FERIAS">Férias (limite de 30 dias)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1">
           <Label htmlFor="freeze-reason">
             Motivo <span className="text-red-500">*</span>
@@ -1242,7 +1260,7 @@ function SuspendDialogBody({
             value={reason}
             onChange={(ev) => setReason(ev.target.value)}
             rows={3}
-            placeholder="ex: lesão no joelho, viagem 3 meses, problemas financeiros…"
+            placeholder="ex: lesão no joelho, viagem 3 meses…"
             disabled={pending}
             autoFocus
           />
@@ -1256,9 +1274,6 @@ function SuspendDialogBody({
             onChange={(ev) => setExpectedReturnAt(ev.target.value)}
             disabled={pending}
           />
-          <p className="text-[11px] text-muted-foreground">
-            Sem data, fica como &quot;congelado sem prazo&quot;.
-          </p>
         </div>
       </div>
 

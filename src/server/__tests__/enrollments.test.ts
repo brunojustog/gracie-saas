@@ -48,17 +48,21 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
     expect(where).not.toHaveProperty("lead");
   });
 
-  it("filtro de status é aplicado pra todas as roles", () => {
-    const adminW = buildEnrollmentListWhere(
-      membershipFactory({ role: "ADMIN" }),
-      { status: "CANCELED" },
-    );
-    const sellerW = buildEnrollmentListWhere(
-      membershipFactory({ role: "SELLER" }),
-      { status: "CANCELED" },
-    );
-    expect(adminW.status).toBe("CANCELED");
-    expect(sellerW.status).toBe("CANCELED");
+  it("filtro de status (visão) vira OR de fragmentos", () => {
+    const w = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
+      statusViews: ["CANCELADA"],
+    });
+    expect(w.OR).toEqual([{ status: "CANCELED" }]);
+  });
+
+  it("congelada = ACTIVE + suspendedAt != null; judicial = status JUDICIAL", () => {
+    const w = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
+      statusViews: ["CONGELADA", "JUDICIAL"],
+    });
+    expect(w.OR).toEqual([
+      { status: "ACTIVE", suspendedAt: { not: null } },
+      { status: "JUDICIAL" },
+    ]);
   });
 
   it("search aplica em lead.name (case-insensitive) — mesma forma pra qualquer role", () => {
@@ -82,26 +86,24 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
     expect(where.planId).toBe("plan_anual");
   });
 
-  it("filtro paymentMethod é aplicado direto no where", () => {
+  it("multi-seleção de pagamento vira paymentMethod IN [...]", () => {
     const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
-      paymentMethod: "PIX",
+      paymentMethods: ["PIX", "CREDIT_CARD"],
     });
-    expect(where.paymentMethod).toBe("PIX");
+    expect(where.paymentMethod).toEqual({ in: ["PIX", "CREDIT_CARD"] });
   });
 
-  it("filtros combinados (modality + plan + payment + status) coexistem", () => {
+  it("filtros combinados (modality + plan + payment) coexistem", () => {
     const where = buildEnrollmentListWhere(membershipFactory({ role: "ADMIN" }), {
       modalityIds: ["mod_jiujitsu"],
       planId: "plan_mensal",
-      paymentMethod: "BOLETO",
-      status: "ACTIVE",
+      paymentMethods: ["BOLETO"],
     });
     expect(where).toMatchObject({
       tenantId: "tenant_gracie",
       modalityId: { in: ["mod_jiujitsu"] },
       planId: "plan_mensal",
-      paymentMethod: "BOLETO",
-      status: "ACTIVE",
+      paymentMethod: { in: ["BOLETO"] },
     });
   });
 

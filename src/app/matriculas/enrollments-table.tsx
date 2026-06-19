@@ -2,7 +2,7 @@
 
 import type { EnrollmentStatus, PaymentMethod } from "@prisma/client";
 import { differenceInCalendarDays, format, startOfDay } from "date-fns";
-import { Banknote, PencilLine, Play, Snowflake, XCircle } from "lucide-react";
+import { Banknote, Gavel, PencilLine, Play, Snowflake, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -20,6 +20,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
@@ -33,6 +40,7 @@ import {
 import {
   cancelEnrollment,
   confirmPayment,
+  markEnrollmentJudicial,
   reactivateEnrollment,
   suspendEnrollment,
 } from "./actions";
@@ -44,7 +52,10 @@ type Row = {
   canceledAt: Date | string | null;
   suspendedAt: Date | string | null;
   suspensionReason: string | null;
+  frozenKind: string | null;
   expectedReturnAt: Date | string | null;
+  frozenDaysUsed: number;
+  contractEndAt: Date | string | null;
   nextDueDate: Date | string | null;
   // null quando SELLER — backend mascara pra não vazar receita.
   monthlyValue: number | string | { toString(): string } | null;
@@ -64,12 +75,6 @@ type Row = {
   plan: { id: string; name: string };
 };
 
-const STATUS_TONE: Record<EnrollmentStatus, string> = {
-  ACTIVE: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200",
-  CANCELED: "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200",
-  SUSPENDED: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200",
-};
-
 const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   PIX: "Pix",
   CREDIT_CARD: "Cartão",
@@ -79,11 +84,22 @@ const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   OTHER: "Outro",
 };
 
-const STATUS_LABEL: Record<EnrollmentStatus, string> = {
-  ACTIVE: "ativa",
-  CANCELED: "cancelada",
-  SUSPENDED: "congelada",
-};
+/**
+ * Situação visual (v1.1-AT/AU): congelada deixou de ser status no banco
+ * (é ACTIVE + suspendedAt). Aqui derivamos o rótulo/cor.
+ */
+function statusView(r: { status: EnrollmentStatus; suspendedAt: Date | string | null }): {
+  label: string;
+  tone: string;
+} {
+  if (r.status === "CANCELED")
+    return { label: "cancelada", tone: "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200" };
+  if (r.status === "JUDICIAL")
+    return { label: "judicial", tone: "bg-purple-100 text-purple-900 dark:bg-purple-900/40 dark:text-purple-200" };
+  if (r.suspendedAt)
+    return { label: "congelada", tone: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" };
+  return { label: "ativa", tone: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" };
+}
 
 export function EnrollmentsTable({
   rows,
@@ -95,6 +111,7 @@ export function EnrollmentsTable({
   const router = useRouter();
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
   const [freezeTarget, setFreezeTarget] = useState<Row | null>(null);
+  const [judicialTarget, setJudicialTarget] = useState<Row | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [payTarget, setPayTarget] = useState<Row | null>(null);
   const [pending, startTransition] = useTransition();
@@ -197,21 +214,27 @@ export function EnrollmentsTable({
                     <DueDateCell row={r} />
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-0.5">
-                      <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[r.status]}`}>
-                        {STATUS_LABEL[r.status]}
-                      </span>
-                      {r.status === "SUSPENDED" && r.expectedReturnAt ? (
-                        <span className="text-[10px] text-muted-foreground" title={r.suspensionReason ?? undefined}>
-                          retorna {format(new Date(r.expectedReturnAt), "dd/MM/yyyy")}
-                        </span>
-                      ) : null}
-                      {r.status === "SUSPENDED" && !r.expectedReturnAt ? (
-                        <span className="text-[10px] text-muted-foreground" title={r.suspensionReason ?? undefined}>
-                          sem prazo de retorno
-                        </span>
-                      ) : null}
-                    </div>
+                    {(() => {
+                      const sv = statusView(r);
+                      const frozen = r.status === "ACTIVE" && r.suspendedAt;
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs ${sv.tone}`}>
+                            {sv.label}
+                          </span>
+                          {frozen && r.expectedReturnAt ? (
+                            <span className="text-[10px] text-muted-foreground" title={r.suspensionReason ?? undefined}>
+                              retorna {format(new Date(r.expectedReturnAt), "dd/MM/yyyy")}
+                            </span>
+                          ) : null}
+                          {r.frozenDaysUsed > 0 ? (
+                            <span className="text-[10px] text-muted-foreground">
+                              {r.frozenDaysUsed}d a repor
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-0.5">
@@ -226,7 +249,7 @@ export function EnrollmentsTable({
                       >
                         <PencilLine className="h-4 w-4" />
                       </Button>
-                      {r.status === "ACTIVE" ? (
+                      {r.status === "ACTIVE" && !r.suspendedAt ? (
                         <>
                           <Button
                             variant="ghost"
@@ -261,17 +284,28 @@ export function EnrollmentsTable({
                           >
                             <XCircle className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-950/40"
+                            onClick={() => setJudicialTarget(r)}
+                            disabled={pending}
+                            title="Mover para cobrança judicial"
+                            aria-label="Mover para cobrança judicial"
+                          >
+                            <Gavel className="h-4 w-4" />
+                          </Button>
                         </>
                       ) : null}
-                      {r.status === "SUSPENDED" ? (
+                      {r.status === "ACTIVE" && r.suspendedAt ? (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
                           onClick={() => handleReactivate(r)}
                           disabled={pending}
-                          title="Reativar matrícula"
-                          aria-label="Reativar matrícula"
+                          title="Descongelar matrícula"
+                          aria-label="Descongelar matrícula"
                         >
                           <Play className="h-4 w-4" />
                         </Button>
@@ -292,6 +326,10 @@ export function EnrollmentsTable({
       <FreezeDialog
         target={freezeTarget}
         onClose={() => setFreezeTarget(null)}
+      />
+      <JudicialDialog
+        target={judicialTarget}
+        onClose={() => setJudicialTarget(null)}
       />
       <ConfirmPaymentDialog
         target={payTarget}
@@ -543,6 +581,7 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
   // useState inicia natural a cada novo congelamento. Sem useEffect.
   const router = useRouter();
   const [reason, setReason] = useState("");
+  const [frozenKind, setFrozenKind] = useState<"DOENCA" | "FERIAS">("DOENCA");
   const [expectedReturnAt, setExpectedReturnAt] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -555,6 +594,7 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
       const result = await suspendEnrollment({
         enrollmentId: target.id,
         reason: reason.trim(),
+        frozenKind,
         expectedReturnAt: expectedReturnAt || null,
       });
       if (!result.ok) {
@@ -572,11 +612,28 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
       <DialogHeader>
         <DialogTitle>Congelar matrícula</DialogTitle>
         <DialogDescription>
-          {target.lead.name} — {target.modality.name} ({target.plan.name})
+          {target.lead.name} — continua ativo e cobrando; os dias congelados
+          são repostos no fim do contrato.
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="freeze-kind">Tipo</Label>
+          <Select
+            value={frozenKind}
+            onValueChange={(v) => setFrozenKind(v as "DOENCA" | "FERIAS")}
+            disabled={pending}
+          >
+            <SelectTrigger id="freeze-kind">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="DOENCA">Doença (repõe o tempo do atestado)</SelectItem>
+              <SelectItem value="FERIAS">Férias (limite de 30 dias)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1">
           <Label htmlFor="freeze-reason">
             Motivo <span className="text-red-500">*</span>
@@ -586,7 +643,7 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder="ex: lesão no joelho, viagem 3 meses, problemas financeiros…"
+            placeholder="ex: lesão no joelho, viagem 3 meses…"
             disabled={pending}
             autoFocus
           />
@@ -600,9 +657,6 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
             onChange={(e) => setExpectedReturnAt(e.target.value)}
             disabled={pending}
           />
-          <p className="text-[11px] text-muted-foreground">
-            Sem data, fica como &quot;congelado sem prazo&quot;.
-          </p>
         </div>
       </div>
 
@@ -612,6 +666,76 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
         </Button>
         <Button onClick={handleConfirm} disabled={pending}>
           {pending ? "Congelando…" : "Confirmar congelamento"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Judicial (v1.1-AU)
+// ──────────────────────────────────────────────────────────────────────────
+
+function JudicialDialog({ target, onClose }: { target: Row | null; onClose: () => void }) {
+  return (
+    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {target ? <JudicialBody key={target.id} target={target} onClose={onClose} /> : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function JudicialBody({ target, onClose }: { target: Row; onClose: () => void }) {
+  const router = useRouter();
+  const [reason, setReason] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const handleConfirm = () => {
+    startTransition(async () => {
+      const result = await markEnrollmentJudicial({
+        enrollmentId: target.id,
+        reason: reason.trim() || undefined,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Movido para cobrança judicial");
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Mover para cobrança judicial</DialogTitle>
+        <DialogDescription>
+          {target.lead.name} — sai dos alunos ativos e entra na carteira
+          jurídica (conta como cancelamento). Use pra quem sumiu devendo e não
+          pagou a multa.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-1">
+        <Label htmlFor="judicial-reason">Observação (opcional)</Label>
+        <Textarea
+          id="judicial-reason"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+          placeholder="ex: deve 3 mensalidades + kimono; sem retorno desde maio…"
+          disabled={pending}
+        />
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={pending}>
+          Voltar
+        </Button>
+        <Button variant="destructive" onClick={handleConfirm} disabled={pending}>
+          {pending ? "Movendo…" : "Confirmar (judicial)"}
         </Button>
       </DialogFooter>
     </>
