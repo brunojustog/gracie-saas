@@ -39,6 +39,7 @@ model User {
   authoredLeadNotes LeadNote[]
   confirmedPayments PaymentRecord[] @relation("PaymentConfirmedBy")
   soldPrivatePackages PrivatePackage[] @relation("PrivatePackageSeller")
+  soldLooseClasses    LooseClass[]     @relation("LooseClassSeller")
 }
 
 model Account {
@@ -155,6 +156,7 @@ model Tenant {
   leadNotes           LeadNote[]
   paymentRecords      PaymentRecord[]
   privatePackages     PrivatePackage[]
+  looseClasses        LooseClass[]
 }
 
 enum Role {
@@ -241,6 +243,7 @@ model Modality {
   experimentalClasses ExperimentalClass[]
   enrollments         Enrollment[]
   privatePackages     PrivatePackage[]
+  looseClasses        LooseClass[]
   classSchedules      ClassSchedule[]
 
   @@index([tenantId])
@@ -410,6 +413,7 @@ model Lead {
   sales               Sale[]
   leadNotes           LeadNote[]
   privatePackages     PrivatePackage[]
+  looseClasses        LooseClass[]
 
   @@index([tenantId])
   @@index([tenantId, stageId])
@@ -742,6 +746,35 @@ model PrivateSession {
   package PrivatePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
   @@index([packageId])
+}
+
+/**
+ * Aula avulsa (v1.1-BD) — pessoa paga UMA aula só, sem pacote nem matrícula.
+ * Substitui o uso da lojinha. NÃO conta como matrícula/mensalista; o lead vai
+ * pro estágio terminal "Aula Avulsa" (fora do funil). A receita entra no
+ * total global do Quadro + ganha um quadro próprio.
+ */
+model LooseClass {
+  id            String         @id @default(cuid())
+  tenantId      String
+  leadId        String
+  modalityId    String?
+  value         Decimal        @db.Decimal(10, 2)
+  classDate     DateTime // dia da aula avulsa
+  paymentMethod PaymentMethod?
+  soldById      String? // vendedora que fechou (User)
+  notes         String?        @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  modality Modality? @relation(fields: [modalityId], references: [id])
+  soldBy   User?     @relation("LooseClassSeller", fields: [soldById], references: [id])
+
+  @@index([tenantId, classDate])
+  @@index([leadId])
 }
 
 // ──────────────────────────────────────────────────────────────────────────

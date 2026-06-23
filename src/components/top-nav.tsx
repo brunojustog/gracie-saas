@@ -29,7 +29,7 @@ const LINKS: NavLink[] = [
   { href: "/aulas", label: "Aulas", icon: Calendar },
   { href: "/matriculas", label: "Matrículas", icon: GraduationCap },
   { href: "/particulares", label: "Particulares", icon: Ticket },
-  { href: "/pdv", label: "Lojinha", icon: ShoppingBag },
+  { href: "/avulsas", label: "Aulas avulsas", icon: ShoppingBag },
   // v1.1-AK: painel gerencial só pra ADMIN.
   { href: "/quadro", label: "Quadro do Vitor", icon: BarChart3, adminOnly: true },
   // v1.1-AH: Config visível pra todos — SELLER acessa /settings/planos

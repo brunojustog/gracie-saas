@@ -20,6 +20,7 @@ import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
 import { isOverdue } from "@/lib/overdue";
+import { getLooseRevenue } from "@/server/loose-classes";
 import { getPrivatePackageCounts, getPrivateRevenue } from "@/server/private-packages";
 
 /** Percentual seguro (0 quando o denominador é 0). */
@@ -99,6 +100,7 @@ export async function getQuadroData(tenantId: string) {
     privateActiveRows,
     monthClasses,
     expOutcomeLeads,
+    looseRevenue,
   ] = await Promise.all([
     // Matrículas ativas (gênero + kids + plano + pagamento + vencimento +
     // nome do aluno pro drill-down v1.1-AY).
@@ -235,6 +237,8 @@ export async function getQuadroData(tenantId: string) {
         stage: { select: { name: true, isWon: true, isLost: true } },
       },
     }),
+    // Receita de aulas avulsas (v1.1-BD)
+    getLooseRevenue(tenantId, monthStart, nextMonthStart),
   ]);
 
   // ── Bloco "Número de matrículas" ─────────────────────────────────────────
@@ -543,13 +547,18 @@ export async function getQuadroData(tenantId: string) {
     expStats,
     expByProgram,
     expOutcomes,
-    // Receita (v1.1-AO): mensalidades recorrentes + aulas particulares.
+    // Receita (v1.1-AO/BD): mensalidades + aulas particulares + avulsas.
     revenue: {
       monthlyRecurring,
       privateThisMonth: privateRevenue.thisMonth,
       privateAllTime: privateRevenue.allTime,
       privateActiveCount: privateRevenue.activeCount,
-      globalThisMonth: monthlyRecurring + privateRevenue.thisMonth,
+      looseThisMonth: looseRevenue.thisMonth,
+      looseAllTime: looseRevenue.allTime,
+      looseCountThisMonth: looseRevenue.countThisMonth,
+      looseCountAllTime: looseRevenue.countAllTime,
+      globalThisMonth:
+        monthlyRecurring + privateRevenue.thisMonth + looseRevenue.thisMonth,
     },
   };
 }

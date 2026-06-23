@@ -135,12 +135,12 @@ export default async function QuadroPage() {
           </div>
         </section>
 
-        {/* 8) Receita global (mensalidades + aulas particulares) — v1.1-AO */}
+        {/* 8) Receita global (mensalidades + particulares + avulsas) — v1.1-AO/BD */}
         <Panel
           title="Receita"
-          subtitle="Mensalidades recorrentes + aulas particulares"
+          subtitle="Mensalidades recorrentes + aulas particulares + aulas avulsas"
         >
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <RevenueCard
               label="Mensalidades ativas"
               value={data.revenue.monthlyRecurring}
@@ -152,15 +152,25 @@ export default async function QuadroPage() {
               hint={`${data.revenue.privateActiveCount} pacote(s) em andamento`}
             />
             <RevenueCard
+              label="Aulas avulsas (mês)"
+              value={data.revenue.looseThisMonth}
+              hint={`${data.revenue.looseCountThisMonth} aula(s) no mês`}
+            />
+            <RevenueCard
               label="Receita global do mês"
               value={data.revenue.globalThisMonth}
-              hint="mensalidades + particulares"
+              hint="mensalidades + particulares + avulsas"
               strong
             />
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Particulares acumulado (todos os pacotes não cancelados):{" "}
+            Particulares acumulado:{" "}
             {data.revenue.privateAllTime.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}{" "}
+            · Avulsas acumulado:{" "}
+            {data.revenue.looseAllTime.toLocaleString("pt-BR", {
               style: "currency",
               currency: "BRL",
             })}
@@ -210,6 +220,36 @@ export default async function QuadroPage() {
             </div>
           </Panel>
         </section>
+
+        {/* Aulas avulsas (v1.1-BD) — pessoas que pagaram 1 aula só */}
+        <Panel
+          title="Aulas avulsas"
+          subtitle="Pessoas que pagaram uma aula só (sem pacote/matrícula)"
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
+            <RevenueCard
+              label="Valor no mês"
+              value={data.revenue.looseThisMonth}
+              hint={`${data.revenue.looseCountThisMonth} aula(s) no mês`}
+            />
+            <RevenueCard
+              label="Valor acumulado"
+              value={data.revenue.looseAllTime}
+              hint={`${data.revenue.looseCountAllTime} aula(s) no total`}
+            />
+            <div className="rounded border bg-muted/40 p-3">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Aulas no mês
+              </div>
+              <div className="mt-0.5 text-2xl font-semibold">
+                {data.revenue.looseCountThisMonth}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {data.revenue.looseCountAllTime} no total
+              </div>
+            </div>
+          </div>
+        </Panel>
 
         {/* 4 + 6) Crescimento e churn mês a mês */}
         <Panel
