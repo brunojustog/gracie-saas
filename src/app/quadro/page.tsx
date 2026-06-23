@@ -240,7 +240,7 @@ export default async function QuadroPage() {
                       −{m.canceledInMonth}
                     </td>
                     <td className="px-2 py-2 text-right text-amber-700 dark:text-amber-300">
-                      −{m.frozenInMonth}
+                      {m.frozenInMonth}
                     </td>
                     <td className="px-2 py-2 text-right">{fmtPct(m.churnPct)}</td>
                   </tr>

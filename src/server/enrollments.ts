@@ -96,7 +96,9 @@ export function buildEnrollmentListWhere(
   }
 
   // Filtros que recaem no Lead (sexo + busca) compartilham o mesmo objeto.
-  const leadWhere: Prisma.LeadWhereInput = {};
+  // deletedAt:null sempre — matrículas de leads excluídos (ex.: duplicatas)
+  // não aparecem em listas nem contagens (v1.1-BA).
+  const leadWhere: Prisma.LeadWhereInput = { deletedAt: null };
   if (filters.gender) leadWhere.gender = filters.gender;
   if (filters.search?.trim()) {
     leadWhere.name = { contains: filters.search.trim(), mode: "insensitive" };
@@ -112,7 +114,7 @@ export function buildEnrollmentListWhere(
         : { not: null, gte: today, lt: addDays(today, 8) };
   }
 
-  if (Object.keys(leadWhere).length > 0) where.lead = leadWhere;
+  where.lead = leadWhere;
 
   return where;
 }
@@ -190,13 +192,15 @@ export async function findEnrollmentInScope(
  */
 export async function getEnrollmentStatusCounts(membership: TenantUser) {
   const tenantId = membership.tenantId;
+  // Ignora matrículas de leads excluídos (duplicatas removidas) — v1.1-BA.
+  const live = { tenantId, lead: { deletedAt: null } };
   const [active, frozen, canceled, judicial, revenueAgg] = await Promise.all([
-    prisma.enrollment.count({ where: { tenantId, status: "ACTIVE", suspendedAt: null } }),
-    prisma.enrollment.count({ where: { tenantId, status: "ACTIVE", suspendedAt: { not: null } } }),
-    prisma.enrollment.count({ where: { tenantId, status: "CANCELED" } }),
-    prisma.enrollment.count({ where: { tenantId, status: "JUDICIAL" } }),
+    prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: null } }),
+    prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: { not: null } } }),
+    prisma.enrollment.count({ where: { ...live, status: "CANCELED" } }),
+    prisma.enrollment.count({ where: { ...live, status: "JUDICIAL" } }),
     prisma.enrollment.aggregate({
-      where: { tenantId, status: "ACTIVE" },
+      where: { ...live, status: "ACTIVE" },
       _sum: { monthlyValue: true },
     }),
   ]);

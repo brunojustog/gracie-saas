@@ -31,21 +31,26 @@ describe("scopedEnrollmentWhere (v1.1-O: sem isolamento por seller)", () => {
 });
 
 describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
-  it("ADMIN sem filtros = só tenant", () => {
+  it("ADMIN sem filtros = só tenant + lead não-excluído", () => {
     const where = buildEnrollmentListWhere(
       membershipFactory({ role: "ADMIN" }),
       {},
     );
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
+    expect(where).toEqual({
+      tenantId: "tenant_gracie",
+      lead: { deletedAt: null },
+    });
   });
 
-  it("SELLER sem filtros = só tenant (v1.1-O)", () => {
+  it("SELLER sem filtros = só tenant + lead não-excluído (v1.1-O)", () => {
     const where = buildEnrollmentListWhere(
       membershipFactory({ role: "SELLER", userId: "user_anna" }),
       {},
     );
-    expect(where).toEqual({ tenantId: "tenant_gracie" });
-    expect(where).not.toHaveProperty("lead");
+    expect(where).toEqual({
+      tenantId: "tenant_gracie",
+      lead: { deletedAt: null },
+    });
   });
 
   it("filtro de status (visão) vira OR de fragmentos", () => {
@@ -74,7 +79,10 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
       membershipFactory({ role: "SELLER", userId: "user_anna" }),
       { search: "Thiago" },
     );
-    const expectedLead = { name: { contains: "Thiago", mode: "insensitive" } };
+    const expectedLead = {
+      deletedAt: null,
+      name: { contains: "Thiago", mode: "insensitive" },
+    };
     expect(adminW.lead).toEqual(expectedLead);
     expect(sellerW.lead).toEqual(expectedLead);
   });
@@ -127,6 +135,7 @@ describe("buildEnrollmentListWhere — combinando filtros UI com scope", () => {
       search: "Pedro",
     });
     expect(where.lead).toEqual({
+      deletedAt: null,
       gender: "MALE",
       name: { contains: "Pedro", mode: "insensitive" },
     });

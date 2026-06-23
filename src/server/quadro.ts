@@ -101,7 +101,7 @@ export async function getQuadroData(tenantId: string) {
     // Matrículas ativas (gênero + kids + plano + pagamento + vencimento +
     // nome do aluno pro drill-down v1.1-AY).
     prisma.enrollment.findMany({
-      where: { tenantId, status: "ACTIVE" },
+      where: { tenantId, status: "ACTIVE", lead: { deletedAt: null } },
       select: {
         id: true,
         nextDueDate: true,
@@ -116,7 +116,11 @@ export async function getQuadroData(tenantId: string) {
     // Cancelamentos na vida da academia — inclui JUDICIAL (v1.1-AU).
     // findMany (em vez de count) pra alimentar o drill-down de nomes.
     prisma.enrollment.findMany({
-      where: { tenantId, status: { in: ["CANCELED", "JUDICIAL"] } },
+      where: {
+        tenantId,
+        status: { in: ["CANCELED", "JUDICIAL"] },
+        lead: { deletedAt: null },
+      },
       select: {
         id: true,
         status: true,

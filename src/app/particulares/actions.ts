@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { parseLocalDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
@@ -88,8 +89,8 @@ export async function createPrivatePackage(input: unknown): Promise<Result> {
         totalClasses: parsed.data.totalClasses,
         value: parsed.data.value,
         paymentMethod: parsed.data.paymentMethod ?? null,
-        startDate: new Date(parsed.data.startDate),
-        endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : null,
+        startDate: parseLocalDate(parsed.data.startDate)!,
+        endDate: parseLocalDate(parsed.data.endDate),
         soldById: parsed.data.soldById ?? null,
       },
     });
@@ -184,8 +185,8 @@ export async function updatePrivatePackage(input: unknown): Promise<Result> {
       totalClasses: parsed.data.totalClasses,
       value: parsed.data.value,
       paymentMethod: parsed.data.paymentMethod ?? null,
-      startDate: new Date(parsed.data.startDate),
-      endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : null,
+      startDate: parseLocalDate(parsed.data.startDate)!,
+      endDate: parseLocalDate(parsed.data.endDate),
       soldById: parsed.data.soldById ?? null,
       notes: parsed.data.notes ?? null,
       status,
@@ -286,13 +287,9 @@ export async function saveSession(
   if (!pkg) return { ok: false, error: "pacote não encontrado ou sem permissão" };
 
   const completedAt = parsed.data.completed
-    ? parsed.data.completedDate
-      ? new Date(parsed.data.completedDate)
-      : new Date()
+    ? parseLocalDate(parsed.data.completedDate) ?? new Date()
     : null;
-  const scheduledDate = parsed.data.scheduledDate
-    ? new Date(parsed.data.scheduledDate)
-    : null;
+  const scheduledDate = parseLocalDate(parsed.data.scheduledDate);
 
   if (parsed.data.sessionId) {
     // garante que a sessão é do pacote (que já está no scope)
