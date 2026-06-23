@@ -97,6 +97,8 @@ export async function getQuadroData(tenantId: string) {
     privateRevenue,
     privateCounts,
     privateActiveRows,
+    monthClasses,
+    expOutcomeLeads,
   ] = await Promise.all([
     // Matrículas ativas (gênero + kids + plano + pagamento + vencimento +
     // nome do aluno pro drill-down v1.1-AY).
@@ -207,6 +209,31 @@ export async function getQuadroData(tenantId: string) {
         modality: { select: { name: true } },
       },
       orderBy: { startDate: "desc" },
+    }),
+    // v1.1-BC: aulas experimentais do MÊS — stats + por programa (item 6/7).
+    prisma.experimentalClass.findMany({
+      where: { tenantId, scheduledDate: { gte: monthStart, lt: nextMonthStart } },
+      select: {
+        id: true,
+        scheduledDate: true,
+        status: true,
+        lead: { select: { name: true } },
+        modality: { select: { name: true } },
+      },
+      orderBy: { scheduledDate: "asc" },
+    }),
+    // v1.1-BC: destino dos leads que fizeram experimental (item 8).
+    prisma.lead.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        experimentalClasses: { some: {} },
+      },
+      select: {
+        id: true,
+        name: true,
+        stage: { select: { name: true, isWon: true, isLost: true } },
+      },
     }),
   ]);
 
@@ -413,6 +440,64 @@ export async function getQuadroData(tenantId: string) {
       .map(mapClass),
   };
 
+  // ── Experimentais do mês: stats + por programa (v1.1-BC, itens 6/7) ───────
+  const kanbanHref = (name: string) => `/kanban?q=${encodeURIComponent(name)}`;
+  const classItem = (c: (typeof monthClasses)[number]): Name => ({
+    id: c.id,
+    name: c.lead.name,
+    sub: `${format(c.scheduledDate, "dd/MM", { locale: ptBR })} · ${c.modality.name}`,
+    href: kanbanHref(c.lead.name),
+  });
+  const isOpen = (s: string) => s === "SCHEDULED" || s === "CONFIRMED";
+  const notCanceled = monthClasses.filter((c) => c.status !== "CANCELED");
+  const expStats = {
+    total: notCanceled.length,
+    totalNames: notCanceled.map(classItem),
+    attended: notCanceled.filter((c) => c.status === "ATTENDED").map(classItem),
+    noShow: notCanceled.filter((c) => c.status === "NO_SHOW").map(classItem),
+    rescheduled: notCanceled.filter((c) => c.status === "RESCHEDULED").map(classItem),
+    upcoming: notCanceled
+      .filter((c) => isOpen(c.status) && c.scheduledDate > now)
+      .map(classItem),
+    unregistered: notCanceled
+      .filter((c) => isOpen(c.status) && c.scheduledDate <= now)
+      .map(classItem),
+  };
+
+  // Por programa (GB1/GB2/GBF/GBK…). GBK-* colapsa em "GBK".
+  const programOf = (modName: string) =>
+    modName.startsWith("GBK") ? "GBK" : modName;
+  const programMap = new Map<string, Name[]>();
+  for (const c of notCanceled) {
+    const p = programOf(c.modality.name);
+    if (!programMap.has(p)) programMap.set(p, []);
+    programMap.get(p)!.push(classItem(c));
+  }
+  const expByProgram = [...programMap.entries()]
+    .map(([program, names]) => ({ program, count: names.length, names }))
+    .sort((a, b) => b.count - a.count);
+
+  // ── Destino dos leads que fizeram experimental (v1.1-BC, item 8) ──────────
+  const outcomeBucket = (lead: (typeof expOutcomeLeads)[number]): Name => ({
+    id: lead.id,
+    name: lead.name,
+    sub: lead.stage.name,
+    href: kanbanHref(lead.name),
+  });
+  const expOutcomes = {
+    ganho: [] as Name[],
+    negociacao: [] as Name[],
+    nutricao: [] as Name[],
+    perda: [] as Name[],
+  };
+  for (const l of expOutcomeLeads) {
+    const item = outcomeBucket(l);
+    if (l.stage.isWon) expOutcomes.ganho.push(item);
+    else if (l.stage.isLost) expOutcomes.perda.push(item);
+    else if (l.stage.name === "Negociação") expOutcomes.negociacao.push(item);
+    else if (l.stage.name === "Nutrição") expOutcomes.nutricao.push(item);
+  }
+
   return {
     generatedAt: now,
     matriculas: {
@@ -453,6 +538,11 @@ export async function getQuadroData(tenantId: string) {
     posExperimental,
     posExpLastWeek,
     agenda,
+    // Experimentais do mês (v1.1-BC, itens 6/7/8).
+    expMonthLabel: format(monthStart, "MMMM/yy", { locale: ptBR }),
+    expStats,
+    expByProgram,
+    expOutcomes,
     // Receita (v1.1-AO): mensalidades recorrentes + aulas particulares.
     revenue: {
       monthlyRecurring,

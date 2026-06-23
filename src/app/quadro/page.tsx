@@ -291,6 +291,52 @@ export default async function QuadroPage() {
           </div>
         </Panel>
 
+        {/* Experimentais do mês: stats + por programa (v1.1-BC, itens 6/7) */}
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Panel
+            title="Aulas experimentais (mês)"
+            subtitle={`Resumo de ${data.expMonthLabel} — clique nos números pra ver os nomes`}
+          >
+            <div className="flex flex-wrap gap-2 text-sm">
+              <StatChip label="no mês" value={data.expStats.total} items={data.expStats.totalNames} tone="primary" />
+              <StatChip label="compareceram" prefix="✓ " value={data.expStats.attended.length} items={data.expStats.attended} tone="emerald" />
+              <StatChip label="faltas" prefix="✗ " value={data.expStats.noShow.length} items={data.expStats.noShow} tone="red" />
+              <StatChip label="reagendadas" prefix="↻ " value={data.expStats.rescheduled.length} items={data.expStats.rescheduled} tone="amber" />
+              <StatChip label="futuras" prefix="→ " value={data.expStats.upcoming.length} items={data.expStats.upcoming} tone="sky" />
+              {data.expStats.unregistered.length > 0 ? (
+                <StatChip label="sem registro" prefix="! " value={data.expStats.unregistered.length} items={data.expStats.unregistered} tone="zinc" />
+              ) : null}
+            </div>
+          </Panel>
+
+          <Panel
+            title="Experimentais por programa (mês)"
+            subtitle="GB1 / GB2 / GBF / GBK… — clique pra ver os nomes"
+          >
+            <KeyValueList
+              rows={data.expByProgram.map((p) => ({
+                label: p.program,
+                value: p.count,
+                items: p.names,
+              }))}
+              emptyLabel="Nenhuma aula experimental no mês."
+            />
+          </Panel>
+        </section>
+
+        {/* Destino dos leads que fizeram experimental (v1.1-BC, item 8) */}
+        <Panel
+          title="Para onde foram os leads que fizeram experimental"
+          subtitle="Situação atual no funil de quem já fez uma aula — clique pra ver os nomes"
+        >
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <OutcomeCard label="Ganho" items={data.expOutcomes.ganho} tone="emerald" />
+            <OutcomeCard label="Negociação" items={data.expOutcomes.negociacao} tone="sky" />
+            <OutcomeCard label="Nutrição" items={data.expOutcomes.nutricao} tone="amber" />
+            <OutcomeCard label="Perda" items={data.expOutcomes.perda} tone="red" />
+          </div>
+        </Panel>
+
         {/* 7) Conversão experimental → matrícula */}
         <section className="grid gap-4 lg:grid-cols-2">
           <Panel
@@ -518,6 +564,67 @@ function ConversionCard({
       <div className="text-[11px] text-muted-foreground">
         {c.enrolled} de {c.attended} matricularam
       </div>
+    </div>
+  );
+}
+
+// ── Experimentais do mês (v1.1-BC) ──────────────────────────────────────────
+
+type Tone = "primary" | "emerald" | "red" | "amber" | "sky" | "zinc";
+
+const CHIP_TONE: Record<Tone, string> = {
+  primary: "bg-primary/10 text-primary",
+  emerald: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
+  red: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
+  amber: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+  sky: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
+  zinc: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+};
+
+/** Chip clicável (pílula) com nomes por trás — espelha os chips da agenda. */
+function StatChip({
+  label,
+  value,
+  items,
+  tone,
+  prefix = "",
+}: {
+  label: string;
+  value: number;
+  items: DrillItem[];
+  tone: Tone;
+  prefix?: string;
+}) {
+  return (
+    <DrillNumber
+      variant="plain"
+      title={label}
+      items={items}
+      className={`rounded-full px-2.5 py-1 font-medium ${CHIP_TONE[tone]}`}
+      value={`${prefix}${value} ${label}`}
+    />
+  );
+}
+
+/** Card de destino (ganho/negociação/nutrição/perda) com drill-down. */
+function OutcomeCard({
+  label,
+  items,
+  tone,
+}: {
+  label: string;
+  items: DrillItem[];
+  tone: Tone;
+}) {
+  return (
+    <div className={`rounded border p-3 text-center ${CHIP_TONE[tone]}`}>
+      <DrillNumber
+        value={items.length}
+        title={label}
+        items={items}
+        className="text-2xl font-semibold"
+      />
+      <div className="text-[11px] uppercase tracking-wide opacity-80">{label}</div>
     </div>
   );
 }
