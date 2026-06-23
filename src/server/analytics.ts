@@ -12,6 +12,7 @@
  * funil, leads/dia, etc. respondem ao mesmo recorte).
  */
 import { Prisma, type TenantUser } from "@prisma/client";
+import { startOfDay } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
 import type { Period } from "@/lib/period";
@@ -159,9 +160,15 @@ export async function getDashboardData(
       },
     }),
 
-    // Receita ACTIVE corrente (independe do período; é a foto do MRR)
+    // Receita ACTIVE corrente (independe do período; é a foto do MRR).
+    // v1.1-BB: quitados (paidInFullUntil >= hoje) saem do MRR recorrente.
     prisma.enrollment.aggregate({
-      where: { tenantId, ...leadFilter, status: "ACTIVE" },
+      where: {
+        tenantId,
+        ...leadFilter,
+        status: "ACTIVE",
+        NOT: { paidInFullUntil: { gte: startOfDay(new Date()) } },
+      },
       _sum: { monthlyValue: true },
     }),
 

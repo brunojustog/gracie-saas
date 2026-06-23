@@ -622,6 +622,15 @@ model Enrollment {
    */
   nextDueDate DateTime?
 
+  /**
+   * v1.1-BB: quitação total (aluno pagou vários meses/ano de uma vez).
+   * Enquanto `paidInFullUntil >= hoje`, a matrícula NÃO entra na receita
+   * mensal recorrente (o valor já foi recebido de uma vez) e o nextDueDate
+   * é empurrado pra essa data (some dos vencimentos/inadimplência). Null =
+   * mensalista normal mês a mês.
+   */
+  paidInFullUntil DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

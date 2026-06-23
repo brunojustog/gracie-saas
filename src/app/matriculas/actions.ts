@@ -409,6 +409,87 @@ export async function confirmPayment(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Pagamento TOTAL / quitação (v1.1-BB) — aluno paga N meses de uma vez.
+// Empurra o vencimento e marca `paidInFullUntil`; enquanto quitado, sai da
+// receita mensal recorrente (já foi recebido de uma vez).
+// ──────────────────────────────────────────────────────────────────────────
+
+const payInFullSchema = z.object({
+  enrollmentId: z.string().min(1),
+  /** Quantos meses foram quitados (ex.: 12 = ano). */
+  months: z.number().int().min(1).max(60),
+  /** Data do pagamento. Default: hoje. */
+  paidAt: z.string().date().optional(),
+  /** Valor total pago. Default: months × mensalidade. */
+  totalAmount: z.number().nonnegative().max(10_000_000).optional(),
+});
+
+export async function payEnrollmentInFull(
+  input: unknown,
+): Promise<ActionResult> {
+  const parsed = payInFullSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  if (enrollment.status !== "ACTIVE") {
+    return { ok: false, error: "só dá pra quitar matrícula ativa" };
+  }
+
+  const { months } = parsed.data;
+  const paidAt = parsed.data.paidAt ? new Date(parsed.data.paidAt) : new Date();
+  // Ancora no vencimento atual (ou hoje) e avança N meses.
+  const base = enrollment.nextDueDate ?? paidAt;
+  const paidUntil = addMonths(base, months);
+  const amount =
+    parsed.data.totalAmount ?? Number(enrollment.monthlyValue) * months;
+  const fmt = (d: Date) => d.toLocaleDateString("pt-BR");
+
+  await prisma.$transaction(async (tx) => {
+    const payment = await tx.paymentRecord.create({
+      data: {
+        tenantId: tenant.id,
+        enrollmentId: enrollment.id,
+        dueDate: enrollment.nextDueDate,
+        paidAt,
+        amount,
+        method: enrollment.paymentMethod,
+        confirmedById: user.id,
+      },
+    });
+
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: { nextDueDate: paidUntil, paidInFullUntil: paidUntil },
+    });
+
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "PAYMENT_CONFIRMED",
+        body: `Pagamento TOTAL de ${months} ${months === 1 ? "mês" : "meses"} — quitado até ${fmt(paidUntil)}`,
+        metadata: {
+          enrollmentId: enrollment.id,
+          paymentRecordId: payment.id,
+          paidAt: paidAt.toISOString(),
+          paidInFullUntil: paidUntil.toISOString(),
+          months,
+        },
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/dashboard");
+  revalidatePath("/quadro");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Cancelar matrícula
 // ──────────────────────────────────────────────────────────────────────────
 

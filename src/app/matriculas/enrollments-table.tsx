@@ -2,7 +2,15 @@
 
 import type { EnrollmentStatus, PaymentMethod } from "@prisma/client";
 import { differenceInCalendarDays, format, startOfDay } from "date-fns";
-import { Banknote, Gavel, PencilLine, Play, Snowflake, XCircle } from "lucide-react";
+import {
+  Banknote,
+  CalendarCheck,
+  Gavel,
+  PencilLine,
+  Play,
+  Snowflake,
+  XCircle,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -41,9 +49,12 @@ import {
   cancelEnrollment,
   confirmPayment,
   markEnrollmentJudicial,
+  payEnrollmentInFull,
   reactivateEnrollment,
   suspendEnrollment,
 } from "./actions";
+import { CollectionNotesButton } from "@/app/dashboard/collection-notes";
+
 import { EnrollmentEditModal, type EditTarget } from "./enrollment-edit-modal";
 
 type Row = {
@@ -57,6 +68,7 @@ type Row = {
   frozenDaysUsed: number;
   contractEndAt: Date | string | null;
   nextDueDate: Date | string | null;
+  paidInFullUntil: Date | string | null;
   // null quando SELLER — backend mascara pra não vazar receita.
   monthlyValue: number | string | { toString(): string } | null;
   paymentMethod: PaymentMethod;
@@ -114,6 +126,7 @@ export function EnrollmentsTable({
   const [judicialTarget, setJudicialTarget] = useState<Row | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [payTarget, setPayTarget] = useState<Row | null>(null);
+  const [payFullTarget, setPayFullTarget] = useState<Row | null>(null);
   const [pending, startTransition] = useTransition();
 
   // v1.1-AB: SELLER também edita — o modal esconde os campos financeiros
@@ -249,6 +262,12 @@ export function EnrollmentsTable({
                       >
                         <PencilLine className="h-4 w-4" />
                       </Button>
+                      {r.status === "ACTIVE" ? (
+                        <CollectionNotesButton
+                          enrollmentId={r.id}
+                          leadName={r.lead.name}
+                        />
+                      ) : null}
                       {r.status === "ACTIVE" && !r.suspendedAt ? (
                         <>
                           <Button
@@ -261,6 +280,17 @@ export function EnrollmentsTable({
                             aria-label="Confirmar pagamento da mensalidade"
                           >
                             <Banknote className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                            onClick={() => setPayFullTarget(r)}
+                            disabled={pending}
+                            title="Pagamento total (quitar vários meses)"
+                            aria-label="Pagamento total (quitar vários meses)"
+                          >
+                            <CalendarCheck className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -335,6 +365,10 @@ export function EnrollmentsTable({
         target={payTarget}
         onClose={() => setPayTarget(null)}
       />
+      <PayInFullDialog
+        target={payFullTarget}
+        onClose={() => setPayFullTarget(null)}
+      />
       <EnrollmentEditModal
         target={editTarget}
         onClose={() => setEditTarget(null)}
@@ -358,7 +392,11 @@ function DueDateCell({ row }: { row: Row }) {
   const due = new Date(row.nextDueDate);
   const days = differenceInCalendarDays(startOfDay(due), startOfDay(new Date()));
   const daysPast = -days; // positivo quando já venceu
-  const isBillable = row.status === "ACTIVE";
+  // v1.1-BB: quitado = paidInFullUntil no futuro → some da cobrança mensal.
+  const prepaid =
+    row.paidInFullUntil != null &&
+    startOfDay(new Date(row.paidInFullUntil)) >= startOfDay(new Date());
+  const isBillable = row.status === "ACTIVE" && !prepaid;
   const inadimplente = isBillable && daysPast >= OVERDUE_GRACE_DAYS;
   const emCarencia = isBillable && daysPast > 0 && daysPast < OVERDUE_GRACE_DAYS;
 
@@ -367,6 +405,11 @@ function DueDateCell({ row }: { row: Row }) {
       <span className={inadimplente ? "font-medium text-red-700 dark:text-red-300" : "text-muted-foreground"}>
         {format(due, "dd/MM/yyyy")}
       </span>
+      {prepaid ? (
+        <span className="inline-block w-fit rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200">
+          quitado até {format(new Date(row.paidInFullUntil!), "dd/MM/yyyy")}
+        </span>
+      ) : null}
       {inadimplente ? (
         <span className="inline-block w-fit rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-900 dark:bg-red-900/40 dark:text-red-200">
           inadimplente · venceu há {daysPast}d
@@ -465,6 +508,134 @@ function ConfirmPaymentBody({ target, onClose }: { target: Row; onClose: () => v
         </Button>
         <Button onClick={handleConfirm} disabled={pending || !paidAt}>
           {pending ? "Confirmando…" : "Confirmar pagamento"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+// ── Pagamento TOTAL / quitação (v1.1-BB) ────────────────────────────────────
+
+function PayInFullDialog({
+  target,
+  onClose,
+}: {
+  target: Row | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {target ? <PayInFullBody key={target.id} target={target} onClose={onClose} /> : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PayInFullBody({ target, onClose }: { target: Row; onClose: () => void }) {
+  const router = useRouter();
+  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [months, setMonths] = useState("12");
+  const monthly = target.monthlyValue !== null ? Number(target.monthlyValue) : null;
+  const monthsNum = Number(months);
+  const [amount, setAmount] = useState(() =>
+    monthly !== null ? String(monthly * 12) : "",
+  );
+  const [pending, startTransition] = useTransition();
+
+  // Sugere o total = meses × mensalidade quando o usuário muda os meses.
+  const onMonthsChange = (v: string) => {
+    setMonths(v);
+    const n = Number(v);
+    if (monthly !== null && Number.isInteger(n) && n > 0) {
+      setAmount(String(monthly * n));
+    }
+  };
+
+  const handleConfirm = () => {
+    const n = Number(months);
+    if (!Number.isInteger(n) || n < 1) {
+      toast.error("informe quantos meses foram quitados");
+      return;
+    }
+    startTransition(async () => {
+      const result = await payEnrollmentInFull({
+        enrollmentId: target.id,
+        months: n,
+        paidAt,
+        totalAmount: amount.trim() ? Number(amount) : undefined,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Quitação registrada — sai da cobrança mensal");
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Pagamento total (quitação)</DialogTitle>
+        <DialogDescription>
+          {target.lead.name} — {target.modality.name} ({target.plan.name})
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="pf-months">Meses quitados</Label>
+            <Input
+              id="pf-months"
+              type="number"
+              min={1}
+              max={60}
+              value={months}
+              onChange={(e) => onMonthsChange(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="pf-date">Data do pagamento</Label>
+            <Input
+              id="pf-date"
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="pf-amount">Valor total pago (R$)</Label>
+          <Input
+            id="pf-amount"
+            type="number"
+            min={0}
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={pending}
+            placeholder={monthly !== null ? String(monthly * monthsNum) : ""}
+          />
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Empurra o vencimento {Number.isInteger(monthsNum) && monthsNum > 0 ? `${monthsNum} ` : ""}
+          meses pra frente e marca como <strong>quitado</strong>: o aluno
+          continua ativo, mas <strong>sai da receita mensal recorrente</strong>{" "}
+          e dos vencimentos/inadimplência até a data de quitação.
+        </p>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={pending}>
+          Voltar
+        </Button>
+        <Button onClick={handleConfirm} disabled={pending}>
+          {pending ? "Registrando…" : "Registrar quitação"}
         </Button>
       </DialogFooter>
     </>

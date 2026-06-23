@@ -105,6 +105,7 @@ export async function getQuadroData(tenantId: string) {
       select: {
         id: true,
         nextDueDate: true,
+        paidInFullUntil: true,
         paymentMethod: true,
         monthlyValue: true,
         plan: { select: { id: true, name: true } },
@@ -255,7 +256,10 @@ export async function getQuadroData(tenantId: string) {
           : "sem vencimento",
       });
     }
-    monthlyRecurring += Number(e.monthlyValue);
+    // v1.1-BB: quitados (pagaram vários meses de uma vez) não entram na
+    // receita mensal recorrente — o valor já foi recebido de uma vez.
+    const prepaid = e.paidInFullUntil != null && e.paidInFullUntil >= today;
+    if (!prepaid) monthlyRecurring += Number(e.monthlyValue);
 
     const isKids = e.modality.isKids;
     const bucket = isKids ? kids : adults;

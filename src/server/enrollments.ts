@@ -136,6 +136,7 @@ export async function getEnrollmentsForList(
       frozenDaysUsed: true,
       contractEndAt: true,
       nextDueDate: true,
+      paidInFullUntil: true,
       monthlyValue: true,
       paymentMethod: true,
       status: true,
@@ -194,13 +195,16 @@ export async function getEnrollmentStatusCounts(membership: TenantUser) {
   const tenantId = membership.tenantId;
   // Ignora matrículas de leads excluídos (duplicatas removidas) — v1.1-BA.
   const live = { tenantId, lead: { deletedAt: null } };
+  // v1.1-BB: quitados (paidInFullUntil >= hoje) saem da receita recorrente.
+  const today = startOfDay(new Date());
+  const notPrepaid = { NOT: { paidInFullUntil: { gte: today } } };
   const [active, frozen, canceled, judicial, revenueAgg] = await Promise.all([
     prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: null } }),
     prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: { not: null } } }),
     prisma.enrollment.count({ where: { ...live, status: "CANCELED" } }),
     prisma.enrollment.count({ where: { ...live, status: "JUDICIAL" } }),
     prisma.enrollment.aggregate({
-      where: { ...live, status: "ACTIVE" },
+      where: { ...live, status: "ACTIVE", ...notPrepaid },
       _sum: { monthlyValue: true },
     }),
   ]);
