@@ -262,7 +262,7 @@ export function EnrollmentsTable({
                       >
                         <PencilLine className="h-4 w-4" />
                       </Button>
-                      {r.status === "ACTIVE" ? (
+                      {r.status === "ACTIVE" || r.status === "JUDICIAL" ? (
                         <CollectionNotesButton
                           enrollmentId={r.id}
                           leadName={r.lead.name}

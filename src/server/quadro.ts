@@ -73,7 +73,12 @@ function emptySplit(): GenderSplit {
   return { female: 0, male: 0, unknown: 0 };
 }
 
-export async function getQuadroData(tenantId: string) {
+export async function getQuadroData(
+  tenantId: string,
+  // v1.1-BE: período da segmentação de experimentais (item 4). Default = mês
+  // atual. Só afeta os painéis de experimentais; o resto do Quadro é "agora".
+  expPeriod?: { from: Date; to: Date; label: string },
+) {
   const now = new Date();
   const today = startOfDay(now);
 
@@ -86,6 +91,13 @@ export async function getQuadroData(tenantId: string) {
 
   const monthStart = startOfMonth(now);
   const nextMonthStart = startOfMonth(subMonths(now, -1));
+
+  // Período da segmentação de experimentais (item 4). Default = mês atual.
+  const ep = expPeriod ?? {
+    from: monthStart,
+    to: now,
+    label: format(monthStart, "MMMM/yy", { locale: ptBR }),
+  };
 
   const [
     activeEnrollments,
@@ -134,14 +146,20 @@ export async function getQuadroData(tenantId: string) {
       },
       orderBy: { canceledAt: "desc" },
     }),
-    // Todas as matrículas (pra crescimento + churn mês a mês)
+    // Todas as matrículas (pra crescimento + churn mês a mês).
+    // v1.1-BE: ignora leads excluídos (duplicatas) — alinha o churn com o
+    // painel de Cancelamentos, que já filtra deletedAt.
     prisma.enrollment.findMany({
-      where: { tenantId },
+      where: { tenantId, lead: { deletedAt: null } },
       select: { enrolledAt: true, canceledAt: true, status: true, suspendedAt: true },
     }),
     // Matrículas dos últimos 6 meses pra ranking por vendedora
     prisma.enrollment.findMany({
-      where: { tenantId, enrolledAt: { gte: startOfMonth(subMonths(now, 5)) } },
+      where: {
+        tenantId,
+        lead: { deletedAt: null },
+        enrolledAt: { gte: startOfMonth(subMonths(now, 5)) },
+      },
       select: {
         enrolledAt: true,
         monthlyValue: true,
@@ -212,9 +230,9 @@ export async function getQuadroData(tenantId: string) {
       },
       orderBy: { startDate: "desc" },
     }),
-    // v1.1-BC: aulas experimentais do MÊS — stats + por programa (item 6/7).
+    // v1.1-BC/BE: aulas experimentais do PERÍODO — stats + por programa (item 6/7).
     prisma.experimentalClass.findMany({
-      where: { tenantId, scheduledDate: { gte: monthStart, lt: nextMonthStart } },
+      where: { tenantId, scheduledDate: { gte: ep.from, lte: ep.to } },
       select: {
         id: true,
         scheduledDate: true,
@@ -224,17 +242,19 @@ export async function getQuadroData(tenantId: string) {
       },
       orderBy: { scheduledDate: "asc" },
     }),
-    // v1.1-BC: destino dos leads que fizeram experimental (item 8).
+    // v1.1-BC/BE: destino dos leads que fizeram experimental NO PERÍODO (item 8).
+    // "Matriculou" = tem Enrollment (fonte da verdade), não estágio Ganho.
     prisma.lead.findMany({
       where: {
         tenantId,
         deletedAt: null,
-        experimentalClasses: { some: {} },
+        experimentalClasses: { some: { scheduledDate: { gte: ep.from, lte: ep.to } } },
       },
       select: {
         id: true,
         name: true,
-        stage: { select: { name: true, isWon: true, isLost: true } },
+        stage: { select: { name: true, isLost: true } },
+        enrollment: { select: { id: true } },
       },
     }),
     // Receita de aulas avulsas (v1.1-BD)
@@ -481,22 +501,25 @@ export async function getQuadroData(tenantId: string) {
     .map(([program, names]) => ({ program, count: names.length, names }))
     .sort((a, b) => b.count - a.count);
 
-  // ── Destino dos leads que fizeram experimental (v1.1-BC, item 8) ──────────
-  const outcomeBucket = (lead: (typeof expOutcomeLeads)[number]): Name => ({
+  // ── Destino dos leads que fizeram experimental no período (v1.1-BC/BE) ─────
+  // Prioridade: matriculou (Enrollment) > perda > negociação > nutrição.
+  // "Matriculou" usa Enrollment como fonte da verdade (decisão BE), batendo
+  // com Churn e Dashboard.
+  const outcomeItem = (lead: (typeof expOutcomeLeads)[number]): Name => ({
     id: lead.id,
     name: lead.name,
-    sub: lead.stage.name,
+    sub: lead.enrollment ? "matriculado" : lead.stage.name,
     href: kanbanHref(lead.name),
   });
   const expOutcomes = {
-    ganho: [] as Name[],
+    matriculou: [] as Name[],
     negociacao: [] as Name[],
     nutricao: [] as Name[],
     perda: [] as Name[],
   };
   for (const l of expOutcomeLeads) {
-    const item = outcomeBucket(l);
-    if (l.stage.isWon) expOutcomes.ganho.push(item);
+    const item = outcomeItem(l);
+    if (l.enrollment) expOutcomes.matriculou.push(item);
     else if (l.stage.isLost) expOutcomes.perda.push(item);
     else if (l.stage.name === "Negociação") expOutcomes.negociacao.push(item);
     else if (l.stage.name === "Nutrição") expOutcomes.nutricao.push(item);
@@ -542,8 +565,8 @@ export async function getQuadroData(tenantId: string) {
     posExperimental,
     posExpLastWeek,
     agenda,
-    // Experimentais do mês (v1.1-BC, itens 6/7/8).
-    expMonthLabel: format(monthStart, "MMMM/yy", { locale: ptBR }),
+    // Experimentais do período (v1.1-BC/BE, itens 6/7/8).
+    expPeriodLabel: ep.label,
     expStats,
     expByProgram,
     expOutcomes,

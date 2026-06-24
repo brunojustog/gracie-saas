@@ -5,9 +5,25 @@ import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { DrillNumber, type DrillItem } from "@/components/drill-number";
 import { TopNav } from "@/components/top-nav";
+import {
+  type PeriodPreset,
+  resolveCustom,
+  resolvePreset,
+} from "@/lib/period";
 import { signOut } from "@/server/auth";
 import { getQuadroData } from "@/server/quadro";
 import { requireRole } from "@/server/tenant";
+
+import { ExpPeriodFilter } from "./exp-period-filter";
+
+const VALID_PRESETS: PeriodPreset[] = [
+  "this_month",
+  "last_month",
+  "last_7_days",
+  "last_30_days",
+];
+
+type SearchParams = Promise<{ period?: string; from?: string; to?: string }>;
 
 const PAYMENT_LABEL: Record<string, string> = {
   PIX: "Pix",
@@ -29,10 +45,24 @@ const CLASS_STATUS_LABEL: Record<ExperimentalClassStatus, string> = {
 
 const fmtPct = (n: number) => `${n.toFixed(1)}%`;
 
-export default async function QuadroPage() {
+export default async function QuadroPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   // Admin-only. requireRole redireciona quem não for ADMIN pra /dashboard.
   const { tenant, user, membership } = await requireRole("ADMIN");
-  const data = await getQuadroData(tenant.id);
+  const sp = await searchParams;
+
+  // Período da segmentação de experimentais (item 4). Default = mês atual.
+  const customPeriod = sp.from && sp.to ? resolveCustom(sp.from, sp.to) : null;
+  const preset: PeriodPreset = VALID_PRESETS.includes(sp.period as PeriodPreset)
+    ? (sp.period as PeriodPreset)
+    : "this_month";
+  const expPeriod = customPeriod ?? resolvePreset(preset);
+  const expSelector: PeriodPreset | "custom" = customPeriod ? "custom" : preset;
+
+  const data = await getQuadroData(tenant.id, expPeriod);
 
   return (
     <>
@@ -331,14 +361,21 @@ export default async function QuadroPage() {
           </div>
         </Panel>
 
-        {/* Experimentais do mês: stats + por programa (v1.1-BC, itens 6/7) */}
+        {/* Segmentação de experimentais por período (v1.1-BC/BE, itens 4/6/7/8) */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Aulas experimentais · {data.expPeriodLabel}
+          </h2>
+          <ExpPeriodFilter current={expSelector} from={sp.from} to={sp.to} />
+        </div>
+
         <section className="grid gap-4 lg:grid-cols-2">
           <Panel
-            title="Aulas experimentais (mês)"
-            subtitle={`Resumo de ${data.expMonthLabel} — clique nos números pra ver os nomes`}
+            title="Aulas experimentais (período)"
+            subtitle="Clique nos números pra ver os nomes"
           >
             <div className="flex flex-wrap gap-2 text-sm">
-              <StatChip label="no mês" value={data.expStats.total} items={data.expStats.totalNames} tone="primary" />
+              <StatChip label="no período" value={data.expStats.total} items={data.expStats.totalNames} tone="primary" />
               <StatChip label="compareceram" prefix="✓ " value={data.expStats.attended.length} items={data.expStats.attended} tone="emerald" />
               <StatChip label="faltas" prefix="✗ " value={data.expStats.noShow.length} items={data.expStats.noShow} tone="red" />
               <StatChip label="reagendadas" prefix="↻ " value={data.expStats.rescheduled.length} items={data.expStats.rescheduled} tone="amber" />
@@ -350,7 +387,7 @@ export default async function QuadroPage() {
           </Panel>
 
           <Panel
-            title="Experimentais por programa (mês)"
+            title="Experimentais por programa (período)"
             subtitle="GB1 / GB2 / GBF / GBK… — clique pra ver os nomes"
           >
             <KeyValueList
@@ -359,18 +396,18 @@ export default async function QuadroPage() {
                 value: p.count,
                 items: p.names,
               }))}
-              emptyLabel="Nenhuma aula experimental no mês."
+              emptyLabel="Nenhuma aula experimental no período."
             />
           </Panel>
         </section>
 
-        {/* Destino dos leads que fizeram experimental (v1.1-BC, item 8) */}
+        {/* Destino dos leads que fizeram experimental no período (item 8) */}
         <Panel
           title="Para onde foram os leads que fizeram experimental"
-          subtitle="Situação atual no funil de quem já fez uma aula — clique pra ver os nomes"
+          subtitle="Dos que fizeram aula no período: 'Matriculou' = tem matrícula registrada (Enrollment). Clique pra ver os nomes."
         >
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <OutcomeCard label="Ganho" items={data.expOutcomes.ganho} tone="emerald" />
+            <OutcomeCard label="Matriculou" items={data.expOutcomes.matriculou} tone="emerald" />
             <OutcomeCard label="Negociação" items={data.expOutcomes.negociacao} tone="sky" />
             <OutcomeCard label="Nutrição" items={data.expOutcomes.nutricao} tone="amber" />
             <OutcomeCard label="Perda" items={data.expOutcomes.perda} tone="red" />

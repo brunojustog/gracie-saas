@@ -58,6 +58,10 @@ export async function getDashboardData(
   // (precisam navegar via `lead: { ... }`).
   const hasLeadConstraint = Object.keys(filterWhere).length > 0;
   const leadFilter = hasLeadConstraint ? { lead: filterWhere } : {};
+  // v1.1-BE: filtro pra queries de Enrollment — SEMPRE exclui leads
+  // excluídos (duplicatas) e aplica os filtros da toolbar. Mantém matrículas
+  // e ranking de vendedoras batendo com os outros relatórios.
+  const enrollLeadFilter = { lead: { deletedAt: null, ...filterWhere } };
 
   // Helper: monta um fragmento "AND ..." que espelha filterWhere em SQL raw,
   // com prefixo opcional pra qualificar colunas (ex: "l.").
@@ -146,7 +150,7 @@ export async function getDashboardData(
     prisma.enrollment.count({
       where: {
         tenantId,
-        ...leadFilter,
+        ...enrollLeadFilter,
         status: "ACTIVE",
         enrolledAt: { gte: period.from, lte: period.to },
       },
@@ -154,7 +158,7 @@ export async function getDashboardData(
     prisma.enrollment.count({
       where: {
         tenantId,
-        ...leadFilter,
+        ...enrollLeadFilter,
         status: "ACTIVE",
         enrolledAt: { gte: prev.from, lte: prev.to },
       },
@@ -165,7 +169,7 @@ export async function getDashboardData(
     prisma.enrollment.aggregate({
       where: {
         tenantId,
-        ...leadFilter,
+        ...enrollLeadFilter,
         status: "ACTIVE",
         NOT: { paidInFullUntil: { gte: startOfDay(new Date()) } },
       },
@@ -289,15 +293,18 @@ export async function getDashboardData(
             tenantId,
             status: "ACTIVE",
             enrolledAt: { gte: period.from, lte: period.to },
-            ...(hasLeadConstraint ? leadFilter : {}),
+            ...enrollLeadFilter,
           },
           _sum: { monthlyValue: true },
         }),
     isSeller
       ? Promise.resolve([])
-      : prisma.user.findMany({
+      : // v1.1-BE: inclui QUALQUER membro ativo (não só role SELLER) que
+        // tenha matrículas atribuídas — dono/gerente que fecham também
+        // aparecem, pro ranking bater com o total de matrículas do período.
+        prisma.user.findMany({
           where: {
-            tenants: { some: { tenantId, role: "SELLER", active: true } },
+            tenants: { some: { tenantId, active: true } },
           },
           select: { id: true, name: true, email: true },
         }),
@@ -344,7 +351,7 @@ export async function getDashboardData(
     prisma.enrollment.findMany({
       where: {
         tenantId,
-        ...leadFilter,
+        ...enrollLeadFilter,
         status: "ACTIVE",
         enrolledAt: { gte: period.from, lte: period.to },
       },
