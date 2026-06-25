@@ -577,6 +577,95 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Resgatar matrícula (v1.1-BF) — aluno que cancelou/judicial voltou. Mesma
+// ação serve pra rematrícula/mudança de status pós-cancelado/judicial:
+// volta a ACTIVE, reinicia o vencimento e devolve o lead pro estágio Ganho.
+// ──────────────────────────────────────────────────────────────────────────
+
+const reinstateSchema = z.object({
+  enrollmentId: z.string().min(1),
+  /** Primeiro vencimento ao voltar. Default = 1 mês a partir de hoje. */
+  nextDueDate: z.string().date().optional(),
+});
+
+export async function reinstateEnrollment(input: unknown): Promise<ActionResult> {
+  const parsed = reinstateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  if (enrollment.status !== "CANCELED" && enrollment.status !== "JUDICIAL") {
+    return { ok: false, error: "só dá pra resgatar matrícula cancelada ou judicial" };
+  }
+
+  const nextDue = parsed.data.nextDueDate
+    ? new Date(parsed.data.nextDueDate)
+    : addMonths(new Date(), 1);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
+        status: "ACTIVE",
+        canceledAt: null,
+        nextDueDate: nextDue,
+      },
+    });
+
+    // Devolve o lead pro estágio Ganho e tira tags de perda.
+    const wonStage = await tx.stage.findFirst({
+      where: { tenantId: tenant.id, isWon: true, active: true },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+    const leadCurrent = await tx.lead.findUnique({
+      where: { id: enrollment.leadId },
+      select: { tags: true },
+    });
+    const cleanedTags = (leadCurrent?.tags ?? []).filter(
+      (t) => t !== "Aluno Perdido" && t !== "Judicial",
+    );
+    await tx.lead.update({
+      where: { id: enrollment.leadId },
+      data: {
+        ...(wonStage ? { stageId: wonStage.id } : {}),
+        tags: cleanedTags,
+        lastInteractionAt: new Date(),
+      },
+    });
+    if (wonStage) {
+      await tx.stageHistory.create({
+        data: {
+          leadId: enrollment.leadId,
+          toStageId: wonStage.id,
+          changedById: user.id,
+          notes: "Aluno resgatado (matrícula reativada)",
+        },
+      });
+    }
+
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "ENROLLMENT_REACTIVATED",
+        body: `Aluno resgatado — matrícula reativada; próximo vencimento ${nextDue.toLocaleDateString("pt-BR")}.`,
+        metadata: { enrollmentId: enrollment.id, nextDueDate: nextDue.toISOString() },
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/dashboard");
+  revalidatePath("/kanban");
+  revalidatePath("/quadro");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Congelar matrícula (v1.1-AT) — continua ATIVA e cobrando; só marca o
 // período pra repor os dias no fim do contrato.
 // ──────────────────────────────────────────────────────────────────────────

@@ -304,10 +304,20 @@ export default async function QuadroPage({
                     <td className="px-2 py-2 font-medium capitalize">{m.label}</td>
                     <td className="px-2 py-2 text-right">{m.activeStart}</td>
                     <td className="px-2 py-2 text-right text-emerald-700 dark:text-emerald-300">
-                      +{m.newInMonth}
+                      <DrillNumber
+                        value={`+${m.newInMonth}`}
+                        title={`Novas matrículas · ${m.label}`}
+                        items={m.newNames}
+                        className="font-medium"
+                      />
                     </td>
                     <td className="px-2 py-2 text-right text-red-700 dark:text-red-300">
-                      −{m.canceledInMonth}
+                      <DrillNumber
+                        value={`−${m.canceledInMonth}`}
+                        title={`Cancelamentos · ${m.label}`}
+                        items={m.canceledNames}
+                        className="font-medium"
+                      />
                     </td>
                     <td className="px-2 py-2 text-right text-amber-700 dark:text-amber-300">
                       {m.frozenInMonth}
@@ -323,7 +333,7 @@ export default async function QuadroPage({
         {/* 5) Vendas por vendedora */}
         <Panel
           title="Matrículas por vendedora"
-          subtitle="Produtividade nos últimos 3 meses (matrículas fechadas)"
+          subtitle="Matrículas fechadas por mês (clique nos números pra ver os nomes)"
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -350,14 +360,55 @@ export default async function QuadroPage({
                     <tr key={s.name} className="border-b last:border-0">
                       <td className="px-2 py-2 font-medium">{s.name}</td>
                       {s.counts.map((c, i) => (
-                        <td key={i} className="px-2 py-2 text-right">{c}</td>
+                        <td key={i} className="px-2 py-2 text-right">
+                          {c > 0 ? (
+                            <DrillNumber
+                              value={c}
+                              title={`${s.name} · ${data.salesMonthLabels[i]}`}
+                              items={s.names[i] ?? []}
+                            />
+                          ) : (
+                            c
+                          )}
+                        </td>
                       ))}
-                      <td className="px-2 py-2 text-right font-semibold">{s.total}</td>
+                      <td className="px-2 py-2 text-right font-semibold">
+                        <DrillNumber
+                          value={s.total}
+                          title={`${s.name} · total`}
+                          items={s.totalNames}
+                          className="font-semibold"
+                        />
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+          </div>
+        </Panel>
+
+        {/* Matrículas com vs sem aula experimental (v1.1-BF, item 2) */}
+        <Panel
+          title="Matrículas com vs sem aula experimental"
+          subtitle="Vitalício — de todas as matrículas, quantos alunos chegaram a fazer uma experimental e quantos fecharam direto. Clique pra ver os nomes."
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <OutcomeCard
+              label="Total de matrículas"
+              items={[...data.matriculasExp.comExp, ...data.matriculasExp.semExp]}
+              tone="primary"
+            />
+            <OutcomeCard
+              label="Fizeram experimental"
+              items={data.matriculasExp.comExp}
+              tone="emerald"
+            />
+            <OutcomeCard
+              label="Fecharam sem experimental"
+              items={data.matriculasExp.semExp}
+              tone="amber"
+            />
           </div>
         </Panel>
 

@@ -113,6 +113,7 @@ export async function getQuadroData(
     monthClasses,
     expOutcomeLeads,
     looseRevenue,
+    enrollmentsForExpSplit,
   ] = await Promise.all([
     // Matrículas ativas (gênero + kids + plano + pagamento + vencimento +
     // nome do aluno pro drill-down v1.1-AY).
@@ -148,23 +149,32 @@ export async function getQuadroData(
     }),
     // Todas as matrículas (pra crescimento + churn mês a mês).
     // v1.1-BE: ignora leads excluídos (duplicatas) — alinha o churn com o
-    // painel de Cancelamentos, que já filtra deletedAt.
+    // painel de Cancelamentos. v1.1-BF: +id/nome pro drill-down do churn.
     prisma.enrollment.findMany({
       where: { tenantId, lead: { deletedAt: null } },
-      select: { enrolledAt: true, canceledAt: true, status: true, suspendedAt: true },
+      select: {
+        id: true,
+        enrolledAt: true,
+        canceledAt: true,
+        status: true,
+        suspendedAt: true,
+        lead: { select: { name: true } },
+      },
     }),
-    // Matrículas dos últimos 6 meses pra ranking por vendedora
+    // v1.1-BF: TODAS as matrículas (vitalício) pro ranking por vendedora —
+    // o quadro mostra todos os meses (de abril/26 em diante).
     prisma.enrollment.findMany({
       where: {
         tenantId,
         lead: { deletedAt: null },
-        enrolledAt: { gte: startOfMonth(subMonths(now, 5)) },
       },
       select: {
+        id: true,
         enrolledAt: true,
         monthlyValue: true,
         lead: {
           select: {
+            name: true,
             assignedSeller: { select: { id: true, name: true, email: true } },
           },
         },
@@ -259,6 +269,20 @@ export async function getQuadroData(
     }),
     // Receita de aulas avulsas (v1.1-BD)
     getLooseRevenue(tenantId, monthStart, nextMonthStart),
+    // v1.1-BF (item 2): matrículas com/sem aula experimental (vitalício).
+    prisma.enrollment.findMany({
+      where: { tenantId, lead: { deletedAt: null } },
+      select: {
+        id: true,
+        lead: {
+          select: {
+            name: true,
+            experimentalClasses: { select: { id: true }, take: 1 },
+          },
+        },
+      },
+      orderBy: { enrolledAt: "desc" },
+    }),
   ]);
 
   // ── Bloco "Número de matrículas" ─────────────────────────────────────────
@@ -357,6 +381,13 @@ export async function getQuadroData(
     sub: `${p.modality?.name ?? "—"} · ${p.totalClasses} aulas`,
   }));
 
+  // Item de drill-down a partir de uma matrícula (id + nome do lead).
+  const matriculaItem = (e: { id: string; lead: { name: string } }): Name => ({
+    id: e.id,
+    name: e.lead.name,
+    href: enrollHref(e.lead.name),
+  });
+
   // ── Crescimento (ativos no 1º dia de cada mês) + churn mensal ────────────
   const months = lastMonthStarts(now, 6);
   const growth = months.map((mStart, i) => {
@@ -365,12 +396,13 @@ export async function getQuadroData(
         ? months[i + 1]!
         : startOfMonth(subMonths(now, -1)); // início do próximo mês
     const activeStart = countActiveAt(allEnrollments, mStart);
-    const canceledInMonth = allEnrollments.filter(
+    // v1.1-BF: além das contagens, guarda os NOMES (drill-down clicável).
+    const canceledList = allEnrollments.filter(
       (e) => e.canceledAt && e.canceledAt >= mStart && e.canceledAt < monthEnd,
-    ).length;
-    const newInMonth = allEnrollments.filter(
+    );
+    const newList = allEnrollments.filter(
       (e) => e.enrolledAt >= mStart && e.enrolledAt < monthEnd,
-    ).length;
+    );
     // Congelamentos no mês (3º fluxo: nem novo, nem cancelamento). v1.1-AT:
     // congelado é ACTIVE + suspendedAt, então conta por suspendedAt no mês.
     const frozenInMonth = allEnrollments.filter(
@@ -379,37 +411,85 @@ export async function getQuadroData(
     return {
       label: format(mStart, "MMM/yy", { locale: ptBR }),
       activeStart,
-      newInMonth,
-      canceledInMonth,
+      newInMonth: newList.length,
+      newNames: newList.map(matriculaItem),
+      canceledInMonth: canceledList.length,
+      canceledNames: canceledList.map(matriculaItem),
       frozenInMonth,
-      churnPct: ratePct(canceledInMonth, activeStart),
+      churnPct: ratePct(canceledList.length, activeStart),
     };
   });
 
-  // ── Vendas (matrículas) por vendedora — últimos 3 meses ──────────────────
-  const salesMonths = lastMonthStarts(now, 3);
+  // ── Matrículas por vendedora — TODOS os meses (v1.1-BF, de abril/26 em
+  // diante). Gera a lista de meses do mais antigo (1ª matrícula) até agora.
+  const earliest = salesEnrollments.reduce<Date | null>(
+    (min, e) => (min === null || e.enrolledAt < min ? e.enrolledAt : min),
+    null,
+  );
+  const firstMonth = earliest ? startOfMonth(earliest) : monthStart;
+  const salesMonths: Date[] = [];
+  for (
+    let m = firstMonth;
+    m <= monthStart;
+    m = startOfMonth(subMonths(m, -1))
+  ) {
+    salesMonths.push(m);
+  }
   const salesMonthEnds = salesMonths.map((m, i) =>
     i + 1 < salesMonths.length ? salesMonths[i + 1]! : startOfMonth(subMonths(now, -1)),
   );
-  type SellerRow = { name: string; counts: number[]; total: number };
+  type SellerRow = {
+    name: string;
+    counts: number[];
+    names: Name[][];
+    total: number;
+    totalNames: Name[];
+  };
   const sellerMap = new Map<string, SellerRow>();
   for (const e of salesEnrollments) {
     const seller = e.lead.assignedSeller;
     const key = seller?.id ?? "__none__";
     const name = seller?.name ?? seller?.email ?? "(sem vendedora)";
     if (!sellerMap.has(key)) {
-      sellerMap.set(key, { name, counts: salesMonths.map(() => 0), total: 0 });
+      sellerMap.set(key, {
+        name,
+        counts: salesMonths.map(() => 0),
+        names: salesMonths.map(() => []),
+        total: 0,
+        totalNames: [],
+      });
     }
     const row = sellerMap.get(key)!;
     const idx = salesMonths.findIndex(
       (m, i) => e.enrolledAt >= m && e.enrolledAt < salesMonthEnds[i]!,
     );
     if (idx >= 0) {
+      const item = matriculaItem(e);
       row.counts[idx]!++;
+      row.names[idx]!.push(item);
       row.total++;
+      row.totalNames.push(item);
     }
   }
   const sellerRanking = [...sellerMap.values()].sort((a, b) => b.total - a.total);
+
+  // ── Matrículas com/sem aula experimental (v1.1-BF, item 2; vitalício) ─────
+  const comExp: Name[] = [];
+  const semExp: Name[] = [];
+  for (const e of enrollmentsForExpSplit) {
+    const item: Name = {
+      id: e.id,
+      name: e.lead.name,
+      href: enrollHref(e.lead.name),
+    };
+    if (e.lead.experimentalClasses.length > 0) comExp.push(item);
+    else semExp.push(item);
+  }
+  const matriculasExp = {
+    total: enrollmentsForExpSplit.length,
+    comExp,
+    semExp,
+  };
 
   // ── Conversão experimental → matrícula (30d e 90d) ───────────────────────
   const convWindow = (since: Date) => {
@@ -561,6 +641,7 @@ export async function getQuadroData(
     growth,
     salesMonthLabels: salesMonths.map((m) => format(m, "MMM/yy", { locale: ptBR })),
     sellerRanking,
+    matriculasExp,
     conversion,
     posExperimental,
     posExpLastWeek,

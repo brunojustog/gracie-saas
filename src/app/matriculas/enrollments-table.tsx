@@ -8,6 +8,7 @@ import {
   Gavel,
   PencilLine,
   Play,
+  RotateCcw,
   Snowflake,
   XCircle,
 } from "lucide-react";
@@ -51,6 +52,7 @@ import {
   markEnrollmentJudicial,
   payEnrollmentInFull,
   reactivateEnrollment,
+  reinstateEnrollment,
   suspendEnrollment,
 } from "./actions";
 import { CollectionNotesButton } from "@/app/dashboard/collection-notes";
@@ -127,6 +129,7 @@ export function EnrollmentsTable({
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [payTarget, setPayTarget] = useState<Row | null>(null);
   const [payFullTarget, setPayFullTarget] = useState<Row | null>(null);
+  const [reinstateTarget, setReinstateTarget] = useState<Row | null>(null);
   const [pending, startTransition] = useTransition();
 
   // v1.1-AB: SELLER também edita — o modal esconde os campos financeiros
@@ -340,6 +343,19 @@ export function EnrollmentsTable({
                           <Play className="h-4 w-4" />
                         </Button>
                       ) : null}
+                      {r.status === "CANCELED" || r.status === "JUDICIAL" ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                          onClick={() => setReinstateTarget(r)}
+                          disabled={pending}
+                          title="Resgatar aluno (reativar matrícula)"
+                          aria-label="Resgatar aluno (reativar matrícula)"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -368,6 +384,10 @@ export function EnrollmentsTable({
       <PayInFullDialog
         target={payFullTarget}
         onClose={() => setPayFullTarget(null)}
+      />
+      <ReinstateDialog
+        target={reinstateTarget}
+        onClose={() => setReinstateTarget(null)}
       />
       <EnrollmentEditModal
         target={editTarget}
@@ -636,6 +656,88 @@ function PayInFullBody({ target, onClose }: { target: Row; onClose: () => void }
         </Button>
         <Button onClick={handleConfirm} disabled={pending}>
           {pending ? "Registrando…" : "Registrar quitação"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+// ── Resgatar aluno (v1.1-BF) ────────────────────────────────────────────────
+
+function ReinstateDialog({
+  target,
+  onClose,
+}: {
+  target: Row | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {target ? <ReinstateBody key={target.id} target={target} onClose={onClose} /> : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReinstateBody({ target, onClose }: { target: Row; onClose: () => void }) {
+  const router = useRouter();
+  const [nextDueDate, setNextDueDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [pending, startTransition] = useTransition();
+
+  const handleConfirm = () => {
+    startTransition(async () => {
+      const result = await reinstateEnrollment({
+        enrollmentId: target.id,
+        nextDueDate,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Aluno resgatado — matrícula reativada");
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Resgatar aluno</DialogTitle>
+        <DialogDescription>
+          {target.lead.name} — volta a ATIVA e ao funil (Ganho). Use pra quem
+          cancelou e quer voltar (rematrícula) ou pra reverter judicial.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="reinstate-due">Próximo vencimento</Label>
+          <Input
+            id="reinstate-due"
+            type="date"
+            value={nextDueDate}
+            onChange={(e) => setNextDueDate(e.target.value)}
+            disabled={pending}
+          />
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          A matrícula volta a contar como ativa e a cobrar a partir desse
+          vencimento. Confira o valor/plano em seguida, se mudou.
+        </p>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={pending}>
+          Voltar
+        </Button>
+        <Button onClick={handleConfirm} disabled={pending || !nextDueDate}>
+          {pending ? "Resgatando…" : "Resgatar aluno"}
         </Button>
       </DialogFooter>
     </>
