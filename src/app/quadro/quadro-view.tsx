@@ -4,7 +4,7 @@ import { ptBR } from "date-fns/locale";
 
 import { DrillNumber, type DrillItem } from "@/components/drill-number";
 import type { PeriodPreset } from "@/lib/period";
-import type { QuadroData } from "@/server/quadro";
+import { EXP_SPLIT_SINCE, type QuadroData } from "@/server/quadro";
 
 import { ExpPeriodFilter } from "./exp-period-filter";
 
@@ -291,7 +291,7 @@ export function QuadroBody({
       {/* Matrículas com vs sem aula experimental */}
       <Panel
         title="Matrículas com vs sem aula experimental"
-        subtitle="Vitalício — de todas as matrículas, quantos fizeram experimental e quantos fecharam direto. Clique pra ver os nomes."
+        subtitle={`A partir de ${format(EXP_SPLIT_SINCE, "dd/MM/yyyy", { locale: ptBR })} — das matrículas novas, quantos fizeram experimental e quantos fecharam direto. Clique pra ver os nomes.`}
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <OutcomeCard label="Total de matrículas" items={[...data.matriculasExp.comExp, ...data.matriculasExp.semExp]} tone="primary" />

@@ -23,6 +23,13 @@ import { isOverdue } from "@/lib/overdue";
 import { getLooseRevenue } from "@/server/loose-classes";
 import { getPrivatePackageCounts, getPrivateRevenue } from "@/server/private-packages";
 
+/**
+ * v1.1-BH: a partir de quando o painel "Matrículas com/sem experimental" é
+ * confiável. Dados anteriores não têm o vínculo experimental→matrícula
+ * registrado, então só contamos matrículas feitas daqui pra frente.
+ */
+export const EXP_SPLIT_SINCE = new Date(2026, 5, 25); // 25/06/2026
+
 /** Percentual seguro (0 quando o denominador é 0). */
 export function ratePct(part: number, total: number): number {
   if (total <= 0) return 0;
@@ -269,9 +276,14 @@ export async function getQuadroData(
     }),
     // Receita de aulas avulsas (v1.1-BD)
     getLooseRevenue(tenantId, monthStart, nextMonthStart),
-    // v1.1-BF (item 2): matrículas com/sem aula experimental (vitalício).
+    // v1.1-BF/BH (item 2): matrículas com/sem aula experimental, contando só
+    // de EXP_SPLIT_SINCE em diante (dados antigos sem vínculo confiável).
     prisma.enrollment.findMany({
-      where: { tenantId, lead: { deletedAt: null } },
+      where: {
+        tenantId,
+        lead: { deletedAt: null },
+        enrolledAt: { gte: EXP_SPLIT_SINCE },
+      },
       select: {
         id: true,
         lead: {
