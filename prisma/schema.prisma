@@ -89,6 +89,12 @@ model Tenant {
   logoUrl      String?
   primaryColor String   @default("#C8102E")
   active       Boolean  @default(true)
+  /**
+   * v1.1-BF: token do link público (read-only, sem login) do Quadro do Vitor.
+   * /p/quadro/<token>. Null = link desativado. Regerar troca o token (revoga
+   * o anterior). O link público NUNCA mostra números financeiros.
+   */
+  publicQuadroToken String? @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -22,7 +22,9 @@ export const authConfig = {
         pathname === "/login" ||
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/api/webhooks") ||
-        pathname.startsWith("/invite/");
+        pathname.startsWith("/invite/") ||
+        // v1.1-BF: visão pública do Quadro por token (read-only, sem login).
+        pathname.startsWith("/p/");
 
       if (isPublic) return true;
       return isLoggedIn;
