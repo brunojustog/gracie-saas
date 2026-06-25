@@ -259,13 +259,16 @@ export async function getQuadroData(
       },
       orderBy: { scheduledDate: "asc" },
     }),
-    // v1.1-BC/BE: destino dos leads que fizeram experimental NO PERÍODO (item 8).
+    // v1.1-BC/BE/BI: destino dos leads que COMPARECERAM a uma experimental no
+    // período (item 8). Só ATTENDED → bate com o nº "compareceram" de cima.
     // "Matriculou" = tem Enrollment (fonte da verdade), não estágio Ganho.
     prisma.lead.findMany({
       where: {
         tenantId,
         deletedAt: null,
-        experimentalClasses: { some: { scheduledDate: { gte: ep.from, lte: ep.to } } },
+        experimentalClasses: {
+          some: { scheduledDate: { gte: ep.from, lte: ep.to }, status: "ATTENDED" },
+        },
       },
       select: {
         id: true,

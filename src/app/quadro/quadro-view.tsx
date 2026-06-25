@@ -334,7 +334,7 @@ export function QuadroBody({
 
       <Panel
         title="Para onde foram os leads que fizeram experimental"
-        subtitle="Dos que fizeram aula no período: 'Matriculou' = tem matrícula registrada. Clique pra ver os nomes."
+        subtitle="Dos que COMPARECERAM a uma experimental no período: 'Matriculou' = tem matrícula registrada. Clique pra ver os nomes."
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <OutcomeCard label="Matriculou" items={data.expOutcomes.matriculou} tone="emerald" />
