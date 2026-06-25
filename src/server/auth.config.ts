@@ -23,6 +23,8 @@ export const authConfig = {
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/api/webhooks") ||
         pathname.startsWith("/invite/") ||
+        // Crons são protegidos por CRON_SECRET no próprio handler.
+        pathname.startsWith("/api/cron") ||
         // v1.1-BF: visão pública do Quadro por token (read-only, sem login).
         pathname.startsWith("/p/");
 

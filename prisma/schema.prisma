@@ -95,6 +95,12 @@ model Tenant {
    * o anterior). O link público NUNCA mostra números financeiros.
    */
   publicQuadroToken String? @unique
+  /**
+   * v1.1-BH: telefones que recebem o resumo diário do Quadro no WhatsApp
+   * (22h, via WuzAPI). Vazio = ninguém recebe. Formato livre; normalizado
+   * no envio (toWuzapiPhone).
+   */
+  dailyReportPhones String[] @default([])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
