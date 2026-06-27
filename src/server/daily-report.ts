@@ -225,6 +225,21 @@ export async function backfillSnapshots(
   return days;
 }
 
+/** Backfill dos últimos `days` dias pra TODOS os tenants ativos (seed). */
+export async function backfillAllSnapshots(
+  days = 7,
+  now: Date = new Date(),
+): Promise<{ tenants: number; days: number }> {
+  const allTenants = await prisma.tenant.findMany({
+    where: { active: true },
+    select: { id: true },
+  });
+  for (const t of allTenants) {
+    await backfillSnapshots(t.id, days, now);
+  }
+  return { tenants: allTenants.length, days };
+}
+
 /**
  * Rotina diária completa (cron 22h): grava snapshot de TODOS os tenants
  * ativos e envia o resumo pra quem tem WhatsApp configurado.

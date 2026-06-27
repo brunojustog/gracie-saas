@@ -8,7 +8,7 @@
  */
 import { type NextRequest, NextResponse } from "next/server";
 
-import { runDailyReports } from "@/server/daily-report";
+import { backfillAllSnapshots, runDailyReports } from "@/server/daily-report";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +52,13 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
+    // ?backfill=N → só semeia os últimos N dias (não envia WhatsApp).
+    const backfill = req.nextUrl.searchParams.get("backfill");
+    if (backfill) {
+      const days = Math.min(31, Math.max(1, Number(backfill) || 7));
+      const summary = await backfillAllSnapshots(days);
+      return NextResponse.json({ ok: true, backfill: summary });
+    }
     const summary = await runDailyReports();
     return NextResponse.json({ ok: true, ...summary });
   } catch (err) {
