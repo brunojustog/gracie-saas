@@ -7,7 +7,7 @@
  */
 import { randomUUID } from "crypto";
 
-import { endOfDay, format, startOfDay } from "date-fns";
+import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
@@ -55,8 +55,15 @@ export async function getDailyDigest(tenantId: string, now: Date = new Date()) {
     prisma.looseClass.count({
       where: { tenantId, classDate: { gte: dayStart, lte: dayEnd } },
     }),
+    // Ativos no FIM daquele dia (ponto-no-tempo) — correto pro histórico:
+    // matrícula que já existia e não estava cancelada até dayEnd.
     prisma.enrollment.count({
-      where: { tenantId, ...live, status: "ACTIVE" },
+      where: {
+        tenantId,
+        ...live,
+        enrolledAt: { lte: dayEnd },
+        OR: [{ canceledAt: null }, { canceledAt: { gt: dayEnd } }],
+      },
     }),
   ]);
 
@@ -156,4 +163,80 @@ export async function sendDailyQuadroReports(
   }
 
   return { tenants: tenants.length, sent, failed };
+}
+
+// ── Snapshots diários (v1.1-BJ) ─────────────────────────────────────────────
+
+/** Grava (upsert) o snapshot do dia `now` pro tenant. */
+export async function storeDailySnapshot(
+  tenantId: string,
+  now: Date = new Date(),
+) {
+  const d = await getDailyDigest(tenantId, now);
+  const day = startOfDay(now);
+  const fields = {
+    matriculas: d.matriculasHoje,
+    cancelamentos: d.cancelamentosHoje,
+    experimentais: d.experimentaisHoje,
+    compareceram: d.compareceramHoje,
+    avulsas: d.avulsasHoje,
+    ativos: d.ativosTotal,
+  };
+  await prisma.dailyReportSnapshot.upsert({
+    where: { tenantId_day: { tenantId, day } },
+    create: { tenantId, day, ...fields },
+    update: fields,
+  });
+  return d;
+}
+
+/** Últimos `n` snapshots do tenant, do mais antigo pro mais novo (display). */
+export async function getRecentSnapshots(tenantId: string, n = 7) {
+  const rows = await prisma.dailyReportSnapshot.findMany({
+    where: { tenantId },
+    orderBy: { day: "desc" },
+    take: n,
+    select: {
+      day: true,
+      matriculas: true,
+      cancelamentos: true,
+      experimentais: true,
+      compareceram: true,
+      avulsas: true,
+      ativos: true,
+    },
+  });
+  return rows.reverse(); // mais antigo → mais novo (esquerda → direita)
+}
+
+export type DailySnapshot = Awaited<
+  ReturnType<typeof getRecentSnapshots>
+>[number];
+
+/** Backfill dos últimos `days` dias (pra a faixa já aparecer cheia). */
+export async function backfillSnapshots(
+  tenantId: string,
+  days = 7,
+  now: Date = new Date(),
+): Promise<number> {
+  for (let i = 0; i < days; i++) {
+    await storeDailySnapshot(tenantId, subDays(now, i));
+  }
+  return days;
+}
+
+/**
+ * Rotina diária completa (cron 22h): grava snapshot de TODOS os tenants
+ * ativos e envia o resumo pra quem tem WhatsApp configurado.
+ */
+export async function runDailyReports(now: Date = new Date()) {
+  const allTenants = await prisma.tenant.findMany({
+    where: { active: true },
+    select: { id: true },
+  });
+  for (const t of allTenants) {
+    await storeDailySnapshot(t.id, now);
+  }
+  const sendSummary = await sendDailyQuadroReports(now);
+  return { snapshots: allTenants.length, ...sendSummary };
 }

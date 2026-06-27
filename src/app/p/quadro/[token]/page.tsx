@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { resolvePreset } from "@/lib/period";
 import { prisma } from "@/lib/prisma";
+import { getRecentSnapshots } from "@/server/daily-report";
 import { getQuadroData } from "@/server/quadro";
 
 import { QuadroBody } from "@/app/quadro/quadro-view";
@@ -25,7 +26,10 @@ export default async function PublicQuadroPage({ params }: { params: Params }) {
   if (!tenant) notFound();
 
   const expPeriod = resolvePreset("this_month");
-  const data = await getQuadroData(tenant.id, expPeriod);
+  const [data, snapshots] = await Promise.all([
+    getQuadroData(tenant.id, expPeriod),
+    getRecentSnapshots(tenant.id, 7),
+  ]);
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -37,7 +41,7 @@ export default async function PublicQuadroPage({ params }: { params: Params }) {
           </span>
         </div>
       </header>
-      <QuadroBody data={data} expSelector="this_month" publicMode />
+      <QuadroBody data={data} expSelector="this_month" publicMode dailySnapshots={snapshots} />
     </div>
   );
 }

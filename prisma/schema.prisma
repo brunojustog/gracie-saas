@@ -169,6 +169,30 @@ model Tenant {
   paymentRecords      PaymentRecord[]
   privatePackages     PrivatePackage[]
   looseClasses        LooseClass[]
+  dailySnapshots      DailyReportSnapshot[]
+}
+
+/**
+ * Snapshot do resumo diário (v1.1-BJ). Gravado pelo cron das 22h, 1 por dia
+ * por tenant. Alimenta a faixa "últimos dias" na visão pública do Quadro.
+ */
+model DailyReportSnapshot {
+  id            String   @id @default(cuid())
+  tenantId      String
+  day           DateTime @db.Date // dia (sem hora)
+  matriculas    Int
+  cancelamentos Int
+  experimentais Int
+  compareceram  Int
+  avulsas       Int
+  ativos        Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, day])
+  @@index([tenantId, day])
 }
 
 enum Role {

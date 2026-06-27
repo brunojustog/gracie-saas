@@ -4,6 +4,7 @@ import { ptBR } from "date-fns/locale";
 
 import { DrillNumber, type DrillItem } from "@/components/drill-number";
 import type { PeriodPreset } from "@/lib/period";
+import type { DailySnapshot } from "@/server/daily-report";
 import { EXP_SPLIT_SINCE, type QuadroData } from "@/server/quadro";
 
 import { ExpPeriodFilter } from "./exp-period-filter";
@@ -40,6 +41,7 @@ export function QuadroBody({
   to,
   publicMode = false,
   shareSlot,
+  dailySnapshots,
 }: {
   data: QuadroData;
   expSelector: PeriodPreset | "custom";
@@ -47,6 +49,8 @@ export function QuadroBody({
   to?: string;
   publicMode?: boolean;
   shareSlot?: React.ReactNode;
+  /** v1.1-BJ: faixa "últimos dias" (resumo diário). */
+  dailySnapshots?: DailySnapshot[];
 }) {
   return (
     <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-4">
@@ -60,6 +64,10 @@ export function QuadroBody({
         </div>
         {shareSlot}
       </div>
+
+      {dailySnapshots && dailySnapshots.length > 0 ? (
+        <DailyStrip snapshots={dailySnapshots} />
+      ) : null}
 
       {/* 1) Número de matrículas */}
       <section className="grid gap-4 lg:grid-cols-2">
@@ -428,6 +436,64 @@ export function QuadroBody({
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Faixa "resumo dos últimos dias" (v1.1-BJ) — 1 card por dia, atualiza 22h. */
+function DailyStrip({ snapshots }: { snapshots: DailySnapshot[] }) {
+  // `day` vem como DATE (UTC midnight) — reconstrói a data local pelos
+  // componentes UTC pra não deslocar 1 dia no fuso.
+  const dayLabel = (raw: Date | string) => {
+    const d = new Date(raw);
+    const local = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    return {
+      dow: format(local, "EEE", { locale: ptBR }),
+      date: format(local, "dd/MM", { locale: ptBR }),
+    };
+  };
+  const last = snapshots.length - 1;
+
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold">Resumo dos últimos dias</h3>
+        <p className="text-xs text-muted-foreground">
+          Atualiza todo dia às 22h — entra o dia de hoje e sai o mais antigo.
+        </p>
+      </div>
+      <div
+        className="grid gap-2"
+        style={{
+          gridTemplateColumns: `repeat(${snapshots.length}, minmax(110px, 1fr))`,
+        }}
+      >
+        {snapshots.map((s, i) => {
+          const l = dayLabel(s.day);
+          const isToday = i === last;
+          return (
+            <div
+              key={String(s.day)}
+              className={`rounded-lg border p-2.5 text-xs ${isToday ? "border-primary/40 bg-primary/5" : "bg-muted/30"}`}
+            >
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="font-semibold capitalize">{l.dow}</span>
+                <span className="text-muted-foreground">{l.date}</span>
+              </div>
+              <ul className="space-y-0.5">
+                <li className="flex justify-between"><span>✅ Matríc.</span><span className="font-medium tabular-nums">{s.matriculas}</span></li>
+                <li className="flex justify-between"><span>❌ Cancel.</span><span className="font-medium tabular-nums">{s.cancelamentos}</span></li>
+                <li className="flex justify-between"><span>🥋 Exper.</span><span className="font-medium tabular-nums">{s.experimentais} ({s.compareceram})</span></li>
+                <li className="flex justify-between"><span>🎟️ Avulsas</span><span className="font-medium tabular-nums">{s.avulsas}</span></li>
+                <li className="flex justify-between border-t pt-0.5"><span>👥 Ativos</span><span className="font-semibold tabular-nums">{s.ativos}</span></li>
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        🥋 Experimentais = total no dia (entre parênteses, quantos compareceram).
+      </p>
+    </div>
+  );
+}
 
 function Panel({
   title,

@@ -8,7 +8,7 @@
  */
 import { type NextRequest, NextResponse } from "next/server";
 
-import { sendDailyQuadroReports } from "@/server/daily-report";
+import { runDailyReports } from "@/server/daily-report";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
-    const summary = await sendDailyQuadroReports();
+    const summary = await runDailyReports();
     return NextResponse.json({ ok: true, ...summary });
   } catch (err) {
     console.error("[cron/daily-quadro] erro", err);

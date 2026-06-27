@@ -7,6 +7,7 @@ import {
 } from "@/lib/period";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
+import { getRecentSnapshots } from "@/server/daily-report";
 import { getQuadroData } from "@/server/quadro";
 import { requireRole } from "@/server/tenant";
 
@@ -39,12 +40,13 @@ export default async function QuadroPage({
   const expPeriod = customPeriod ?? resolvePreset(preset);
   const expSelector: PeriodPreset | "custom" = customPeriod ? "custom" : preset;
 
-  const [data, tenantRow] = await Promise.all([
+  const [data, tenantRow, snapshots] = await Promise.all([
     getQuadroData(tenant.id, expPeriod),
     prisma.tenant.findUnique({
       where: { id: tenant.id },
       select: { publicQuadroToken: true },
     }),
+    getRecentSnapshots(tenant.id, 7),
   ]);
 
   return (
@@ -72,6 +74,7 @@ export default async function QuadroPage({
         expSelector={expSelector}
         from={sp.from}
         to={sp.to}
+        dailySnapshots={snapshots}
         shareSlot={<PublicLinkButton token={tenantRow?.publicQuadroToken ?? null} />}
       />
     </>
