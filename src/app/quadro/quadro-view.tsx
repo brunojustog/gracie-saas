@@ -329,7 +329,31 @@ export function QuadroBody({
             {data.expStats.unregistered.length > 0 ? (
               <StatChip label="sem registro" prefix="! " value={data.expStats.unregistered.length} items={data.expStats.unregistered} tone="zinc" />
             ) : null}
+            {data.expStats.canceled.length > 0 ? (
+              <StatChip label="canceladas" prefix="⊘ " value={data.expStats.canceled.length} items={data.expStats.canceled} tone="zinc" />
+            ) : null}
           </div>
+          {/* v1.1-BK: reconcilia o "compareceram" (aulas × pessoas). */}
+          <p className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+            <span>
+              Dos <strong>{data.expStats.attended.length}</strong> comparecimentos:{" "}
+              <strong>{data.expStats.attendedUnique}</strong> pessoas diferentes
+            </span>
+            {data.expStats.attendedRepeated > 0 ? (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1">
+                  <DrillNumber
+                    value={data.expStats.attendedRepeated}
+                    title="Comparecimentos repetidos (mesmo lead voltou)"
+                    items={data.expStats.attendedRepeaterNames}
+                    className="font-medium text-amber-700 dark:text-amber-300"
+                  />
+                  <span>repetidas (mesmo lead veio 2+)</span>
+                </span>
+              </>
+            ) : null}
+          </p>
         </Panel>
 
         <Panel title="Experimentais por programa (período)" subtitle="GB1 / GB2 / GBF / GBK… — clique pra ver os nomes">

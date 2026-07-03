@@ -252,6 +252,7 @@ export async function getQuadroData(
       where: { tenantId, scheduledDate: { gte: ep.from, lte: ep.to } },
       select: {
         id: true,
+        leadId: true,
         scheduledDate: true,
         status: true,
         lead: { select: { name: true } },
@@ -569,10 +570,36 @@ export async function getQuadroData(
   });
   const isOpen = (s: string) => s === "SCHEDULED" || s === "CONFIRMED";
   const notCanceled = monthClasses.filter((c) => c.status !== "CANCELED");
+
+  // v1.1-BK: comparecimentos por pessoa única × repetidas (mesmo lead voltou).
+  // Ex.: 26 aulas comparecidas = 19 pessoas + 7 repetidas → o número "bate".
+  const attendedRaw = notCanceled.filter((c) => c.status === "ATTENDED");
+  const attendedByLead = new Map<string, typeof attendedRaw>();
+  for (const c of attendedRaw) {
+    const arr = attendedByLead.get(c.leadId) ?? [];
+    arr.push(c);
+    attendedByLead.set(c.leadId, arr);
+  }
+  const attendedRepeaterNames: Name[] = [];
+  for (const [, classes] of attendedByLead) {
+    if (classes.length > 1) {
+      attendedRepeaterNames.push({
+        id: classes[0]!.leadId,
+        name: classes[0]!.lead.name,
+        sub: `compareceu ${classes.length}x`,
+        href: kanbanHref(classes[0]!.lead.name),
+      });
+    }
+  }
+
   const expStats = {
     total: notCanceled.length,
     totalNames: notCanceled.map(classItem),
-    attended: notCanceled.filter((c) => c.status === "ATTENDED").map(classItem),
+    attended: attendedRaw.map(classItem),
+    // Comparecimentos: pessoas únicas + repetidas (mesmo lead 2+).
+    attendedUnique: attendedByLead.size,
+    attendedRepeated: attendedRaw.length - attendedByLead.size,
+    attendedRepeaterNames,
     noShow: notCanceled.filter((c) => c.status === "NO_SHOW").map(classItem),
     rescheduled: notCanceled.filter((c) => c.status === "RESCHEDULED").map(classItem),
     upcoming: notCanceled
@@ -581,6 +608,8 @@ export async function getQuadroData(
     unregistered: notCanceled
       .filter((c) => isOpen(c.status) && c.scheduledDate <= now)
       .map(classItem),
+    // v1.1-BK: canceladas ficam visíveis (às vezes engano).
+    canceled: monthClasses.filter((c) => c.status === "CANCELED").map(classItem),
   };
 
   // Por programa (GB1/GB2/GBF/GBK…). GBK-* colapsa em "GBK".

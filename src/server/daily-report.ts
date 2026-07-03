@@ -7,79 +7,72 @@
  */
 import { randomUUID } from "crypto";
 
-import { endOfDay, format, startOfDay, subDays } from "date-fns";
+import { endOfDay, format, startOfDay, startOfMonth, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
 import { sendText } from "@/server/wuzapi";
 
-/** Contadores do dia corrente (fuso do container = America/Sao_Paulo). */
-export async function getDailyDigest(tenantId: string, now: Date = new Date()) {
-  const dayStart = startOfDay(now);
-  const dayEnd = endOfDay(now);
+/** Contadores de um intervalo [from, to] (fuso do container = SP). */
+export async function getRangeDigest(tenantId: string, from: Date, to: Date) {
   const live = { lead: { deletedAt: null } };
+  const [matriculas, cancelamentos, experimentais, compareceram, avulsas, ativos] =
+    await Promise.all([
+      prisma.enrollment.count({
+        where: { tenantId, ...live, enrolledAt: { gte: from, lte: to } },
+      }),
+      prisma.enrollment.count({
+        where: {
+          tenantId,
+          ...live,
+          status: { in: ["CANCELED", "JUDICIAL"] },
+          canceledAt: { gte: from, lte: to },
+        },
+      }),
+      prisma.experimentalClass.count({
+        where: { tenantId, status: { not: "CANCELED" }, scheduledDate: { gte: from, lte: to } },
+      }),
+      prisma.experimentalClass.count({
+        where: { tenantId, status: "ATTENDED", scheduledDate: { gte: from, lte: to } },
+      }),
+      prisma.looseClass.count({
+        where: { tenantId, classDate: { gte: from, lte: to } },
+      }),
+      // Ativos no FIM do intervalo (ponto-no-tempo).
+      prisma.enrollment.count({
+        where: {
+          tenantId,
+          ...live,
+          enrolledAt: { lte: to },
+          OR: [{ canceledAt: null }, { canceledAt: { gt: to } }],
+        },
+      }),
+    ]);
+  return { matriculas, cancelamentos, experimentais, compareceram, avulsas, ativos };
+}
 
-  const [
-    matriculasHoje,
-    cancelamentosHoje,
-    experimentaisHoje,
-    compareceramHoje,
-    avulsasHoje,
-    ativosTotal,
-  ] = await Promise.all([
-    prisma.enrollment.count({
-      where: { tenantId, ...live, enrolledAt: { gte: dayStart, lte: dayEnd } },
-    }),
-    prisma.enrollment.count({
-      where: {
-        tenantId,
-        ...live,
-        status: { in: ["CANCELED", "JUDICIAL"] },
-        canceledAt: { gte: dayStart, lte: dayEnd },
-      },
-    }),
-    prisma.experimentalClass.count({
-      where: {
-        tenantId,
-        status: { not: "CANCELED" },
-        scheduledDate: { gte: dayStart, lte: dayEnd },
-      },
-    }),
-    prisma.experimentalClass.count({
-      where: {
-        tenantId,
-        status: "ATTENDED",
-        scheduledDate: { gte: dayStart, lte: dayEnd },
-      },
-    }),
-    prisma.looseClass.count({
-      where: { tenantId, classDate: { gte: dayStart, lte: dayEnd } },
-    }),
-    // Ativos no FIM daquele dia (ponto-no-tempo) — correto pro histórico:
-    // matrícula que já existia e não estava cancelada até dayEnd.
-    prisma.enrollment.count({
-      where: {
-        tenantId,
-        ...live,
-        enrolledAt: { lte: dayEnd },
-        OR: [{ canceledAt: null }, { canceledAt: { gt: dayEnd } }],
-      },
-    }),
-  ]);
-
+/** Contadores do dia corrente. */
+export async function getDailyDigest(tenantId: string, now: Date = new Date()) {
+  const d = await getRangeDigest(tenantId, startOfDay(now), endOfDay(now));
   return {
-    matriculasHoje,
-    cancelamentosHoje,
-    experimentaisHoje,
-    compareceramHoje,
-    avulsasHoje,
-    ativosTotal,
+    matriculasHoje: d.matriculas,
+    cancelamentosHoje: d.cancelamentos,
+    experimentaisHoje: d.experimentais,
+    compareceramHoje: d.compareceram,
+    avulsasHoje: d.avulsas,
+    ativosTotal: d.ativos,
   };
+}
+
+/** Acumulado do mês corrente até `now`. */
+export async function getMonthDigest(tenantId: string, now: Date = new Date()) {
+  return getRangeDigest(tenantId, startOfMonth(now), now);
 }
 
 function buildMessage(
   tenantName: string,
-  digest: Awaited<ReturnType<typeof getDailyDigest>>,
+  day: Awaited<ReturnType<typeof getDailyDigest>>,
+  month: Awaited<ReturnType<typeof getMonthDigest>>,
   link: string,
   now: Date,
 ): string {
@@ -87,11 +80,19 @@ function buildMessage(
     `📊 *Quadro do dia — ${tenantName}*`,
     format(now, "EEEE, dd/MM/yyyy", { locale: ptBR }),
     "",
-    `✅ Matrículas hoje: ${digest.matriculasHoje}`,
-    `❌ Cancelamentos hoje: ${digest.cancelamentosHoje}`,
-    `🥋 Experimentais hoje: ${digest.experimentaisHoje} (${digest.compareceramHoje} compareceram)`,
-    `🎟️ Aulas avulsas hoje: ${digest.avulsasHoje}`,
-    `👥 Alunos ativos: ${digest.ativosTotal}`,
+    "*Hoje:*",
+    `✅ Matrículas: ${day.matriculasHoje}`,
+    `❌ Cancelamentos: ${day.cancelamentosHoje}`,
+    `🥋 Experimentais: ${day.experimentaisHoje} (${day.compareceramHoje} compareceram)`,
+    `🎟️ Aulas avulsas: ${day.avulsasHoje}`,
+    "",
+    `*No mês (${format(now, "MMMM", { locale: ptBR })}):*`,
+    `✅ Matrículas: ${month.matriculas}`,
+    `❌ Cancelamentos: ${month.cancelamentos}`,
+    `🥋 Experimentais: ${month.experimentais} (${month.compareceram} compareceram)`,
+    `🎟️ Aulas avulsas: ${month.avulsas}`,
+    "",
+    `👥 Alunos ativos: ${day.ativosTotal}`,
     "",
     "Ver o quadro completo (sem login):",
     link,
@@ -145,9 +146,12 @@ export async function sendDailyQuadroReports(
       });
     }
 
-    const digest = await getDailyDigest(t.id, now);
+    const [digest, month] = await Promise.all([
+      getDailyDigest(t.id, now),
+      getMonthDigest(t.id, now),
+    ]);
     const link = `${baseUrl}/p/quadro/${token}`;
-    const body = buildMessage(t.name, digest, link, now);
+    const body = buildMessage(t.name, digest, month, link, now);
     const creds = { url: t.wuzapiUrl!, token: t.wuzapiToken! };
 
     for (const phone of t.dailyReportPhones) {
