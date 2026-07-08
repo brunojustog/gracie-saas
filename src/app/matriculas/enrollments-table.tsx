@@ -5,6 +5,7 @@ import { differenceInCalendarDays, format, startOfDay } from "date-fns";
 import {
   Banknote,
   CalendarCheck,
+  CheckCircle2,
   Gavel,
   PencilLine,
   Play,
@@ -49,6 +50,7 @@ import {
 import {
   cancelEnrollment,
   confirmPayment,
+  effectCancelEnrollment,
   markEnrollmentJudicial,
   payEnrollmentInFull,
   reactivateEnrollment,
@@ -106,6 +108,11 @@ function statusView(r: { status: EnrollmentStatus; suspendedAt: Date | string | 
   label: string;
   tone: string;
 } {
+  if (r.status === "CANCEL_REQUESTED")
+    return {
+      label: "cancel. solicitado",
+      tone: "bg-orange-100 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200",
+    };
   if (r.status === "CANCELED")
     return { label: "cancelada", tone: "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200" };
   if (r.status === "JUDICIAL")
@@ -161,6 +168,22 @@ export function EnrollmentsTable({
         return;
       }
       toast.success("Matrícula reativada");
+      router.refresh();
+    });
+  };
+
+  // v1.1-BN: efetivar cancelamento (aluno pagou a taxa de saída).
+  const handleEffectCancel = (row: Row) => {
+    if (!window.confirm(`Confirmar que ${row.lead.name} pagou a taxa de saída? A matrícula passa de "solicitado" para cancelada.`)) {
+      return;
+    }
+    startTransition(async () => {
+      const result = await effectCancelEnrollment({ enrollmentId: row.id });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Cancelamento efetivado");
       router.refresh();
     });
   };
@@ -343,7 +366,22 @@ export function EnrollmentsTable({
                           <Play className="h-4 w-4" />
                         </Button>
                       ) : null}
-                      {r.status === "CANCELED" || r.status === "JUDICIAL" ? (
+                      {r.status === "CANCEL_REQUESTED" ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                          onClick={() => handleEffectCancel(r)}
+                          disabled={pending}
+                          title="Efetivar cancelamento (aluno pagou a taxa de saída)"
+                          aria-label="Efetivar cancelamento"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                      {r.status === "CANCELED" ||
+                      r.status === "JUDICIAL" ||
+                      r.status === "CANCEL_REQUESTED" ? (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -764,6 +802,9 @@ function CancelBody({ target, onClose }: { target: Row; onClose: () => void }) {
   const router = useRouter();
   const [reason, setReason] = useState("");
   const [moveToLost, setMoveToLost] = useState(true);
+  // v1.1-BN: padrão = solicitação (aluno pediu, ainda não pagou a taxa).
+  // Marcar quando já pagou a taxa e o cancelamento é efetivado direto.
+  const [paidExitFee, setPaidExitFee] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const handleCancel = () => {
@@ -772,12 +813,13 @@ function CancelBody({ target, onClose }: { target: Row; onClose: () => void }) {
         enrollmentId: target.id,
         reason: reason || undefined,
         moveToLost,
+        mode: paidExitFee ? "effected" : "requested",
       });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success("Matrícula cancelada");
+      toast.success(paidExitFee ? "Matrícula cancelada" : "Cancelamento solicitado");
       onClose();
       router.refresh();
     });
@@ -805,6 +847,23 @@ function CancelBody({ target, onClose }: { target: Row; onClose: () => void }) {
           />
         </div>
 
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={paidExitFee}
+            onChange={(e) => setPaidExitFee(e.target.checked)}
+            disabled={pending}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            Aluno já pagou a taxa de saída (cancelar direto)
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Deixe desmarcado se ele só solicitou o cancelamento — para de cobrar
+              na hora e fica como &quot;solicitado&quot; até quitar a taxa.
+            </span>
+          </span>
+        </label>
+
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -826,7 +885,11 @@ function CancelBody({ target, onClose }: { target: Row; onClose: () => void }) {
           onClick={handleCancel}
           disabled={pending}
         >
-          {pending ? "Cancelando…" : "Confirmar cancelamento"}
+          {pending
+            ? "Salvando…"
+            : paidExitFee
+              ? "Confirmar cancelamento"
+              : "Solicitar cancelamento"}
         </Button>
       </DialogFooter>
     </>

@@ -56,6 +56,7 @@ export async function getLeadDetails(leadId: string) {
           status: true,
           enrolledAt: true,
           canceledAt: true,
+          cancelRequestedAt: true,
           suspendedAt: true,
           suspensionReason: true,
           expectedReturnAt: true,

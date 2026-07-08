@@ -603,6 +603,15 @@ enum PaymentMethod {
 
 enum EnrollmentStatus {
   ACTIVE
+
+  /**
+   * v1.1-BN: aluno pediu pra cancelar mas ainda NÃO pagou a taxa de saída
+   * (kimono). Sai da base de vigentes na hora (não conta como ativo, para de
+   * cobrar mensalidade) e JÁ conta como cancelamento. Quando paga a taxa,
+   * vira CANCELED (efetuado). `cancelRequestedAt` guarda quando solicitou.
+   */
+  CANCEL_REQUESTED
+
   CANCELED
   SUSPENDED // legado (v1.1-AT): congelado NÃO usa mais status — ver doc abaixo
   /**
@@ -622,7 +631,8 @@ model Enrollment {
   planId        String
   status        EnrollmentStatus @default(ACTIVE)
   enrolledAt    DateTime         @default(now())
-  canceledAt    DateTime?
+  canceledAt    DateTime? // quando o cancelamento foi EFETUADO (pagou a taxa)
+  cancelRequestedAt DateTime? // v1.1-BN: quando SOLICITOU o cancelamento
   monthlyValue  Decimal          @db.Decimal(10, 2)
   paymentMethod PaymentMethod
   observations  String?          @db.Text

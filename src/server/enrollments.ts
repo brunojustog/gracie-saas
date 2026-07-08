@@ -38,10 +38,16 @@ export type DueFilter = "overdue" | "due7";
  * um status no banco (é ACTIVE + suspendedAt) — aqui vira uma visão derivada.
  *   - ATIVA      = ACTIVE e não congelada
  *   - CONGELADA  = ACTIVE e congelada (suspendedAt != null)
+ *   - SOLICITADO = CANCEL_REQUESTED (pediu cancelamento, ainda não pagou taxa)
  *   - CANCELADA  = CANCELED
  *   - JUDICIAL   = JUDICIAL
  */
-export type StatusView = "ATIVA" | "CONGELADA" | "CANCELADA" | "JUDICIAL";
+export type StatusView =
+  | "ATIVA"
+  | "CONGELADA"
+  | "SOLICITADO"
+  | "CANCELADA"
+  | "JUDICIAL";
 
 function statusViewWhere(v: StatusView): Prisma.EnrollmentWhereInput {
   switch (v) {
@@ -49,6 +55,8 @@ function statusViewWhere(v: StatusView): Prisma.EnrollmentWhereInput {
       return { status: "ACTIVE", suspendedAt: null };
     case "CONGELADA":
       return { status: "ACTIVE", suspendedAt: { not: null } };
+    case "SOLICITADO":
+      return { status: "CANCEL_REQUESTED" };
     case "CANCELADA":
       return { status: "CANCELED" };
     case "JUDICIAL":
@@ -198,9 +206,11 @@ export async function getEnrollmentStatusCounts(membership: TenantUser) {
   // v1.1-BB: quitados (paidInFullUntil >= hoje) saem da receita recorrente.
   const today = startOfDay(new Date());
   const notPrepaid = { NOT: { paidInFullUntil: { gte: today } } };
-  const [active, frozen, canceled, judicial, revenueAgg] = await Promise.all([
+  const [active, frozen, requested, canceled, judicial, revenueAgg] = await Promise.all([
     prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: null } }),
     prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: { not: null } } }),
+    // v1.1-BN: cancelamento solicitado — já parou de cobrar, não é mais vigente.
+    prisma.enrollment.count({ where: { ...live, status: "CANCEL_REQUESTED" } }),
     prisma.enrollment.count({ where: { ...live, status: "CANCELED" } }),
     prisma.enrollment.count({ where: { ...live, status: "JUDICIAL" } }),
     prisma.enrollment.aggregate({
@@ -212,9 +222,12 @@ export async function getEnrollmentStatusCounts(membership: TenantUser) {
     ativas: active,
     congeladas: frozen,
     totalAtivos: active + frozen,
+    solicitadas: requested,
     canceladas: canceled,
     judicial,
-    cancelamentosTotal: canceled + judicial,
+    // "Cancelamento" do negócio = efetivados + judicial + solicitados (o aluno
+    // já pediu pra sair e paramos de cobrar).
+    cancelamentosTotal: canceled + judicial + requested,
     monthlyRevenue: Number(revenueAgg._sum.monthlyValue ?? 0),
   };
 }

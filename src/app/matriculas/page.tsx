@@ -24,7 +24,13 @@ const VALID_PAYMENT_METHODS: PaymentMethod[] = [
   "TRANSFER",
   "OTHER",
 ];
-const VALID_STATUS_VIEWS: StatusView[] = ["ATIVA", "CONGELADA", "CANCELADA", "JUDICIAL"];
+const VALID_STATUS_VIEWS: StatusView[] = [
+  "ATIVA",
+  "CONGELADA",
+  "SOLICITADO",
+  "CANCELADA",
+  "JUDICIAL",
+];
 
 type SearchParams = Promise<{
   q?: string;

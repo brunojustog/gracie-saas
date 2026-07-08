@@ -1025,11 +1025,14 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
       ? "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30"
       : e.status === "CANCELED"
         ? "border-red-500/40 bg-red-50 dark:bg-red-950/30"
-        : "border-amber-500/40 bg-amber-50 dark:bg-amber-950/30";
+        : e.status === "CANCEL_REQUESTED"
+          ? "border-orange-500/40 bg-orange-50 dark:bg-orange-950/30"
+          : "border-amber-500/40 bg-amber-50 dark:bg-amber-950/30";
 
   const STATUS_LABEL: Record<typeof e.status, string> = {
     ACTIVE: e.suspendedAt ? "congelada" : "ativa",
     SUSPENDED: "congelada",
+    CANCEL_REQUESTED: "cancel. solicitado",
     CANCELED: "cancelada",
     JUDICIAL: "judicial",
   };
@@ -1096,6 +1099,16 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
         {e.status === "CANCELED" && e.canceledAt ? (
           <div className="border-t border-current/20 pt-2 text-xs text-muted-foreground">
             Cancelada em {format(new Date(e.canceledAt), "dd/MM/yyyy")}
+          </div>
+        ) : null}
+
+        {e.status === "CANCEL_REQUESTED" ? (
+          <div className="border-t border-current/20 pt-2 text-xs text-muted-foreground">
+            Cancelamento solicitado
+            {e.cancelRequestedAt
+              ? ` em ${format(new Date(e.cancelRequestedAt), "dd/MM/yyyy")}`
+              : ""}{" "}
+            — parou de cobrar; aguardando taxa de saída.
           </div>
         ) : null}
 

@@ -36,6 +36,7 @@ const PAYMENT_OPTIONS = [
 const STATUS_OPTIONS = [
   { value: "ATIVA", label: "Ativa" },
   { value: "CONGELADA", label: "Congelada" },
+  { value: "SOLICITADO", label: "Cancel. solicitado" },
   { value: "CANCELADA", label: "Cancelada" },
   { value: "JUDICIAL", label: "Judicial" },
 ];

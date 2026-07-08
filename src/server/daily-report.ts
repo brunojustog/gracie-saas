@@ -16,17 +16,35 @@ import { sendText } from "@/server/wuzapi";
 /** Contadores de um intervalo [from, to] (fuso do container = SP). */
 export async function getRangeDigest(tenantId: string, from: Date, to: Date) {
   const live = { lead: { deletedAt: null } };
-  const [matriculas, cancelamentos, experimentais, compareceram, avulsas, ativos] =
-    await Promise.all([
+  const [
+    matriculas,
+    cancelEfetivados,
+    cancelSolicitados,
+    experimentais,
+    compareceram,
+    avulsas,
+    ativos,
+  ] = await Promise.all([
       prisma.enrollment.count({
         where: { tenantId, ...live, enrolledAt: { gte: from, lte: to } },
       }),
+      // Cancelamentos efetivados/judiciais (pela data do cancelamento).
       prisma.enrollment.count({
         where: {
           tenantId,
           ...live,
           status: { in: ["CANCELED", "JUDICIAL"] },
           canceledAt: { gte: from, lte: to },
+        },
+      }),
+      // v1.1-BN: solicitações de cancelamento (pela data da solicitação) —
+      // já contam como cancelamento do negócio.
+      prisma.enrollment.count({
+        where: {
+          tenantId,
+          ...live,
+          status: "CANCEL_REQUESTED",
+          cancelRequestedAt: { gte: from, lte: to },
         },
       }),
       prisma.experimentalClass.count({
@@ -43,17 +61,29 @@ export async function getRangeDigest(tenantId: string, from: Date, to: Date) {
       prisma.looseClass.count({
         where: { tenantId, classDate: { gte: from, lte: to } },
       }),
-      // Ativos no FIM do intervalo (ponto-no-tempo).
+      // Ativos no FIM do intervalo (ponto-no-tempo). v1.1-BN: quem solicitou
+      // cancelamento até `to` já saiu da base (parou de cobrar).
       prisma.enrollment.count({
         where: {
           tenantId,
           ...live,
           enrolledAt: { lte: to },
           OR: [{ canceledAt: null }, { canceledAt: { gt: to } }],
+          NOT: {
+            status: "CANCEL_REQUESTED",
+            cancelRequestedAt: { lte: to },
+          },
         },
       }),
     ]);
-  return { matriculas, cancelamentos, experimentais, compareceram, avulsas, ativos };
+  return {
+    matriculas,
+    cancelamentos: cancelEfetivados + cancelSolicitados,
+    experimentais,
+    compareceram,
+    avulsas,
+    ativos,
+  };
 }
 
 /** Contadores do dia corrente. */

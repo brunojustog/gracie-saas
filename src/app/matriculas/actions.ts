@@ -498,6 +498,15 @@ const cancelSchema = z.object({
   reason: z.string().max(2000).optional(),
   /** Se true, move o lead pro stage isLost ("Perda") + tag "Aluno Perdido" automaticamente. */
   moveToLost: z.boolean().default(false),
+  /**
+   * v1.1-BN: dois momentos do cancelamento.
+   * - "requested" (padrão): aluno SOLICITOU o cancelamento mas ainda não pagou a
+   *   taxa de saída. Para de cobrar e sai da base de vigentes na hora; já conta
+   *   como cancelamento (status CANCEL_REQUESTED).
+   * - "effected": cancelamento efetuado de fato (status CANCELED) — usado quando
+   *   já paga a taxa direto, sem passar pelo estágio "solicitado".
+   */
+  mode: z.enum(["requested", "effected"]).default("requested"),
 });
 
 export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
@@ -510,15 +519,25 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
   if (enrollment.status === "CANCELED") {
     return { ok: false, error: "matrícula já cancelada" };
   }
+  if (enrollment.status === "CANCEL_REQUESTED" && parsed.data.mode === "requested") {
+    return { ok: false, error: "cancelamento já solicitado" };
+  }
+
+  const requested = parsed.data.mode === "requested";
+  const now = new Date();
+  const tagWord = requested ? "cancelamento solicitado" : "cancelado";
 
   await prisma.$transaction(async (tx) => {
     await tx.enrollment.update({
       where: { id: enrollment.id },
       data: {
-        status: "CANCELED",
-        canceledAt: new Date(),
+        status: requested ? "CANCEL_REQUESTED" : "CANCELED",
+        // Sempre para de cobrar (sai da base de vigentes). Se for solicitação,
+        // registra cancelRequestedAt; se efetuado, canceledAt.
+        cancelRequestedAt: requested ? now : enrollment.cancelRequestedAt ?? now,
+        canceledAt: requested ? enrollment.canceledAt : now,
         observations: parsed.data.reason
-          ? `${enrollment.observations ?? ""}\n[cancelado] ${parsed.data.reason}`.trim()
+          ? `${enrollment.observations ?? ""}\n[${tagWord}] ${parsed.data.reason}`.trim()
           : enrollment.observations,
       },
     });
@@ -530,9 +549,15 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
         authorId: user.id,
         kind: "ENROLLMENT_CANCELED",
         body: parsed.data.reason
-          ? `Matrícula cancelada — ${parsed.data.reason}`
-          : "Matrícula cancelada",
-        metadata: { enrollmentId: enrollment.id, reason: parsed.data.reason ?? null },
+          ? `${requested ? "Cancelamento solicitado" : "Matrícula cancelada"} — ${parsed.data.reason}`
+          : requested
+            ? "Cancelamento solicitado"
+            : "Matrícula cancelada",
+        metadata: {
+          enrollmentId: enrollment.id,
+          reason: parsed.data.reason ?? null,
+          mode: parsed.data.mode,
+        },
       },
       tx,
     );
@@ -577,6 +602,57 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Efetivar cancelamento (v1.1-BN) — aluno que SOLICITOU o cancelamento pagou a
+// taxa de saída. CANCEL_REQUESTED → CANCELED. Não conta como "novo"
+// cancelamento (a data que vale é a da solicitação); só muda o rótulo.
+// ──────────────────────────────────────────────────────────────────────────
+
+const effectCancelSchema = z.object({
+  enrollmentId: z.string().min(1),
+});
+
+export async function effectCancelEnrollment(input: unknown): Promise<ActionResult> {
+  const parsed = effectCancelSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  if (enrollment.status !== "CANCEL_REQUESTED") {
+    return { ok: false, error: "só dá pra efetivar cancelamento que foi solicitado" };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
+        status: "CANCELED",
+        // Mantém a data da SOLICITAÇÃO como referência do cancelamento no mês;
+        // canceledAt marca quando a taxa foi quitada.
+        canceledAt: new Date(),
+      },
+    });
+
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "ENROLLMENT_CANCELED",
+        body: "Cancelamento efetivado (taxa de saída quitada)",
+        metadata: { enrollmentId: enrollment.id, mode: "effected" },
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/kanban");
+  revalidatePath("/quadro");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Resgatar matrícula (v1.1-BF) — aluno que cancelou/judicial voltou. Mesma
 // ação serve pra rematrícula/mudança de status pós-cancelado/judicial:
 // volta a ACTIVE, reinicia o vencimento e devolve o lead pro estágio Ganho.
@@ -595,8 +671,15 @@ export async function reinstateEnrollment(input: unknown): Promise<ActionResult>
   const { tenant, user, membership } = await requireTenantUser();
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
-  if (enrollment.status !== "CANCELED" && enrollment.status !== "JUDICIAL") {
-    return { ok: false, error: "só dá pra resgatar matrícula cancelada ou judicial" };
+  if (
+    enrollment.status !== "CANCELED" &&
+    enrollment.status !== "JUDICIAL" &&
+    enrollment.status !== "CANCEL_REQUESTED"
+  ) {
+    return {
+      ok: false,
+      error: "só dá pra resgatar matrícula cancelada, judicial ou com cancelamento solicitado",
+    };
   }
 
   const nextDue = parsed.data.nextDueDate
@@ -609,6 +692,7 @@ export async function reinstateEnrollment(input: unknown): Promise<ActionResult>
       data: {
         status: "ACTIVE",
         canceledAt: null,
+        cancelRequestedAt: null,
         nextDueDate: nextDue,
       },
     });

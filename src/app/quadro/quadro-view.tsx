@@ -255,7 +255,7 @@ export function QuadroBody({
       {/* Matrículas por vendedora */}
       <Panel
         title="Matrículas por vendedora"
-        subtitle="Matrículas fechadas por mês (clique nos números pra ver os nomes)"
+        subtitle="Matrículas fechadas por mês, com cancelamentos do mês em vermelho (clique nos números pra ver os nomes). Base da comissão: fechadas − canceladas."
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -276,23 +276,50 @@ export function QuadroBody({
                   </td>
                 </tr>
               ) : (
-                data.sellerRanking.map((s) => (
-                  <tr key={s.name} className="border-b last:border-0">
-                    <td className="px-2 py-2 font-medium">{s.name}</td>
-                    {s.counts.map((c, i) => (
-                      <td key={i} className="px-2 py-2 text-right">
-                        {c > 0 ? (
-                          <DrillNumber value={c} title={`${s.name} · ${data.salesMonthLabels[i]}`} items={s.names[i] ?? []} />
-                        ) : (
-                          c
-                        )}
+                data.sellerRanking.map((s) => {
+                  const cancelTotal = s.cancelCounts.reduce((a, b) => a + b, 0);
+                  const cancelTotalNames = s.cancelNames.flat();
+                  return (
+                    <tr key={s.name} className="border-b last:border-0">
+                      <td className="px-2 py-2 font-medium">{s.name}</td>
+                      {s.counts.map((c, i) => {
+                        const canc = s.cancelCounts[i] ?? 0;
+                        return (
+                          <td key={i} className="px-2 py-2 text-right align-top">
+                            {c > 0 ? (
+                              <DrillNumber value={c} title={`${s.name} · ${data.salesMonthLabels[i]}`} items={s.names[i] ?? []} />
+                            ) : (
+                              <span className="text-muted-foreground">{c}</span>
+                            )}
+                            {canc > 0 ? (
+                              <div className="text-[11px] leading-tight text-red-600">
+                                <DrillNumber
+                                  value={`−${canc} canc.`}
+                                  title={`${s.name} · cancelou · ${data.salesMonthLabels[i]}`}
+                                  items={s.cancelNames[i] ?? []}
+                                  className="text-red-600"
+                                />
+                              </div>
+                            ) : null}
+                          </td>
+                        );
+                      })}
+                      <td className="px-2 py-2 text-right font-semibold align-top">
+                        <DrillNumber value={s.total} title={`${s.name} · total`} items={s.totalNames} className="font-semibold" />
+                        {cancelTotal > 0 ? (
+                          <div className="text-[11px] leading-tight font-normal text-red-600">
+                            <DrillNumber
+                              value={`−${cancelTotal} canc.`}
+                              title={`${s.name} · cancelou · total`}
+                              items={cancelTotalNames}
+                              className="text-red-600"
+                            />
+                          </div>
+                        ) : null}
                       </td>
-                    ))}
-                    <td className="px-2 py-2 text-right font-semibold">
-                      <DrillNumber value={s.total} title={`${s.name} · total`} items={s.totalNames} className="font-semibold" />
-                    </td>
-                  </tr>
-                ))
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

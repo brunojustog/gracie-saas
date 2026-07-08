@@ -19,39 +19,51 @@ describe("isActiveAt — ativo = status ACTIVE (congelado/cancelado não conta)"
 
   it("matrícula ativa simples conta", () => {
     expect(
-      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: null, status: "ACTIVE", suspendedAt: null }, ref),
+      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: null, cancelRequestedAt: null, status: "ACTIVE", suspendedAt: null }, ref),
     ).toBe(true);
   });
 
   it("matriculada depois da data não conta", () => {
     expect(
-      isActiveAt({ enrolledAt: D("2026-07-01"), canceledAt: null, status: "ACTIVE", suspendedAt: null }, ref),
+      isActiveAt({ enrolledAt: D("2026-07-01"), canceledAt: null, cancelRequestedAt: null, status: "ACTIVE", suspendedAt: null }, ref),
     ).toBe(false);
   });
 
   it("cancelada até a data não conta", () => {
     expect(
-      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: D("2026-05-01"), status: "CANCELED", suspendedAt: null }, ref),
+      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: D("2026-05-01"), cancelRequestedAt: null, status: "CANCELED", suspendedAt: null }, ref),
     ).toBe(false);
+  });
+
+  it("cancelamento SOLICITADO até a data não conta (sai pela data da solicitação)", () => {
+    expect(
+      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: null, cancelRequestedAt: D("2026-05-01"), status: "CANCEL_REQUESTED", suspendedAt: null }, ref),
+    ).toBe(false);
+  });
+
+  it("cancelamento SOLICITADO depois da data ainda conta como ativa naquele momento", () => {
+    expect(
+      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: null, cancelRequestedAt: D("2026-06-25"), status: "CANCEL_REQUESTED", suspendedAt: null }, ref),
+    ).toBe(true);
   });
 
   it("congelada (SUSPENDED) antes da data NÃO conta — era o bug do gap", () => {
     expect(
-      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: null, status: "SUSPENDED", suspendedAt: D("2026-05-10") }, ref),
+      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: null, cancelRequestedAt: null, status: "SUSPENDED", suspendedAt: D("2026-05-10") }, ref),
     ).toBe(false);
   });
 
   it("congelada DEPOIS da data ainda contava como ativa naquele momento", () => {
     expect(
-      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: null, status: "SUSPENDED", suspendedAt: D("2026-06-25") }, ref),
+      isActiveAt({ enrolledAt: D("2026-01-01"), canceledAt: null, cancelRequestedAt: null, status: "SUSPENDED", suspendedAt: D("2026-06-25") }, ref),
     ).toBe(true);
   });
 
   it("countActiveAt reconcilia: 2 ativas + 1 congelada = 2", () => {
     const enr = [
-      { enrolledAt: D("2026-01-01"), canceledAt: null, status: "ACTIVE", suspendedAt: null },
-      { enrolledAt: D("2026-02-01"), canceledAt: null, status: "ACTIVE", suspendedAt: null },
-      { enrolledAt: D("2026-03-01"), canceledAt: null, status: "SUSPENDED", suspendedAt: D("2026-04-01") },
+      { enrolledAt: D("2026-01-01"), canceledAt: null, cancelRequestedAt: null, status: "ACTIVE", suspendedAt: null },
+      { enrolledAt: D("2026-02-01"), canceledAt: null, cancelRequestedAt: null, status: "ACTIVE", suspendedAt: null },
+      { enrolledAt: D("2026-03-01"), canceledAt: null, cancelRequestedAt: null, status: "SUSPENDED", suspendedAt: D("2026-04-01") },
     ];
     expect(countActiveAt(enr, ref)).toBe(2);
   });

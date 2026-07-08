@@ -60,13 +60,30 @@ export function lastMonthStarts(now: Date, n: number): Date[] {
 export type GrowthEnrollment = {
   enrolledAt: Date;
   canceledAt: Date | null;
+  // v1.1-BN: aluno que solicitou cancelamento sai da base na data da solicitação.
+  cancelRequestedAt: Date | null;
   status: string;
   suspendedAt: Date | null;
 };
 
+/**
+ * v1.1-BN: data em que a matrícula deixou (ou deixará) a base de vigentes.
+ * Pra CANCEL_REQUESTED vale a data da SOLICITAÇÃO (já paramos de cobrar);
+ * pros demais, a data do cancelamento efetivo.
+ */
+export function leftAt(e: {
+  status: string;
+  canceledAt: Date | null;
+  cancelRequestedAt: Date | null;
+}): Date | null {
+  if (e.status === "CANCEL_REQUESTED") return e.cancelRequestedAt ?? e.canceledAt;
+  return e.canceledAt;
+}
+
 export function isActiveAt(e: GrowthEnrollment, date: Date): boolean {
   if (e.enrolledAt > date) return false;
-  if (e.canceledAt && e.canceledAt <= date) return false;
+  const left = leftAt(e);
+  if (left && left <= date) return false;
   if (e.status === "SUSPENDED" && e.suspendedAt && e.suspendedAt <= date) return false;
   return true;
 }
@@ -140,18 +157,20 @@ export async function getQuadroData(
       },
       orderBy: { lead: { name: "asc" } },
     }),
-    // Cancelamentos na vida da academia — inclui JUDICIAL (v1.1-AU).
+    // Cancelamentos na vida da academia — inclui JUDICIAL (v1.1-AU) e
+    // solicitações de cancelamento (v1.1-BN, já saíram da base).
     // findMany (em vez de count) pra alimentar o drill-down de nomes.
     prisma.enrollment.findMany({
       where: {
         tenantId,
-        status: { in: ["CANCELED", "JUDICIAL"] },
+        status: { in: ["CANCEL_REQUESTED", "CANCELED", "JUDICIAL"] },
         lead: { deletedAt: null },
       },
       select: {
         id: true,
         status: true,
         canceledAt: true,
+        cancelRequestedAt: true,
         lead: { select: { name: true } },
       },
       orderBy: { canceledAt: "desc" },
@@ -165,6 +184,7 @@ export async function getQuadroData(
         id: true,
         enrolledAt: true,
         canceledAt: true,
+        cancelRequestedAt: true,
         status: true,
         suspendedAt: true,
         lead: { select: { name: true } },
@@ -181,6 +201,10 @@ export async function getQuadroData(
         id: true,
         enrolledAt: true,
         monthlyValue: true,
+        // v1.1-BN: pra contar canceladas por vendedora no mês (comissão).
+        status: true,
+        canceledAt: true,
+        cancelRequestedAt: true,
         lead: {
           select: {
             name: true,
@@ -384,17 +408,22 @@ export async function getQuadroData(
 
   // Nomes de cancelados/judicial e particulares ativos (drill-down).
   const STATUS_PT: Record<string, string> = {
+    CANCEL_REQUESTED: "Solicitado",
     CANCELED: "Cancelada",
     JUDICIAL: "Judicial",
   };
-  const canceledNames: Name[] = canceledEnrollments.map((e) => ({
-    id: e.id,
-    name: e.lead.name,
-    sub: e.canceledAt
-      ? `${STATUS_PT[e.status] ?? e.status} · ${format(e.canceledAt, "dd/MM/yy", { locale: ptBR })}`
-      : (STATUS_PT[e.status] ?? e.status),
-    href: enrollHref(e.lead.name),
-  }));
+  const canceledNames: Name[] = canceledEnrollments.map((e) => {
+    // Data de referência: solicitação (se solicitado) ou cancelamento efetivo.
+    const when = e.status === "CANCEL_REQUESTED" ? e.cancelRequestedAt : e.canceledAt;
+    return {
+      id: e.id,
+      name: e.lead.name,
+      sub: when
+        ? `${STATUS_PT[e.status] ?? e.status} · ${format(when, "dd/MM/yy", { locale: ptBR })}`
+        : (STATUS_PT[e.status] ?? e.status),
+      href: enrollHref(e.lead.name),
+    };
+  });
   const privateActiveNames: Name[] = privateActiveRows.map((p) => ({
     id: p.id,
     name: p.lead.name,
@@ -417,9 +446,11 @@ export async function getQuadroData(
         : startOfMonth(subMonths(now, -1)); // início do próximo mês
     const activeStart = countActiveAt(allEnrollments, mStart);
     // v1.1-BF: além das contagens, guarda os NOMES (drill-down clicável).
-    const canceledList = allEnrollments.filter(
-      (e) => e.canceledAt && e.canceledAt >= mStart && e.canceledAt < monthEnd,
-    );
+    const canceledList = allEnrollments.filter((e) => {
+      // v1.1-BN: solicitações contam pela data da solicitação.
+      const left = leftAt(e);
+      return left && left >= mStart && left < monthEnd;
+    });
     const newList = allEnrollments.filter(
       (e) => e.enrolledAt >= mStart && e.enrolledAt < monthEnd,
     );
@@ -464,10 +495,15 @@ export async function getQuadroData(
     names: Name[][];
     total: number;
     totalNames: Name[];
+    // v1.1-BN: cancelamentos por mês atribuídos a quem fez a matrícula
+    // (comissão — não paga em cima do que cancelou).
+    cancelCounts: number[];
+    cancelNames: Name[][];
   };
   const sellerMap = new Map<string, SellerRow>();
-  for (const e of salesEnrollments) {
-    const seller = e.lead.assignedSeller;
+  const ensureSeller = (
+    seller: { id: string; name: string | null; email: string } | null,
+  ): SellerRow => {
     const key = seller?.id ?? "__none__";
     const name = seller?.name ?? seller?.email ?? "(sem vendedora)";
     if (!sellerMap.has(key)) {
@@ -477,9 +513,14 @@ export async function getQuadroData(
         names: salesMonths.map(() => []),
         total: 0,
         totalNames: [],
+        cancelCounts: salesMonths.map(() => 0),
+        cancelNames: salesMonths.map(() => []),
       });
     }
-    const row = sellerMap.get(key)!;
+    return sellerMap.get(key)!;
+  };
+  for (const e of salesEnrollments) {
+    const row = ensureSeller(e.lead.assignedSeller);
     const idx = salesMonths.findIndex(
       (m, i) => e.enrolledAt >= m && e.enrolledAt < salesMonthEnds[i]!,
     );
@@ -489,6 +530,17 @@ export async function getQuadroData(
       row.names[idx]!.push(item);
       row.total++;
       row.totalNames.push(item);
+    }
+    // Cancelamento (solicitado/efetivado/judicial) no mês em que saiu.
+    const left = leftAt(e);
+    if (left) {
+      const cidx = salesMonths.findIndex(
+        (m, i) => left >= m && left < salesMonthEnds[i]!,
+      );
+      if (cidx >= 0) {
+        row.cancelCounts[cidx]!++;
+        row.cancelNames[cidx]!.push(matriculaItem(e));
+      }
     }
   }
   const sellerRanking = [...sellerMap.values()].sort((a, b) => b.total - a.total);
