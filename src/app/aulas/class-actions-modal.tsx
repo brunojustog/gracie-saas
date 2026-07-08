@@ -61,6 +61,9 @@ function toDatetimeLocalValue(d: Date): string {
 export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
   const [pending, startTransition] = useTransition();
   const [rescheduleMode, setRescheduleMode] = useState(false);
+  // v1.1-BO: permite corrigir uma situação já finalizada (ex.: marcaram
+  // "Compareceu" por engano num aluno que não foi).
+  const [correcting, setCorrecting] = useState(false);
   const [newDateTime, setNewDateTime] = useState("");
 
   if (!cls) {
@@ -85,6 +88,7 @@ export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
         return;
       }
       toast.success(`Status: ${STATUS_LABEL[status]}`);
+      setCorrecting(false);
       onUpdated({ ...cls, status });
     });
   };
@@ -179,36 +183,57 @@ export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
               </Button>
             </div>
           </div>
+        ) : isFinalState && !correcting ? (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Situação: <strong>{STATUS_LABEL[cls.status]}</strong>. Marcou
+              errado?
+            </p>
+            <Button
+              onClick={() => setCorrecting(true)}
+              disabled={pending}
+              variant="outline"
+              className="w-full"
+            >
+              Corrigir situação
+            </Button>
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            {(cls.status === "SCHEDULED" || cls.status === "RESCHEDULED") && (
-              <Button onClick={() => setStatus("CONFIRMED")} disabled={pending} variant="outline">
-                <Video className="mr-1 h-4 w-4" />
-                Confirmar
-              </Button>
+            {correcting && (
+              <p className="col-span-2 text-xs text-muted-foreground">
+                Escolha a situação correta — ela substitui a anterior.
+              </p>
             )}
-            {!isFinalState && (
+            {(correcting ||
+              cls.status === "SCHEDULED" ||
+              cls.status === "RESCHEDULED") &&
+              cls.status !== "CONFIRMED" && (
+                <Button onClick={() => setStatus("CONFIRMED")} disabled={pending} variant="outline">
+                  <Video className="mr-1 h-4 w-4" />
+                  Confirmar
+                </Button>
+              )}
+            {cls.status !== "ATTENDED" && (
               <Button onClick={() => setStatus("ATTENDED")} disabled={pending}>
                 <CheckCircle2 className="mr-1 h-4 w-4" />
                 Compareceu
               </Button>
             )}
-            {!isFinalState && (
+            {cls.status !== "NO_SHOW" && (
               <Button onClick={() => setStatus("NO_SHOW")} disabled={pending} variant="outline">
                 <UserX className="mr-1 h-4 w-4" />
                 Faltou
               </Button>
             )}
-            {!isFinalState && (
-              <Button
-                onClick={() => setRescheduleMode(true)}
-                disabled={pending}
-                variant="outline"
-              >
-                Remarcar
-              </Button>
-            )}
-            {!isFinalState && (
+            <Button
+              onClick={() => setRescheduleMode(true)}
+              disabled={pending}
+              variant="outline"
+            >
+              Remarcar
+            </Button>
+            {cls.status !== "CANCELED" && (
               <Button
                 onClick={() => setStatus("CANCELED")}
                 disabled={pending}
@@ -217,6 +242,16 @@ export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
               >
                 <X className="mr-1 h-4 w-4" />
                 Cancelar aula
+              </Button>
+            )}
+            {correcting && (
+              <Button
+                onClick={() => setCorrecting(false)}
+                disabled={pending}
+                variant="ghost"
+                className="col-span-2"
+              >
+                Voltar
               </Button>
             )}
           </div>
