@@ -65,6 +65,9 @@ export function QuadroBody({
         {shareSlot}
       </div>
 
+      {/* Resumo consolidado do mês (v1.1-BM, item 4) — painel fixo grandão. */}
+      <MonthBoard m={data.monthResumo} ativos={data.matriculas.totalActive} />
+
       {dailySnapshots && dailySnapshots.length > 0 ? (
         <DailyStrip snapshots={dailySnapshots} />
       ) : null}
@@ -322,7 +325,7 @@ export function QuadroBody({
         <Panel title="Aulas experimentais (período)" subtitle="Clique nos números pra ver os nomes">
           <div className="flex flex-wrap gap-2 text-sm">
             <StatChip label="no período" value={data.expStats.total} items={data.expStats.totalNames} tone="primary" />
-            <StatChip label="compareceram" prefix="✓ " value={data.expStats.attended.length} items={data.expStats.attended} tone="emerald" />
+            <StatChip label="compareceram" prefix="✓ " value={data.expStats.attendedUnique} items={data.expStats.attended} tone="emerald" />
             <StatChip label="faltas" prefix="✗ " value={data.expStats.noShow.length} items={data.expStats.noShow} tone="red" />
             <StatChip label="reagendadas" prefix="↻ " value={data.expStats.rescheduled.length} items={data.expStats.rescheduled} tone="amber" />
             <StatChip label="futuras" prefix="→ " value={data.expStats.upcoming.length} items={data.expStats.upcoming} tone="sky" />
@@ -333,11 +336,11 @@ export function QuadroBody({
               <StatChip label="canceladas" prefix="⊘ " value={data.expStats.canceled.length} items={data.expStats.canceled} tone="zinc" />
             ) : null}
           </div>
-          {/* v1.1-BK: reconcilia o "compareceram" (aulas × pessoas). */}
+          {/* v1.1-BM: "compareceram" = PESSOAS únicas; repetidas mostradas à parte. */}
           <p className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
             <span>
-              Dos <strong>{data.expStats.attended.length}</strong> comparecimentos:{" "}
-              <strong>{data.expStats.attendedUnique}</strong> pessoas diferentes
+              <strong>{data.expStats.attendedUnique}</strong> pessoas compareceram
+              {" "}(em <strong>{data.expStats.attended.length}</strong> aulas)
             </span>
             {data.expStats.attendedRepeated > 0 ? (
               <>
@@ -349,7 +352,7 @@ export function QuadroBody({
                     items={data.expStats.attendedRepeaterNames}
                     className="font-medium text-amber-700 dark:text-amber-300"
                   />
-                  <span>repetidas (mesmo lead veio 2+)</span>
+                  <span>repetida(s) — mesmo lead veio 2+</span>
                 </span>
               </>
             ) : null}
@@ -515,6 +518,79 @@ function DailyStrip({ snapshots }: { snapshots: DailySnapshot[] }) {
       <p className="mt-2 text-[11px] text-muted-foreground">
         🥋 Experimentais = total no dia (entre parênteses, quantos compareceram).
       </p>
+    </div>
+  );
+}
+
+/** Painel fixo grandão com o resumo consolidado do mês (v1.1-BM, item 4). */
+function MonthBoard({
+  m,
+  ativos,
+}: {
+  m: {
+    label: string;
+    matriculas: number;
+    cancelamentos: number;
+    experimentais: number;
+    compareceram: number;
+    avulsas: number;
+    ativos: number;
+  };
+  ativos: number;
+}) {
+  const saldo = m.matriculas - m.cancelamentos;
+  return (
+    <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-1">
+        <h2 className="text-lg font-bold capitalize">Resumo de {m.label}</h2>
+        <span className="text-xs text-muted-foreground">
+          consolidado do mês (dia 1 até hoje) — o mesmo do WhatsApp
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <Big label="Novas matrículas" value={m.matriculas} tone="emerald" />
+        <Big label="Cancelamentos" value={m.cancelamentos} tone="red" />
+        <Big
+          label="Saldo do mês"
+          value={`${saldo >= 0 ? "+" : ""}${saldo}`}
+          tone={saldo >= 0 ? "emerald" : "red"}
+        />
+        <Big
+          label="Experimentais"
+          value={m.experimentais}
+          sub={`${m.compareceram} compareceram`}
+        />
+        <Big label="Aulas avulsas" value={m.avulsas} />
+        <Big label="Alunos ativos" value={ativos} strong />
+      </div>
+    </div>
+  );
+}
+
+function Big({
+  label,
+  value,
+  sub,
+  tone,
+  strong,
+}: {
+  label: string;
+  value: number | string;
+  sub?: string;
+  tone?: "emerald" | "red";
+  strong?: boolean;
+}) {
+  const color =
+    tone === "emerald"
+      ? "text-emerald-700 dark:text-emerald-300"
+      : tone === "red"
+        ? "text-red-700 dark:text-red-300"
+        : "";
+  return (
+    <div className={`rounded-xl border bg-card p-3 ${strong ? "ring-1 ring-primary/40" : ""}`}>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 text-3xl font-bold tabular-nums ${color}`}>{value}</div>
+      {sub ? <div className="text-[11px] text-muted-foreground">{sub}</div> : null}
     </div>
   );
 }

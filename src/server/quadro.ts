@@ -20,6 +20,7 @@ import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
 import { isOverdue } from "@/lib/overdue";
+import { getRangeDigest } from "@/server/daily-report";
 import { getLooseRevenue } from "@/server/loose-classes";
 import { getPrivatePackageCounts, getPrivateRevenue } from "@/server/private-packages";
 
@@ -121,6 +122,7 @@ export async function getQuadroData(
     expOutcomeLeads,
     looseRevenue,
     enrollmentsForExpSplit,
+    monthResumo,
   ] = await Promise.all([
     // Matrículas ativas (gênero + kids + plano + pagamento + vencimento +
     // nome do aluno pro drill-down v1.1-AY).
@@ -299,6 +301,8 @@ export async function getQuadroData(
       },
       orderBy: { enrolledAt: "desc" },
     }),
+    // v1.1-BM (item 4): resumo consolidado do mês (do dia 1 até agora).
+    getRangeDigest(tenantId, monthStart, now),
   ]);
 
   // ── Bloco "Número de matrículas" ─────────────────────────────────────────
@@ -690,6 +694,11 @@ export async function getQuadroData(
     posExperimental,
     posExpLastWeek,
     agenda,
+    // Resumo consolidado do mês (v1.1-BM, item 4) — painel fixo grandão.
+    monthResumo: {
+      label: format(monthStart, "MMMM 'de' yyyy", { locale: ptBR }),
+      ...monthResumo,
+    },
     // Experimentais do período (v1.1-BC/BE, itens 6/7/8).
     expPeriodLabel: ep.label,
     expStats,

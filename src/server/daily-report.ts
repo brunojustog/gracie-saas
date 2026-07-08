@@ -32,9 +32,14 @@ export async function getRangeDigest(tenantId: string, from: Date, to: Date) {
       prisma.experimentalClass.count({
         where: { tenantId, status: { not: "CANCELED" }, scheduledDate: { gte: from, lte: to } },
       }),
-      prisma.experimentalClass.count({
-        where: { tenantId, status: "ATTENDED", scheduledDate: { gte: from, lte: to } },
-      }),
+      // v1.1-BM: compareceram = PESSOAS únicas (não conta 2x quem voltou).
+      prisma.experimentalClass
+        .findMany({
+          where: { tenantId, status: "ATTENDED", scheduledDate: { gte: from, lte: to } },
+          select: { leadId: true },
+          distinct: ["leadId"],
+        })
+        .then((r) => r.length),
       prisma.looseClass.count({
         where: { tenantId, classDate: { gte: from, lte: to } },
       }),
