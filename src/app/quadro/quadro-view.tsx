@@ -414,7 +414,7 @@ export function QuadroBody({
             <ConversionCard label="Últimos 90 dias" c={data.conversion.d90} />
           </div>
         </Panel>
-        <Panel title="Pós-experimental em conversa" subtitle="Fizeram aula experimental, ainda sem matrícula e não perdidos">
+        <Panel title="Pós-experimental em negociação" subtitle="Fizeram aula experimental, ainda sem matrícula e na etapa Negociação do funil">
           <div className="flex items-baseline gap-2">
             <DrillNumber
               value={data.posExperimental.length}
@@ -428,7 +428,7 @@ export function QuadroBody({
               className="text-3xl font-semibold"
             />
             <span className="text-xs text-muted-foreground">
-              em conversa · {data.posExpLastWeek} fizeram aula na última semana
+              em negociação · {data.posExpLastWeek} fizeram aula na última semana
             </span>
           </div>
         </Panel>
@@ -440,7 +440,7 @@ export function QuadroBody({
         subtitle="Quem fez aula e ainda não fechou — ordenado pela última interação"
       >
         {data.posExperimental.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Ninguém em conversa no momento.</p>
+          <p className="text-xs text-muted-foreground">Ninguém em negociação no momento.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

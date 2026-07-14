@@ -222,14 +222,15 @@ export async function getQuadroData(
         lead: { select: { enrollment: { select: { id: true } } } },
       },
     }),
-    // Leads que fizeram experimental e seguem em conversa (sem matrícula,
-    // não perdidos, não excluídos)
+    // Leads que fizeram experimental e seguem em NEGOCIAÇÃO (sem matrícula,
+    // não excluídos). v1.1-BP: antes contava todo estágio não-perdido
+    // (incluía Nutrição etc.); o cliente quer só quem está negociando.
     prisma.lead.findMany({
       where: {
         tenantId,
         deletedAt: null,
         enrollment: { is: null },
-        stage: { isLost: false },
+        stage: { name: "Negociação", isLost: false },
         experimentalClasses: { some: {} },
       },
       select: {
