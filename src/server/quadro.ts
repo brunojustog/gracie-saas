@@ -213,9 +213,15 @@ export async function getQuadroData(
         },
       },
     }),
-    // Aulas experimentais comparecidas nos últimos 90d (conversão)
+    // Aulas experimentais comparecidas nos últimos 90d (conversão).
+    // v1.1-BQ: sem leads excluídos (duplicatas) — consistente com o resto.
     prisma.experimentalClass.findMany({
-      where: { tenantId, status: "ATTENDED", scheduledDate: { gte: since90 } },
+      where: {
+        tenantId,
+        status: "ATTENDED",
+        scheduledDate: { gte: since90 },
+        lead: { deletedAt: null },
+      },
       select: {
         leadId: true,
         scheduledDate: true,
@@ -275,8 +281,14 @@ export async function getQuadroData(
       orderBy: { startDate: "desc" },
     }),
     // v1.1-BC/BE: aulas experimentais do PERÍODO — stats + por programa (item 6/7).
+    // v1.1-BQ: ignora aulas de leads excluídos (duplicatas) — alinha com o
+    // painel "Para onde foram" (a divergência 32×28 confundia a diretoria).
     prisma.experimentalClass.findMany({
-      where: { tenantId, scheduledDate: { gte: ep.from, lte: ep.to } },
+      where: {
+        tenantId,
+        scheduledDate: { gte: ep.from, lte: ep.to },
+        lead: { deletedAt: null },
+      },
       select: {
         id: true,
         leadId: true,
@@ -697,6 +709,9 @@ export async function getQuadroData(
     negociacao: [] as Name[],
     nutricao: [] as Name[],
     perda: [] as Name[],
+    // v1.1-BQ: quem está em qualquer OUTRO estágio (Agendamento, Potencial…)
+    // caía fora dos baldes e o total não batia com o "compareceram" de cima.
+    outros: [] as Name[],
   };
   for (const l of expOutcomeLeads) {
     const item = outcomeItem(l);
@@ -704,6 +719,7 @@ export async function getQuadroData(
     else if (l.stage.isLost) expOutcomes.perda.push(item);
     else if (l.stage.name === "Negociação") expOutcomes.negociacao.push(item);
     else if (l.stage.name === "Nutrição") expOutcomes.nutricao.push(item);
+    else expOutcomes.outros.push(item);
   }
 
   return {

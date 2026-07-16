@@ -396,13 +396,14 @@ export function QuadroBody({
 
       <Panel
         title="Para onde foram os leads que fizeram experimental"
-        subtitle="Dos que COMPARECERAM a uma experimental no período: 'Matriculou' = tem matrícula registrada. Clique pra ver os nomes."
+        subtitle="Dos que COMPARECERAM a uma experimental no período: 'Matriculou' = tem matrícula registrada. 'Outros estágios' = ainda no funil (Agendamento, Potencial…). A soma bate com o 'compareceram' de cima. Clique pra ver os nomes."
       >
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <OutcomeCard label="Matriculou" items={data.expOutcomes.matriculou} tone="emerald" />
           <OutcomeCard label="Negociação" items={data.expOutcomes.negociacao} tone="sky" />
           <OutcomeCard label="Nutrição" items={data.expOutcomes.nutricao} tone="amber" />
           <OutcomeCard label="Perda" items={data.expOutcomes.perda} tone="red" />
+          <OutcomeCard label="Outros estágios" items={data.expOutcomes.outros} tone="zinc" />
         </div>
       </Panel>
 
