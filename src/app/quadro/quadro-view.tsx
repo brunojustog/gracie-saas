@@ -563,6 +563,14 @@ function MonthBoard({
     compareceram: number;
     avulsas: number;
     ativos: number;
+    names: {
+      matriculas: DrillItem[];
+      cancelamentos: DrillItem[];
+      experimentais: DrillItem[];
+      compareceram: DrillItem[];
+      avulsas: DrillItem[];
+      ativos: DrillItem[];
+    };
   };
   ativos: number;
 }) {
@@ -572,12 +580,22 @@ function MonthBoard({
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-1">
         <h2 className="text-lg font-bold capitalize">Resumo de {m.label}</h2>
         <span className="text-xs text-muted-foreground">
-          consolidado do mês (dia 1 até hoje) — o mesmo do WhatsApp
+          consolidado do mês (dia 1 até hoje) — o mesmo do WhatsApp · clique nos números pra ver os nomes
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Big label="Novas matrículas" value={m.matriculas} tone="emerald" />
-        <Big label="Cancelamentos" value={m.cancelamentos} tone="red" />
+        <Big
+          label="Novas matrículas"
+          value={m.matriculas}
+          tone="emerald"
+          items={m.names.matriculas}
+        />
+        <Big
+          label="Cancelamentos"
+          value={m.cancelamentos}
+          tone="red"
+          items={m.names.cancelamentos}
+        />
         <Big
           label="Saldo do mês"
           value={`${saldo >= 0 ? "+" : ""}${saldo}`}
@@ -587,9 +605,11 @@ function MonthBoard({
           label="Experimentais"
           value={m.experimentais}
           sub={`${m.compareceram} compareceram`}
+          items={m.names.experimentais}
+          subItems={m.names.compareceram}
         />
-        <Big label="Aulas avulsas" value={m.avulsas} />
-        <Big label="Alunos ativos" value={ativos} strong />
+        <Big label="Aulas avulsas" value={m.avulsas} items={m.names.avulsas} />
+        <Big label="Alunos ativos" value={ativos} strong items={m.names.ativos} />
       </div>
     </div>
   );
@@ -601,12 +621,18 @@ function Big({
   sub,
   tone,
   strong,
+  items,
+  subItems,
 }: {
   label: string;
   value: number | string;
   sub?: string;
   tone?: "emerald" | "red";
   strong?: boolean;
+  /** Se vier, o número vira clicável e abre a lista de nomes. */
+  items?: DrillItem[];
+  /** Nomes por trás do sub-texto (ex.: "X compareceram"). */
+  subItems?: DrillItem[];
 }) {
   const color =
     tone === "emerald"
@@ -617,8 +643,27 @@ function Big({
   return (
     <div className={`rounded-xl border bg-card p-3 ${strong ? "ring-1 ring-primary/40" : ""}`}>
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className={`mt-0.5 text-3xl font-bold tabular-nums ${color}`}>{value}</div>
-      {sub ? <div className="text-[11px] text-muted-foreground">{sub}</div> : null}
+      <div className={`mt-0.5 text-3xl font-bold tabular-nums ${color}`}>
+        {items ? (
+          <DrillNumber value={value} title={label} items={items} className={color} />
+        ) : (
+          value
+        )}
+      </div>
+      {sub ? (
+        <div className="text-[11px] text-muted-foreground">
+          {subItems && subItems.length > 0 ? (
+            <DrillNumber
+              value={sub}
+              title={`${label} · compareceram`}
+              items={subItems}
+              variant="plain"
+            />
+          ) : (
+            sub
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

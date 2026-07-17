@@ -722,6 +722,78 @@ export async function getQuadroData(
     else expOutcomes.outros.push(item);
   }
 
+  // ── Nomes por trás do "Resumo do mês" (v1.1-BR) — drill-down do MonthBoard.
+  // Espelha os MESMOS filtros do getRangeDigest(monthStart, now) pra os números
+  // baterem. Matrículas/cancelamentos saem do allEnrollments (já carregado);
+  // experimentais/avulsas do mês precisam de nome, então buscamos aqui.
+  const [monthExpRows, monthLooseRows] = await Promise.all([
+    prisma.experimentalClass.findMany({
+      where: {
+        tenantId,
+        lead: { deletedAt: null },
+        status: { not: "CANCELED" },
+        scheduledDate: { gte: monthStart, lte: now },
+      },
+      select: {
+        id: true,
+        status: true,
+        leadId: true,
+        scheduledDate: true,
+        lead: { select: { name: true } },
+        modality: { select: { name: true } },
+      },
+      orderBy: { scheduledDate: "desc" },
+    }),
+    prisma.looseClass.findMany({
+      where: { tenantId, classDate: { gte: monthStart, lte: now } },
+      select: {
+        id: true,
+        classDate: true,
+        lead: { select: { name: true } },
+      },
+      orderBy: { classDate: "desc" },
+    }),
+  ]);
+
+  const monthMatriculaNames: Name[] = allEnrollments
+    .filter((e) => e.enrolledAt >= monthStart && e.enrolledAt <= now)
+    .map(matriculaItem);
+  const monthCancelNames: Name[] = allEnrollments
+    .filter((e) => {
+      const l = leftAt(e);
+      return l !== null && l >= monthStart && l <= now;
+    })
+    .map((e) => ({
+      id: e.id,
+      name: e.lead.name,
+      sub: STATUS_PT[e.status] ?? e.status,
+      href: enrollHref(e.lead.name),
+    }));
+  const monthExpNames: Name[] = monthExpRows.map((c) => ({
+    id: c.id,
+    name: c.lead.name,
+    sub: `${format(c.scheduledDate, "dd/MM", { locale: ptBR })} · ${c.modality.name}`,
+    href: kanbanHref(c.lead.name),
+  }));
+  const seenAttendee = new Set<string>();
+  const monthCompareceramNames: Name[] = [];
+  for (const c of monthExpRows) {
+    if (c.status === "ATTENDED" && !seenAttendee.has(c.leadId)) {
+      seenAttendee.add(c.leadId);
+      monthCompareceramNames.push({
+        id: c.leadId,
+        name: c.lead.name,
+        href: kanbanHref(c.lead.name),
+      });
+    }
+  }
+  const monthLooseNames: Name[] = monthLooseRows.map((c) => ({
+    id: c.id,
+    name: c.lead.name,
+    sub: format(c.classDate, "dd/MM", { locale: ptBR }),
+    href: kanbanHref(c.lead.name),
+  }));
+
   return {
     generatedAt: now,
     matriculas: {
@@ -764,9 +836,18 @@ export async function getQuadroData(
     posExpLastWeek,
     agenda,
     // Resumo consolidado do mês (v1.1-BM, item 4) — painel fixo grandão.
+    // v1.1-BR: nomes por trás de cada número (drill-down clicável).
     monthResumo: {
       label: format(monthStart, "MMMM 'de' yyyy", { locale: ptBR }),
       ...monthResumo,
+      names: {
+        matriculas: monthMatriculaNames,
+        cancelamentos: monthCancelNames,
+        experimentais: monthExpNames,
+        compareceram: monthCompareceramNames,
+        avulsas: monthLooseNames,
+        ativos: activeNames,
+      },
     },
     // Experimentais do período (v1.1-BC/BE, itens 6/7/8).
     expPeriodLabel: ep.label,
