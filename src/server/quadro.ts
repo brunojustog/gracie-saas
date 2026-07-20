@@ -726,7 +726,7 @@ export async function getQuadroData(
   // Espelha os MESMOS filtros do getRangeDigest(monthStart, now) pra os números
   // baterem. Matrículas/cancelamentos saem do allEnrollments (já carregado);
   // experimentais/avulsas do mês precisam de nome, então buscamos aqui.
-  const [monthExpRows, monthLooseRows] = await Promise.all([
+  const [monthExpRows, monthLooseRows, monthLeadRows] = await Promise.all([
     prisma.experimentalClass.findMany({
       where: {
         tenantId,
@@ -752,6 +752,22 @@ export async function getQuadroData(
         lead: { select: { name: true } },
       },
       orderBy: { classDate: "desc" },
+    }),
+    // v1.1-BS: novos leads do mês — mesma definição da Dashboard
+    // (firstInteractionAt no período), sem leads excluídos.
+    prisma.lead.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        firstInteractionAt: { gte: monthStart, lte: now },
+      },
+      select: {
+        id: true,
+        name: true,
+        firstInteractionAt: true,
+        origin: true,
+      },
+      orderBy: { firstInteractionAt: "desc" },
     }),
   ]);
 
@@ -792,6 +808,14 @@ export async function getQuadroData(
     name: c.lead.name,
     sub: format(c.classDate, "dd/MM", { locale: ptBR }),
     href: kanbanHref(c.lead.name),
+  }));
+  const monthLeadNames: Name[] = monthLeadRows.map((l) => ({
+    id: l.id,
+    name: l.name,
+    sub: l.firstInteractionAt
+      ? `${format(l.firstInteractionAt, "dd/MM", { locale: ptBR })}${l.origin ? ` · ${l.origin}` : ""}`
+      : (l.origin ?? null),
+    href: kanbanHref(l.name),
   }));
 
   return {
@@ -840,7 +864,10 @@ export async function getQuadroData(
     monthResumo: {
       label: format(monthStart, "MMMM 'de' yyyy", { locale: ptBR }),
       ...monthResumo,
+      // v1.1-BS: novos leads do mês (igual à Dashboard).
+      novosLeads: monthLeadRows.length,
       names: {
+        novosLeads: monthLeadNames,
         matriculas: monthMatriculaNames,
         cancelamentos: monthCancelNames,
         experimentais: monthExpNames,

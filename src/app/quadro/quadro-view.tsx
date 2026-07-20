@@ -563,7 +563,9 @@ function MonthBoard({
     compareceram: number;
     avulsas: number;
     ativos: number;
+    novosLeads: number;
     names: {
+      novosLeads: DrillItem[];
       matriculas: DrillItem[];
       cancelamentos: DrillItem[];
       experimentais: DrillItem[];
@@ -583,7 +585,8 @@ function MonthBoard({
           consolidado do mês (dia 1 até hoje) — o mesmo do WhatsApp · clique nos números pra ver os nomes
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <Big label="Novos leads" value={m.novosLeads} items={m.names.novosLeads} />
         <Big
           label="Novas matrículas"
           value={m.matriculas}
