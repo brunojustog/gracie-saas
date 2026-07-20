@@ -32,6 +32,7 @@ export async function getClassesForCalendar(
       id: true,
       scheduledDate: true,
       status: true,
+      kind: true,
       notes: true,
       modalityId: true,
       leadId: true,
@@ -87,6 +88,7 @@ export async function getClassesForList(
       id: true,
       scheduledDate: true,
       status: true,
+      kind: true,
       attendedAt: true,
       modality: { select: { id: true, name: true, color: true } },
       lead: {

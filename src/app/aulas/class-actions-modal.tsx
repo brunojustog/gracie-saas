@@ -25,6 +25,7 @@ type CalendarClass = {
   id: string;
   scheduledDate: Date | string;
   status: ExperimentalClassStatus;
+  kind: "INDIVIDUAL" | "GROUP";
   notes: string | null;
   modalityId: string;
   leadId: string;
@@ -130,6 +131,16 @@ export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
             {format(scheduled, "EEE, dd MMM 'às' HH:mm", { locale: ptBR })}
             <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs">
               {STATUS_LABEL[cls.status]}
+            </span>
+            {/* v1.1-BT: etapa da experimental (1ª individual × 2ª em turma). */}
+            <span
+              className={
+                cls.kind === "INDIVIDUAL"
+                  ? "ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-xs text-violet-800 dark:bg-violet-900/40 dark:text-violet-200"
+                  : "ml-1 rounded bg-teal-100 px-1.5 py-0.5 text-xs text-teal-800 dark:bg-teal-900/40 dark:text-teal-200"
+              }
+            >
+              {cls.kind === "INDIVIDUAL" ? "1ª individual" : "2ª turma"}
             </span>
           </DialogDescription>
         </DialogHeader>

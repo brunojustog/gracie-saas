@@ -40,7 +40,15 @@ import { cn } from "@/lib/utils";
 import { scheduleClass } from "./actions";
 
 type Modality = { id: string; name: string; color: string | null };
-type Lead = { id: string; name: string; phone: string | null; modalityId: string | null };
+type Lead = {
+  id: string;
+  name: string;
+  phone: string | null;
+  modalityId: string | null;
+  /** v1.1-BT: experimentais já feitas (fora canceladas) — sugere 1ª × 2ª. */
+  _count?: { experimentalClasses: number };
+};
+type ClassKind = "INDIVIDUAL" | "GROUP";
 type ScheduleSlot = {
   id: string;
   dayOfWeek: number;
@@ -52,6 +60,7 @@ type CreatedClass = {
   id: string;
   scheduledDate: Date;
   status: ExperimentalClassStatus;
+  kind: ClassKind;
   notes: string | null;
   modalityId: string;
   leadId: string;
@@ -128,6 +137,9 @@ function ModalBody({
   );
   const [datetime, setDatetime] = useState(toDatetimeLocalValue(defaultDate));
   const [notes, setNotes] = useState("");
+  // v1.1-BT: etapa da experimental. null = segue a sugestão automática
+  // (1ª do lead = individual; da 2ª em diante = turma). Escolher fixa.
+  const [kindOverride, setKindOverride] = useState<ClassKind | null>(null);
   const [pending, startTransition] = useTransition();
 
   const sortedModalities = useMemo(() => {
@@ -149,6 +161,11 @@ function ModalBody({
     [leads, leadId],
   );
 
+  // Etapa sugerida pelo histórico do lead; o override manda quando existe.
+  const priorClasses = selectedLead?._count?.experimentalClasses ?? 0;
+  const suggestedKind: ClassKind = priorClasses === 0 ? "INDIVIDUAL" : "GROUP";
+  const kind: ClassKind = kindOverride ?? suggestedKind;
+
   const handleSubmit = () => {
     if (!leadId || !modalityId || !datetime) return;
     const isoDate = new Date(datetime).toISOString();
@@ -158,6 +175,7 @@ function ModalBody({
         modalityId,
         scheduledDate: isoDate,
         notes: notes || undefined,
+        kind,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -170,6 +188,7 @@ function ModalBody({
         id: result.classId,
         scheduledDate: new Date(isoDate),
         status: "SCHEDULED",
+        kind,
         notes: notes || null,
         modalityId,
         leadId,
@@ -290,6 +309,41 @@ function ModalBody({
                 })}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Etapa da experimental</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { v: "INDIVIDUAL" as const, t: "1ª — individual", d: "só aluno + professor" },
+                  { v: "GROUP" as const, t: "2ª — em turma", d: "com os alunos da turma" },
+                ]
+              ).map((o) => (
+                <button
+                  key={o.v}
+                  type="button"
+                  onClick={() => setKindOverride(o.v)}
+                  disabled={pending}
+                  className={cn(
+                    "rounded-lg border p-2 text-left text-xs transition",
+                    kind === o.v
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  <span className="block font-medium">{o.t}</span>
+                  <span className="block text-[11px] text-muted-foreground">{o.d}</span>
+                </button>
+              ))}
+            </div>
+            {leadId ? (
+              <p className="text-[11px] text-muted-foreground">
+                {priorClasses === 0
+                  ? "Esse lead nunca fez experimental — sugerimos a 1ª (individual)."
+                  : `Esse lead já fez ${priorClasses} experimental${priorClasses === 1 ? "" : "is"} — sugerimos a 2ª (em turma).`}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1">

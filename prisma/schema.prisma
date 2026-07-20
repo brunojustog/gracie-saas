@@ -566,6 +566,16 @@ enum ExperimentalClassStatus {
   CANCELED
 }
 
+/// v1.1-BT: a experimental virou processo de 2 etapas pra aumentar fechamento.
+/// INDIVIDUAL = 1ª aula, só aluno + professor.
+/// GROUP      = 2ª aula, com a turma (quando não fechou na 1ª).
+/// NÃO confundir com PrivatePackage ("Aulas particulares"), que é produto PAGO —
+/// a experimental individual segue sendo experimental (gratuita).
+enum ExperimentalClassKind {
+  INDIVIDUAL
+  GROUP
+}
+
 model ExperimentalClass {
   id            String                  @id @default(cuid())
   tenantId      String
@@ -573,6 +583,7 @@ model ExperimentalClass {
   modalityId    String
   scheduledDate DateTime
   status        ExperimentalClassStatus @default(SCHEDULED)
+  kind          ExperimentalClassKind   @default(INDIVIDUAL)
   notes         String?
   attendedAt    DateTime?
 

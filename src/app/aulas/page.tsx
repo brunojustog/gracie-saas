@@ -196,8 +196,21 @@ export default async function AulasPage({
                         {r.lead.assignedSeller?.name ?? r.lead.assignedSeller?.email ?? "—"}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={cn("inline-block rounded-full px-2 py-0.5 text-xs", STATUS_TONE[r.status])}>
-                          {STATUS_LABEL[r.status]}
+                        <span className="flex flex-wrap items-center gap-1">
+                          <span className={cn("inline-block rounded-full px-2 py-0.5 text-xs", STATUS_TONE[r.status])}>
+                            {STATUS_LABEL[r.status]}
+                          </span>
+                          {/* v1.1-BT: etapa (1ª individual × 2ª em turma). */}
+                          <span
+                            className={cn(
+                              "inline-block rounded-full px-2 py-0.5 text-xs",
+                              r.kind === "INDIVIDUAL"
+                                ? "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200"
+                                : "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200",
+                            )}
+                          >
+                            {r.kind === "INDIVIDUAL" ? "1ª individual" : "2ª turma"}
+                          </span>
                         </span>
                       </td>
                     </tr>
@@ -222,7 +235,17 @@ export default async function AulasPage({
     prisma.lead.findMany({
       where: { tenantId: tenant.id, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, phone: true, modalityId: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        modalityId: true,
+        // v1.1-BT: quantas experimentais o lead já tem (fora canceladas) —
+        // o modal usa pra sugerir 1ª (individual) ou 2ª (turma).
+        _count: {
+          select: { experimentalClasses: { where: { status: { not: "CANCELED" } } } },
+        },
+      },
     }),
   ]);
 

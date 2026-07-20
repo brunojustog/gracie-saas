@@ -28,6 +28,13 @@ const scheduleSchema = z.object({
   modalityId: z.string().min(1),
   scheduledDate: z.string().datetime(), // ISO
   notes: z.string().max(2000).optional(),
+  /**
+   * v1.1-BT: etapa da experimental. Se não vier, o servidor decide pela
+   * regra do processo: 1ª aula do lead = INDIVIDUAL (só aluno + professor),
+   * da 2ª em diante = GROUP (com a turma). Assim o kanban e qualquer outro
+   * ponto de entrada acertam sozinhos.
+   */
+  kind: z.enum(["INDIVIDUAL", "GROUP"]).optional(),
 });
 
 export async function scheduleClass(input: unknown): Promise<ActionResult> {
@@ -46,6 +53,17 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
   if (!modality) return { ok: false, error: "modalidade inválida" };
 
   const scheduledFor = new Date(parsed.data.scheduledDate);
+
+  // v1.1-BT: etapa da experimental. Sem escolha explícita, decide pela regra
+  // do processo — nunca fez experimental (fora canceladas) = 1ª (individual).
+  let kind = parsed.data.kind;
+  if (!kind) {
+    const previous = await prisma.experimentalClass.count({
+      where: { tenantId: tenant.id, leadId: lead.id, status: { not: "CANCELED" } },
+    });
+    kind = previous === 0 ? "INDIVIDUAL" : "GROUP";
+  }
+
   const created = await prisma.experimentalClass.create({
     data: {
       tenantId: tenant.id,
@@ -53,6 +71,7 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
       modalityId: modality.id,
       scheduledDate: scheduledFor,
       status: "SCHEDULED",
+      kind,
       notes: parsed.data.notes ?? null,
     },
   });
@@ -68,8 +87,13 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
     leadId: lead.id,
     authorId: user.id,
     kind: "CLASS_SCHEDULED",
-    body: `Aula experimental agendada — ${modality.name} em ${scheduledFor.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`,
-    metadata: { classId: created.id, modalityId: modality.id, scheduledFor: scheduledFor.toISOString() },
+    body: `Aula experimental ${kind === "INDIVIDUAL" ? "individual (1ª)" : "em turma (2ª)"} agendada — ${modality.name} em ${scheduledFor.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`,
+    metadata: {
+      classId: created.id,
+      modalityId: modality.id,
+      scheduledFor: scheduledFor.toISOString(),
+      kind,
+    },
   });
 
   // Enfileira os lembretes de agendamento (confirm + D-1 + D-0 + 1h-before).

@@ -41,6 +41,7 @@ type CalendarClass = {
   id: string;
   scheduledDate: Date | string;
   status: ExperimentalClassStatus;
+  kind: "INDIVIDUAL" | "GROUP";
   notes: string | null;
   modalityId: string;
   leadId: string;
@@ -124,7 +125,8 @@ export function CalendarBoard({
       const modalityColor = cls.modality.color ?? "#6B7280";
       return {
         id: `class:${cls.id}`,
-        title: cls.lead.name,
+        // v1.1-BT: prefixo marca a etapa direto no card do calendário.
+        title: `${cls.kind === "INDIVIDUAL" ? "① " : "② "}${cls.lead.name}`,
         start: start.toISOString(),
         end: end.toISOString(),
         backgroundColor: tone.bg === "transparent" ? modalityColor : tone.bg,
