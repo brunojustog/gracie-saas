@@ -312,12 +312,12 @@ function ModalBody({
           </div>
 
           <div className="space-y-1">
-            <Label>Etapa da experimental</Label>
+            <Label>Tipo da aula</Label>
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
-                  { v: "INDIVIDUAL" as const, t: "1ª — individual", d: "só aluno + professor" },
-                  { v: "GROUP" as const, t: "2ª — em turma", d: "com os alunos da turma" },
+                  { v: "INDIVIDUAL" as const, t: "Individual", d: "só aluno + professor" },
+                  { v: "GROUP" as const, t: "Em turma", d: "com os alunos da turma" },
                 ]
               ).map((o) => (
                 <button
@@ -340,8 +340,8 @@ function ModalBody({
             {leadId ? (
               <p className="text-[11px] text-muted-foreground">
                 {priorClasses === 0
-                  ? "Esse lead nunca fez experimental — sugerimos a 1ª (individual)."
-                  : `Esse lead já fez ${priorClasses} experimental${priorClasses === 1 ? "" : "is"} — sugerimos a 2ª (em turma).`}
+                  ? "Sugestão: nunca fez experimental → individual. O aluno pode escolher começar pela turma — é só trocar."
+                  : `Sugestão: já fez ${priorClasses} experimental${priorClasses === 1 ? "" : "is"} → em turma. Dá pra trocar se preferir.`}
               </p>
             ) : null}
           </div>

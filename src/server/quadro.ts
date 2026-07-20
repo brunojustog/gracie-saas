@@ -294,6 +294,7 @@ export async function getQuadroData(
         leadId: true,
         scheduledDate: true,
         status: true,
+        kind: true,
         lead: { select: { name: true } },
         modality: { select: { name: true } },
       },
@@ -681,6 +682,55 @@ export async function getQuadroData(
     canceled: monthClasses.filter((c) => c.status === "CANCELED").map(classItem),
   };
 
+  // ── Experimental por TIPO de aula (v1.1-BU) ──────────────────────────────
+  // O processo virou 2 etapas (individual × em turma) e o aluno pode começar
+  // por qualquer uma. Aqui a conta é por PESSOA (não por aula): quem fez só
+  // individual, só turma, ou as duas. Base = quem COMPARECEU no período —
+  // "fez a aula" é comparecimento, não agendamento.
+  const kindsByLead = new Map<
+    string,
+    { name: string; individual: number; group: number }
+  >();
+  for (const c of attendedRaw) {
+    const cur = kindsByLead.get(c.leadId) ?? {
+      name: c.lead.name,
+      individual: 0,
+      group: 0,
+    };
+    if (c.kind === "INDIVIDUAL") cur.individual++;
+    else cur.group++;
+    kindsByLead.set(c.leadId, cur);
+  }
+  const soIndividual: Name[] = [];
+  const soTurma: Name[] = [];
+  const ambas: Name[] = [];
+  for (const [leadId, v] of kindsByLead) {
+    const item: Name = {
+      id: leadId,
+      name: v.name,
+      sub:
+        v.individual && v.group
+          ? `${v.individual} individual · ${v.group} turma`
+          : v.individual
+            ? `${v.individual} individual`
+            : `${v.group} turma`,
+      href: kanbanHref(v.name),
+    };
+    if (v.individual > 0 && v.group > 0) ambas.push(item);
+    else if (v.individual > 0) soIndividual.push(item);
+    else soTurma.push(item);
+  }
+  const expByKind = {
+    // Aulas comparecidas separadas por tipo (conta AULA).
+    aulasIndividual: attendedRaw.filter((c) => c.kind === "INDIVIDUAL").map(classItem),
+    aulasTurma: attendedRaw.filter((c) => c.kind === "GROUP").map(classItem),
+    // Pessoas (conta LEAD).
+    leads: kindsByLead.size,
+    soIndividual,
+    soTurma,
+    ambas,
+  };
+
   // Por programa (GB1/GB2/GBF/GBK…). GBK-* colapsa em "GBK".
   const programOf = (modName: string) =>
     modName.startsWith("GBK") ? "GBK" : modName;
@@ -726,7 +776,8 @@ export async function getQuadroData(
   // Espelha os MESMOS filtros do getRangeDigest(monthStart, now) pra os números
   // baterem. Matrículas/cancelamentos saem do allEnrollments (já carregado);
   // experimentais/avulsas do mês precisam de nome, então buscamos aqui.
-  const [monthExpRows, monthLooseRows, monthLeadRows] = await Promise.all([
+  const [monthExpRows, monthLooseRows, monthLeadRows, periodLeadRows] =
+    await Promise.all([
     prisma.experimentalClass.findMany({
       where: {
         tenantId,
@@ -760,6 +811,22 @@ export async function getQuadroData(
         tenantId,
         deletedAt: null,
         firstInteractionAt: { gte: monthStart, lte: now },
+      },
+      select: {
+        id: true,
+        name: true,
+        firstInteractionAt: true,
+        origin: true,
+      },
+      orderBy: { firstInteractionAt: "desc" },
+    }),
+    // v1.1-BU: novos leads no PERÍODO selecionado (mesmo filtro de datas dos
+    // painéis de experimentais) — pro Quadro ter leads com recorte de data.
+    prisma.lead.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        firstInteractionAt: { gte: ep.from, lte: ep.to },
       },
       select: {
         id: true,
@@ -809,14 +876,32 @@ export async function getQuadroData(
     sub: format(c.classDate, "dd/MM", { locale: ptBR }),
     href: kanbanHref(c.lead.name),
   }));
-  const monthLeadNames: Name[] = monthLeadRows.map((l) => ({
+  const leadItem = (l: (typeof monthLeadRows)[number]): Name => ({
     id: l.id,
     name: l.name,
     sub: l.firstInteractionAt
       ? `${format(l.firstInteractionAt, "dd/MM", { locale: ptBR })}${l.origin ? ` · ${l.origin}` : ""}`
       : (l.origin ?? null),
     href: kanbanHref(l.name),
-  }));
+  });
+  const monthLeadNames: Name[] = monthLeadRows.map(leadItem);
+
+  // v1.1-BU: leads do período selecionado + quebra por origem. A origem é
+  // preenchida pela equipe, então serve pra cruzar com a campanha (foi tema
+  // da reunião de 16/07 — Instagram × WhatsApp × ManyChat).
+  const originMap = new Map<string, Name[]>();
+  for (const l of periodLeadRows) {
+    const key = l.origin ?? "SEM ORIGEM";
+    if (!originMap.has(key)) originMap.set(key, []);
+    originMap.get(key)!.push(leadItem(l));
+  }
+  const leadsPeriod = {
+    total: periodLeadRows.length,
+    names: periodLeadRows.map(leadItem),
+    byOrigin: [...originMap.entries()]
+      .map(([origin, names]) => ({ origin, count: names.length, names }))
+      .sort((a, b) => b.count - a.count),
+  };
 
   return {
     generatedAt: now,
@@ -880,6 +965,9 @@ export async function getQuadroData(
     expPeriodLabel: ep.label,
     expStats,
     expByProgram,
+    // v1.1-BU: individual × turma por pessoa + leads do período.
+    expByKind,
+    leadsPeriod,
     expOutcomes,
     // Receita (v1.1-AO/BD): mensalidades + aulas particulares + avulsas.
     revenue: {

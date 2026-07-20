@@ -200,7 +200,7 @@ export default async function AulasPage({
                           <span className={cn("inline-block rounded-full px-2 py-0.5 text-xs", STATUS_TONE[r.status])}>
                             {STATUS_LABEL[r.status]}
                           </span>
-                          {/* v1.1-BT: etapa (1ª individual × 2ª em turma). */}
+                          {/* v1.1-BT: tipo da aula (individual × em turma). */}
                           <span
                             className={cn(
                               "inline-block rounded-full px-2 py-0.5 text-xs",
@@ -209,7 +209,7 @@ export default async function AulasPage({
                                 : "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200",
                             )}
                           >
-                            {r.kind === "INDIVIDUAL" ? "1ª individual" : "2ª turma"}
+                            {r.kind === "INDIVIDUAL" ? "individual" : "em turma"}
                           </span>
                         </span>
                       </td>
@@ -241,7 +241,7 @@ export default async function AulasPage({
         phone: true,
         modalityId: true,
         // v1.1-BT: quantas experimentais o lead já tem (fora canceladas) —
-        // o modal usa pra sugerir 1ª (individual) ou 2ª (turma).
+        // o modal usa pra sugerir o tipo (individual x turma).
         _count: {
           select: { experimentalClasses: { where: { status: { not: "CANCELED" } } } },
         },

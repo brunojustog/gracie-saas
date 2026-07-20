@@ -348,6 +348,65 @@ export function QuadroBody({
         )}
       </div>
 
+      {/* v1.1-BU: leads no período — usa o MESMO filtro de datas acima. */}
+      <Panel
+        title={`Novos leads · ${data.expPeriodLabel}`}
+        subtitle="Leads que entraram no período selecionado, por origem. Clique pra ver os nomes."
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-xl border bg-card px-4 py-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Total no período
+            </div>
+            <DrillNumber
+              value={data.leadsPeriod.total}
+              title={`Novos leads · ${data.expPeriodLabel}`}
+              items={data.leadsPeriod.names}
+              className="text-3xl font-bold tabular-nums"
+            />
+          </div>
+          {data.leadsPeriod.byOrigin.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nenhum lead novo no período.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2 text-sm">
+              {data.leadsPeriod.byOrigin.map((o) => (
+                <StatChip
+                  key={o.origin}
+                  label={o.origin.toLowerCase()}
+                  value={o.count}
+                  items={o.names}
+                  tone="sky"
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      {/* v1.1-BU: individual × turma, contado por PESSOA. */}
+      <Panel
+        title="Individual × em turma (período)"
+        subtitle="Dos que COMPARECERAM no período. 'Fizeram as duas' = completou o processo. Clique pra ver os nomes."
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <OutcomeCard label="Pessoas" items={[...data.expByKind.soIndividual, ...data.expByKind.soTurma, ...data.expByKind.ambas]} tone="primary" />
+          <OutcomeCard label="Aulas individuais" items={data.expByKind.aulasIndividual} tone="zinc" />
+          <OutcomeCard label="Aulas em turma" items={data.expByKind.aulasTurma} tone="zinc" />
+          <OutcomeCard label="Só individual" items={data.expByKind.soIndividual} tone="amber" />
+          <OutcomeCard label="Só em turma" items={data.expByKind.soTurma} tone="sky" />
+        </div>
+        <div className="mt-3">
+          <OutcomeCard label="Fizeram as duas" items={data.expByKind.ambas} tone="emerald" />
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Pessoas = quem compareceu a pelo menos uma experimental no período.
+          Cada pessoa aparece em exatamente um dos três grupos (só individual,
+          só em turma, ou as duas), então os três somam o total de pessoas.
+        </p>
+      </Panel>
+
       <section className="grid gap-4 lg:grid-cols-2">
         <Panel title="Aulas experimentais (período)" subtitle="Clique nos números pra ver os nomes">
           <div className="flex flex-wrap gap-2 text-sm">

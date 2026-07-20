@@ -125,8 +125,8 @@ export function CalendarBoard({
       const modalityColor = cls.modality.color ?? "#6B7280";
       return {
         id: `class:${cls.id}`,
-        // v1.1-BT: prefixo marca a etapa direto no card do calendário.
-        title: `${cls.kind === "INDIVIDUAL" ? "① " : "② "}${cls.lead.name}`,
+        // v1.1-BT: prefixo marca o tipo direto no card do calendario.
+        title: `${cls.kind === "INDIVIDUAL" ? "👤 " : "👥 "}${cls.lead.name}`,
         start: start.toISOString(),
         end: end.toISOString(),
         backgroundColor: tone.bg === "transparent" ? modalityColor : tone.bg,
