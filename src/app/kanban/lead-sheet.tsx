@@ -92,6 +92,7 @@ import {
 import { BeltSelect } from "@/components/belt-select";
 
 import { moveLeadToStage } from "./actions";
+import { StageReasonDialog } from "./stage-reason-dialog";
 import { ORIGIN_LABEL } from "./lead-card";
 import { TagEditor } from "./tag-editor";
 
@@ -121,6 +122,8 @@ type Stage = {
   color: string;
   isWon: boolean;
   isLost: boolean;
+  // v1.1-BW: precisamos saber se a ORIGEM é o comparecimento pra exigir motivo.
+  isAttendance: boolean;
 };
 
 type Modality = { id: string; name: string };
@@ -370,6 +373,8 @@ function OverviewTab({
   const [belt, setBelt] = useState(lead.belt ?? "");
   const [beltDegree, setBeltDegree] = useState(lead.beltDegree ?? 0);
   const [notes, setNotes] = useState(lead.notes ?? "");
+  // v1.1-BW: stage-alvo aguardando justificativa (saída do comparecimento).
+  const [reasonMoveStage, setReasonMoveStage] = useState<Stage | null>(null);
 
   const dirty =
     name !== lead.name ||
@@ -411,23 +416,39 @@ function OverviewTab({
     });
   };
 
+  // v1.1-BW: sincroniza o estado local após um move (usado tanto no move
+  // direto quanto no que passou pelo dialog de motivo).
+  const syncStageMoved = (newStage: Stage) => {
+    onLeadChange({
+      ...lead,
+      stageId: newStage.id,
+      stage: { id: newStage.id, name: newStage.name, color: newStage.color },
+    });
+    onLeadPatch(lead.id, { stageId: newStage.id });
+  };
+
   const handleStageChange = (stageId: string) => {
     if (stageId === lead.stage.id) return;
+    const newStage = stages.find((s) => s.id === stageId);
+    const fromStage = stages.find((s) => s.id === lead.stage.id);
+
+    // v1.1-BW: fecha a brecha do dropdown — sair do comparecimento exige
+    // motivo, igual ao arraste no board. Ganho abre a matrícula (registro
+    // próprio), então só ele fica de fora.
+    if (fromStage?.isAttendance && newStage && !newStage.isWon) {
+      setReasonMoveStage(newStage);
+      return;
+    }
+
     startTransition(async () => {
       const result = await moveLeadToStage({ leadId: lead.id, toStageId: stageId });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      const newStage = stages.find((s) => s.id === stageId);
       if (newStage) {
         toast.success(`Movido para ${newStage.name}`);
-        onLeadChange({
-          ...lead,
-          stageId,
-          stage: { id: newStage.id, name: newStage.name, color: newStage.color },
-        });
-        onLeadPatch(lead.id, { stageId });
+        syncStageMoved(newStage);
       }
     });
   };
@@ -527,6 +548,23 @@ function OverviewTab({
 
   return (
     <div className="space-y-5">
+      <StageReasonDialog
+        target={
+          reasonMoveStage
+            ? {
+                leadId: lead.id,
+                leadName: lead.name,
+                toStageId: reasonMoveStage.id,
+                toStageName: reasonMoveStage.name,
+              }
+            : null
+        }
+        onClose={() => setReasonMoveStage(null)}
+        onConfirmed={() => {
+          if (reasonMoveStage) syncStageMoved(reasonMoveStage);
+        }}
+      />
+
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label htmlFor="stage">Estágio</Label>
