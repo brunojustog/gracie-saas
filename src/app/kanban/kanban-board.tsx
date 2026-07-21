@@ -26,6 +26,7 @@ import { moveLeadToStage } from "./actions";
 import { LeadCard } from "./lead-card";
 import { LeadSheet } from "./lead-sheet";
 import { LossReasonDialog } from "./loss-reason-dialog";
+import { StageReasonDialog } from "./stage-reason-dialog";
 import { NewLeadModal } from "./new-lead-modal";
 import { QuickScheduleModal } from "./quick-schedule-modal";
 
@@ -116,6 +117,13 @@ export function KanbanBoard({
     toStageId: string;
     toStageName: string;
   } | null>(null);
+  // v1.1-BV: justificativa obrigatória ao SAIR do comparecimento.
+  const [moveReasonTarget, setMoveReasonTarget] = useState<{
+    leadId: string;
+    leadName: string;
+    toStageId: string;
+    toStageName: string;
+  } | null>(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
   const [, startTransition] = useTransition();
 
@@ -158,6 +166,7 @@ export function KanbanBoard({
     if (!lead || lead.stageId === overId) return;
 
     const targetStage = stages.find((s) => s.id === overId);
+    const fromStage = stages.find((s) => s.id === lead.stageId);
 
     // Interceptação: dragar pro stage isWon (Matriculado) sem ter Enrollment
     // abre modal de matrícula em vez de só mover. NÃO altera estado local
@@ -189,6 +198,25 @@ export function KanbanBoard({
         leadName: lead.name,
         toStageId: targetStage.id,
         toStageName: targetStage.name,
+      });
+      return;
+    }
+
+    // v1.1-BV: SAIR do comparecimento exige justificativa (reunião 21/07 —
+    // a diretoria quer o motivo de cada lead não fechar). Perda tem o seu
+    // próprio dialog de motivo e Ganho abre a matrícula (o registro já é
+    // explícito), então esses dois passam direto; os demais destinos
+    // (Negociação, Nutrição, volta pro Agendamento pra 2ª aula) pedem o motivo.
+    if (
+      fromStage?.isAttendance &&
+      !targetStage?.isLost &&
+      !(targetStage?.isWon && !lead.enrollment)
+    ) {
+      setMoveReasonTarget({
+        leadId,
+        leadName: lead.name,
+        toStageId: overId,
+        toStageName: targetStage?.name ?? "estágio",
       });
       return;
     }
@@ -306,6 +334,12 @@ export function KanbanBoard({
       <LossReasonDialog
         target={lossTarget}
         onClose={() => setLossTarget(null)}
+        onConfirmed={() => router.refresh()}
+      />
+
+      <StageReasonDialog
+        target={moveReasonTarget}
+        onClose={() => setMoveReasonTarget(null)}
         onConfirmed={() => router.refresh()}
       />
 

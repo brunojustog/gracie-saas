@@ -29,10 +29,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 import { scheduleClass } from "../aulas/actions";
 
 type Modality = { id: string; name: string };
+type ClassKind = "INDIVIDUAL" | "GROUP";
 
 type Props = {
   lead: { id: string; name: string; modalityId: string | null } | null;
@@ -92,6 +94,10 @@ function Body({
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(initial.time);
   const [notes, setNotes] = useState("");
+  // v1.1-BV: tipo da aula. O agendamento pelo kanban só dispara pra lead sem
+  // aula (é a 1ª), então o default é individual — mas o aluno pode preferir
+  // começar pela turma, então deixamos escolher.
+  const [kind, setKind] = useState<ClassKind>("INDIVIDUAL");
   const [pending, startTransition] = useTransition();
 
   const handleSubmit = () => {
@@ -113,6 +119,7 @@ function Body({
         modalityId,
         scheduledDate: localISO,
         notes: notes.trim() || undefined,
+        kind,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -176,6 +183,34 @@ function Body({
               onChange={(e) => setTime(e.target.value)}
               disabled={pending}
             />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label>Tipo da aula</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { v: "INDIVIDUAL" as const, t: "Individual", d: "só aluno + professor" },
+                { v: "GROUP" as const, t: "Em turma", d: "com os alunos da turma" },
+              ]
+            ).map((o) => (
+              <button
+                key={o.v}
+                type="button"
+                onClick={() => setKind(o.v)}
+                disabled={pending}
+                className={cn(
+                  "rounded-lg border p-2 text-left text-xs transition",
+                  kind === o.v
+                    ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                    : "hover:bg-accent",
+                )}
+              >
+                <span className="block font-medium">{o.t}</span>
+                <span className="block text-[11px] text-muted-foreground">{o.d}</span>
+              </button>
+            ))}
           </div>
         </div>
 

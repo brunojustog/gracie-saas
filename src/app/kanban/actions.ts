@@ -11,6 +11,13 @@ import { requireTenantUser } from "@/server/tenant";
 const moveSchema = z.object({
   leadId: z.string().min(1),
   toStageId: z.string().min(1),
+  /**
+   * v1.1-BV: justificativa da movimentação. Obrigatória (regra de negócio da
+   * UI) quando o lead sai do estágio de comparecimento — o motivo alimenta o
+   * relatório de conversão do Quadro. Aqui é opcional: quando vem, entra no
+   * diário do lead junto do "X → Y".
+   */
+  reason: z.string().max(2000).optional(),
 });
 
 export type MoveResult =
@@ -31,7 +38,7 @@ export async function moveLeadToStage(input: unknown): Promise<MoveResult> {
   const parsed = moveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
-  const { leadId, toStageId } = parsed.data;
+  const { leadId, toStageId, reason } = parsed.data;
   const { tenant, user, membership } = await requireTenantUser();
 
   const lead = await findLeadInScope(membership, leadId);
@@ -68,14 +75,23 @@ export async function moveLeadToStage(input: unknown): Promise<MoveResult> {
         changedById: user.id,
       },
     });
+    const trimmedReason = reason?.trim();
     await appendLeadNote(
       {
         tenantId: tenant.id,
         leadId,
         authorId: user.id,
         kind: "STAGE_CHANGED",
-        body: `Movido de "${fromStage?.name ?? "?"}" → "${stage.name}"`,
-        metadata: { fromStageId: lead.stageId, toStageId, fromStageName: fromStage?.name ?? null, toStageName: stage.name },
+        body: trimmedReason
+          ? `Movido de "${fromStage?.name ?? "?"}" → "${stage.name}" — ${trimmedReason}`
+          : `Movido de "${fromStage?.name ?? "?"}" → "${stage.name}"`,
+        metadata: {
+          fromStageId: lead.stageId,
+          toStageId,
+          fromStageName: fromStage?.name ?? null,
+          toStageName: stage.name,
+          reason: trimmedReason ?? null,
+        },
       },
       tx,
     );
