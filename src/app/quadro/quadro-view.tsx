@@ -1,6 +1,8 @@
 import type { ExperimentalClassStatus } from "@prisma/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { FileText } from "lucide-react";
+import Link from "next/link";
 
 import { DrillNumber, type DrillItem } from "@/components/drill-number";
 import type { PeriodPreset } from "@/lib/period";
@@ -344,7 +346,22 @@ export function QuadroBody({
           Aulas experimentais · {data.expPeriodLabel}
         </h2>
         {publicMode ? null : (
-          <ExpPeriodFilter current={expSelector} from={from} to={to} />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* v1.1-BX: relatório de leads experimentais (Data · Nome · Estágio
+                · Motivo) no período atual, pronto pra imprimir/salvar PDF. */}
+            <Link
+              href={`/quadro/relatorio-experimentais?${
+                expSelector === "custom" && from && to
+                  ? new URLSearchParams({ from, to }).toString()
+                  : new URLSearchParams({ period: expSelector }).toString()
+              }`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent"
+            >
+              <FileText className="h-4 w-4" />
+              Relatório de experimentais
+            </Link>
+            <ExpPeriodFilter current={expSelector} from={from} to={to} />
+          </div>
         )}
       </div>
 

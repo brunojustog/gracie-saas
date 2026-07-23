@@ -986,3 +986,105 @@ export async function getQuadroData(
 }
 
 export type QuadroData = Awaited<ReturnType<typeof getQuadroData>>;
+
+// ──────────────────────────────────────────────────────────────────────────
+// Relatório de leads experimentais (v1.1-BX) — a lista que o Anderson montava
+// à mão pra reunião: quem COMPARECEU a uma experimental no período, o estágio
+// atual e o MOTIVO (o comentário obrigatório da saída do comparecimento, com
+// fallback pra observação livre do lead). Um botão no Quadro gera isso pronto
+// pra imprimir/salvar PDF.
+// ──────────────────────────────────────────────────────────────────────────
+
+export type ExperimentalReportRow = {
+  leadId: string;
+  name: string;
+  /** Datas das aulas comparecidas no período (dd/MM), já formatadas. */
+  dates: string;
+  stage: string;
+  motivo: string;
+};
+
+export async function getExperimentalReport(
+  tenantId: string,
+  from: Date,
+  to: Date,
+): Promise<{ rows: ExperimentalReportRow[]; generatedAt: Date }> {
+  // Comparecimentos no período (sem leads excluídos), com o estágio atual.
+  const attended = await prisma.experimentalClass.findMany({
+    where: {
+      tenantId,
+      status: "ATTENDED",
+      scheduledDate: { gte: from, lte: to },
+      lead: { deletedAt: null },
+    },
+    select: {
+      leadId: true,
+      scheduledDate: true,
+      lead: {
+        select: { name: true, notes: true, stage: { select: { name: true } } },
+      },
+    },
+    orderBy: { scheduledDate: "asc" },
+  });
+
+  type Acc = {
+    name: string;
+    stage: string;
+    notes: string | null;
+    dates: Date[];
+  };
+  const byLead = new Map<string, Acc>();
+  for (const c of attended) {
+    const cur = byLead.get(c.leadId) ?? {
+      name: c.lead.name,
+      stage: c.lead.stage.name,
+      notes: c.lead.notes,
+      dates: [],
+    };
+    cur.dates.push(c.scheduledDate);
+    byLead.set(c.leadId, cur);
+  }
+
+  // Motivo = comentário mais recente que TEM justificativa (mudança de estágio
+  // com reason — inclui perda). Se não houver, cai na observação livre do lead.
+  const leadIds = [...byLead.keys()];
+  const reasonByLead = new Map<string, string>();
+  if (leadIds.length > 0) {
+    const notes = await prisma.leadNote.findMany({
+      where: { tenantId, leadId: { in: leadIds }, kind: "STAGE_CHANGED" },
+      select: { leadId: true, metadata: true },
+      orderBy: { createdAt: "desc" },
+    });
+    for (const n of notes) {
+      if (reasonByLead.has(n.leadId)) continue;
+      const reason =
+        n.metadata && typeof n.metadata === "object" && !Array.isArray(n.metadata)
+          ? (n.metadata as Record<string, unknown>).reason
+          : null;
+      if (typeof reason === "string" && reason.trim()) {
+        reasonByLead.set(n.leadId, reason.trim());
+      }
+    }
+  }
+
+  const rows: ExperimentalReportRow[] = leadIds.map((id) => {
+    const a = byLead.get(id)!;
+    return {
+      leadId: id,
+      name: a.name,
+      dates: a.dates
+        .map((d) => format(d, "dd/MM", { locale: ptBR }))
+        .join(" e "),
+      stage: a.stage,
+      motivo: reasonByLead.get(id) ?? a.notes?.trim() ?? "",
+    };
+  });
+  // Ordena pela 1ª aula comparecida (crescente), como na planilha do Anderson.
+  rows.sort((x, y) => {
+    const ax = byLead.get(x.leadId)!.dates[0]!.getTime();
+    const ay = byLead.get(y.leadId)!.dates[0]!.getTime();
+    return ax - ay;
+  });
+
+  return { rows, generatedAt: new Date() };
+}
