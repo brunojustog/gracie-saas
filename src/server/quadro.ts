@@ -320,13 +320,18 @@ export async function getQuadroData(
     }),
     // Receita de aulas avulsas (v1.1-BD)
     getLooseRevenue(tenantId, monthStart, nextMonthStart),
-    // v1.1-BF/BH (item 2): matrículas com/sem aula experimental, contando só
-    // de EXP_SPLIT_SINCE em diante (dados antigos sem vínculo confiável).
+    // v1.1-BF/BH (item 2): matrículas com/sem aula experimental. v1.1-BY:
+    // respeita o MESMO período dos painéis de experimental (pra igualar as
+    // telas na hora do relatório), com piso em EXP_SPLIT_SINCE — antes disso
+    // não há vínculo experimental→matrícula confiável.
     prisma.enrollment.findMany({
       where: {
         tenantId,
         lead: { deletedAt: null },
-        enrolledAt: { gte: EXP_SPLIT_SINCE },
+        enrolledAt: {
+          gte: ep.from > EXP_SPLIT_SINCE ? ep.from : EXP_SPLIT_SINCE,
+          lte: ep.to,
+        },
       },
       select: {
         id: true,

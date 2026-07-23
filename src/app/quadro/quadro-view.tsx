@@ -328,11 +328,18 @@ export function QuadroBody({
         </div>
       </Panel>
 
-      {/* Matrículas com vs sem aula experimental */}
+      {/* Matrículas com vs sem aula experimental — v1.1-BY: mesmo filtro de
+          período da seção de experimentais (sincronizado via URL) pra igualar
+          as telas na hora do relatório. */}
       <Panel
         title="Matrículas com vs sem aula experimental"
-        subtitle={`A partir de ${format(EXP_SPLIT_SINCE, "dd/MM/yyyy", { locale: ptBR })} — das matrículas novas, quantos fizeram experimental e quantos fecharam direto. Clique pra ver os nomes.`}
+        subtitle={`Matrículas novas no período (${data.expPeriodLabel}) — quantas fizeram experimental e quantas fecharam direto. Conta de ${format(EXP_SPLIT_SINCE, "dd/MM/yyyy", { locale: ptBR })} em diante (antes disso o vínculo não era registrado). Clique pra ver os nomes.`}
       >
+        {publicMode ? null : (
+          <div className="mb-3 flex justify-end">
+            <ExpPeriodFilter current={expSelector} from={from} to={to} />
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <OutcomeCard label="Total de matrículas" items={[...data.matriculasExp.comExp, ...data.matriculasExp.semExp]} tone="primary" />
           <OutcomeCard label="Fizeram experimental" items={data.matriculasExp.comExp} tone="emerald" />
