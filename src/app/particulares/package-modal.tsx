@@ -41,6 +41,8 @@ export type FormOptions = {
   modalities: Array<{ id: string; name: string }>;
   leads: Array<{ id: string; name: string; phone: string | null }>;
   sellers: Array<{ id: string; name: string }>;
+  // v1.1-BZ: professores ativos pro select de "quem deu a aula".
+  professors: Array<{ id: string; name: string }>;
 };
 
 export type EditPackage = {

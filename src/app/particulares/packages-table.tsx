@@ -27,6 +27,8 @@ type SessionRow = {
   scheduledDate: Date | string | null;
   completedAt: Date | string | null;
   notes: string | null;
+  professorId: string | null;
+  professor: { name: string } | null;
 };
 
 type Row = {
@@ -189,7 +191,14 @@ export function PackagesTable({
                             id: r.id,
                             leadName: r.lead.name,
                             totalClasses: r.totalClasses,
-                            sessions: r.sessions,
+                            sessions: r.sessions.map((s) => ({
+                              id: s.id,
+                              scheduledDate: s.scheduledDate,
+                              completedAt: s.completedAt,
+                              notes: s.notes,
+                              professorId: s.professorId,
+                              professorName: s.professor?.name ?? null,
+                            })),
                           })
                         }
                       >
@@ -234,7 +243,11 @@ export function PackagesTable({
         hideFinancials={hideFinancials}
         onSaved={() => router.refresh()}
       />
-      <SessionsModal target={sessionsTarget} onClose={() => setSessionsTarget(null)} />
+      <SessionsModal
+        target={sessionsTarget}
+        professors={options.professors}
+        onClose={() => setSessionsTarget(null)}
+      />
       <CancelDialog target={cancelTarget} onClose={() => setCancelTarget(null)} />
     </>
   );

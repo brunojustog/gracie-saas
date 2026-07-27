@@ -21,7 +21,7 @@ const PAYMENT = ["CREDIT_CARD", "PIX", "BOLETO", "CASH", "TRANSFER", "OTHER"] as
 
 export async function getPrivateFormOptions() {
   const { tenant } = await requireTenantUser();
-  const [modalities, leads, sellers] = await Promise.all([
+  const [modalities, leads, sellers, professors] = await Promise.all([
     prisma.modality.findMany({
       where: { tenantId: tenant.id, active: true },
       orderBy: { name: "asc" },
@@ -37,6 +37,12 @@ export async function getPrivateFormOptions() {
       include: { user: { select: { id: true, name: true, email: true } } },
       orderBy: { createdAt: "asc" },
     }),
+    // v1.1-BZ: professores ativos pro select de "quem deu a aula".
+    prisma.professor.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   ]);
   return {
     modalities,
@@ -45,6 +51,7 @@ export async function getPrivateFormOptions() {
       id: s.user.id,
       name: s.user.name ?? s.user.email,
     })),
+    professors,
   };
 }
 
@@ -273,6 +280,8 @@ const sessionSchema = z.object({
   scheduledDate: z.string().date().nullable().optional(),
   completed: z.boolean().default(false),
   completedDate: z.string().date().nullable().optional(),
+  // v1.1-BZ: professor da aula (editável na confirmação — substituição).
+  professorId: z.string().min(1).nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
 });
 
@@ -291,6 +300,17 @@ export async function saveSession(
     : null;
   const scheduledDate = parseLocalDate(parsed.data.scheduledDate);
 
+  // v1.1-BZ: valida que o professor (se veio) é do tenant e está ativo.
+  let professorId = parsed.data.professorId ?? null;
+  if (professorId) {
+    const prof = await prisma.professor.findFirst({
+      where: { id: professorId, tenantId: pkg.tenantId },
+      select: { id: true },
+    });
+    if (!prof) return { ok: false, error: "professor inválido" };
+    professorId = prof.id;
+  }
+
   if (parsed.data.sessionId) {
     // garante que a sessão é do pacote (que já está no scope)
     const existing = await prisma.privateSession.findFirst({
@@ -300,7 +320,7 @@ export async function saveSession(
     if (!existing) return { ok: false, error: "sessão não encontrada" };
     await prisma.privateSession.update({
       where: { id: existing.id },
-      data: { scheduledDate, completedAt, notes: parsed.data.notes ?? null },
+      data: { scheduledDate, completedAt, professorId, notes: parsed.data.notes ?? null },
     });
   } else {
     await prisma.privateSession.create({
@@ -308,6 +328,7 @@ export async function saveSession(
         packageId: pkg.id,
         scheduledDate,
         completedAt,
+        professorId,
         notes: parsed.data.notes ?? null,
       },
     });

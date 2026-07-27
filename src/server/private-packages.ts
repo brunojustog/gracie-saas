@@ -66,7 +66,14 @@ export async function getPrivatePackagesForList(
       modality: { select: { id: true, name: true, color: true } },
       soldBy: { select: { name: true, email: true } },
       sessions: {
-        select: { id: true, scheduledDate: true, completedAt: true, notes: true },
+        select: {
+          id: true,
+          scheduledDate: true,
+          completedAt: true,
+          notes: true,
+          professorId: true,
+          professor: { select: { name: true } },
+        },
         orderBy: { scheduledDate: "asc" },
       },
     },

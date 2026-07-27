@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   MessageCircle,
   MessagesSquare,
+  Dumbbell,
   Smartphone,
   Tag,
   Trash2,
@@ -40,6 +41,7 @@ const NAV_ITEMS: Array<{
 }> = [
   { href: "/settings/modalidades", label: "Modalidades", icon: Tag, minRole: "ADMIN" },
   { href: "/settings/planos", label: "Planos", icon: GraduationCap, minRole: "SELLER" },
+  { href: "/settings/professores", label: "Professores", icon: Dumbbell, minRole: "ADMIN" },
   { href: "/settings/estagios", label: "Estágios do funil", icon: LayoutGrid, minRole: "ADMIN" },
   { href: "/settings/usuarios", label: "Usuários", icon: Users, minRole: "ADMIN" },
   { href: "/settings/chatwoot", label: "Integração Chatwoot", icon: MessageCircle, minRole: "ADMIN" },

@@ -431,6 +431,44 @@ export function QuadroBody({
         </p>
       </Panel>
 
+      {/* v1.1-BZ: aulas particulares concluídas por professor no período. */}
+      <Panel
+        title={`Aulas particulares por professor · ${data.expPeriodLabel}`}
+        subtitle="Aulas particulares concluídas no período, por professor. Clique no número pra ver aluno e data (fechamento do mês)."
+      >
+        {data.professorReport.rows.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma aula particular concluída no período.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {data.professorReport.rows.map((p) => (
+              <div
+                key={p.professorId ?? "none"}
+                className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm"
+              >
+                <span className="font-medium">{p.professorName}</span>
+                <DrillNumber
+                  value={`${p.total} aula${p.total === 1 ? "" : "s"}`}
+                  title={`${p.professorName} · aulas particulares`}
+                  items={p.aulas.map((a, i) => ({
+                    id: `${p.professorId ?? "none"}-${i}`,
+                    name: a.alunoNome,
+                    sub: a.data,
+                  }))}
+                  className="font-semibold"
+                />
+              </div>
+            ))}
+            <p className="pt-1 text-[11px] text-muted-foreground">
+              Total no período: <strong>{data.professorReport.totalAulas}</strong>{" "}
+              aula{data.professorReport.totalAulas === 1 ? "" : "s"} particular
+              {data.professorReport.totalAulas === 1 ? "" : "es"}.
+            </p>
+          </div>
+        )}
+      </Panel>
+
       <section className="grid gap-4 lg:grid-cols-2">
         <Panel title="Aulas experimentais (período)" subtitle="Clique nos números pra ver os nomes">
           <div className="flex flex-wrap gap-2 text-sm">

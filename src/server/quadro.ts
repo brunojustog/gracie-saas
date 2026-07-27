@@ -908,6 +908,13 @@ export async function getQuadroData(
       .sort((a, b) => b.count - a.count),
   };
 
+  // v1.1-BZ: aulas particulares concluídas no período, por professor.
+  const professorReport = await getPrivateClassesByProfessor(
+    tenantId,
+    ep.from,
+    ep.to,
+  );
+
   return {
     generatedAt: now,
     matriculas: {
@@ -973,6 +980,8 @@ export async function getQuadroData(
     // v1.1-BU: individual × turma por pessoa + leads do período.
     expByKind,
     leadsPeriod,
+    // v1.1-BZ: fechamento de aulas particulares por professor no período.
+    professorReport,
     expOutcomes,
     // Receita (v1.1-AO/BD): mensalidades + aulas particulares + avulsas.
     revenue: {
@@ -991,6 +1000,59 @@ export async function getQuadroData(
 }
 
 export type QuadroData = Awaited<ReturnType<typeof getQuadroData>>;
+
+// ──────────────────────────────────────────────────────────────────────────
+// Fechamento mensal de aulas particulares por PROFESSOR (v1.1-BZ) — quais
+// professores deram quais aulas pra quais alunos no período. Base = aulas
+// CONCLUÍDAS (completedAt no intervalo).
+// ──────────────────────────────────────────────────────────────────────────
+
+export type ProfessorReportRow = {
+  professorId: string | null;
+  professorName: string;
+  total: number;
+  aulas: { alunoNome: string; data: string }[];
+};
+
+export async function getPrivateClassesByProfessor(
+  tenantId: string,
+  from: Date,
+  to: Date,
+): Promise<{ rows: ProfessorReportRow[]; totalAulas: number }> {
+  const sessions = await prisma.privateSession.findMany({
+    where: {
+      completedAt: { gte: from, lte: to },
+      package: { tenantId, lead: { deletedAt: null } },
+    },
+    select: {
+      completedAt: true,
+      professorId: true,
+      professor: { select: { name: true } },
+      package: { select: { lead: { select: { name: true } } } },
+    },
+    orderBy: { completedAt: "asc" },
+  });
+
+  const byProf = new Map<string, ProfessorReportRow>();
+  for (const s of sessions) {
+    const key = s.professorId ?? "__none__";
+    const row = byProf.get(key) ?? {
+      professorId: s.professorId,
+      professorName: s.professor?.name ?? "(sem professor)",
+      total: 0,
+      aulas: [],
+    };
+    row.total++;
+    row.aulas.push({
+      alunoNome: s.package.lead.name,
+      data: s.completedAt ? format(s.completedAt, "dd/MM", { locale: ptBR }) : "—",
+    });
+    byProf.set(key, row);
+  }
+
+  const rows = [...byProf.values()].sort((a, b) => b.total - a.total);
+  return { rows, totalAulas: sessions.length };
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // Relatório de leads experimentais (v1.1-BX) — a lista que o Anderson montava

@@ -170,6 +170,7 @@ model Tenant {
   privatePackages     PrivatePackage[]
   looseClasses        LooseClass[]
   dailySnapshots      DailyReportSnapshot[]
+  professors          Professor[]
 }
 
 /**
@@ -795,14 +796,38 @@ model PrivateSession {
   packageId     String
   scheduledDate DateTime?
   completedAt   DateTime?
+  // v1.1-BZ: professor que deu a aula. Editável na confirmação (substituição
+  // de última hora). Null = ainda não definido.
+  professorId   String?
   notes         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  package PrivatePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  package   PrivatePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  professor Professor?     @relation(fields: [professorId], references: [id], onDelete: SetNull)
 
   @@index([packageId])
+  @@index([professorId])
+}
+
+/**
+ * v1.1-BZ: professor da academia. Não é usuário do sistema (não loga); é só
+ * um cadastro pra atribuir quem deu cada aula particular. Fechamento mensal:
+ * quais professores deram quais aulas pra quais alunos.
+ */
+model Professor {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessions PrivateSession[]
+
+  @@index([tenantId, active])
 }
 
 /**
