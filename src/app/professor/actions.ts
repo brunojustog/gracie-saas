@@ -40,9 +40,7 @@ export async function confirmGridClass(input: unknown): Promise<Result> {
 
   const date = new Date(`${parsed.data.date}T00:00:00`);
 
-  if (slot.isKids && !parsed.data.auxProfessorId) {
-    return { ok: false, error: "aula KIDS: selecione o professor auxiliar" };
-  }
+  // v1.1-CD: auxiliar é OPCIONAL — a KIDS pode ter sido dada só pelo titular.
   let auxProfessorId: string | null = null;
   if (slot.isKids && parsed.data.auxProfessorId) {
     const aux = await prisma.professor.findFirst({
@@ -169,9 +167,7 @@ export async function confirmIncoming(input: unknown): Promise<Result> {
     where: { id: parsed.data.taughtId, tenantId: ctx.tenantId, professorId: ctx.professorId },
   });
   if (!t) return { ok: false, error: "aula não encontrada" };
-  if (t.isKids && !parsed.data.auxProfessorId) {
-    return { ok: false, error: "aula KIDS: selecione o professor auxiliar" };
-  }
+  // v1.1-CD: auxiliar opcional (aula KIDS pode ter sido dada sozinho).
   let auxProfessorId: string | null = t.auxProfessorId;
   if (t.isKids && parsed.data.auxProfessorId) {
     const aux = await prisma.professor.findFirst({

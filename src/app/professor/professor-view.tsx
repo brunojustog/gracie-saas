@@ -191,9 +191,9 @@ export function ProfessorView({
                         disabled={pending}
                         className="h-8 rounded-md border bg-background px-2 text-xs"
                       >
-                        <option value="">— auxiliar (KIDS) —</option>
+                        <option value="">KIDS: sem auxiliar (dei sozinho)</option>
                         {day.professors.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                          <option key={p.id} value={p.id}>auxiliar: {p.name}</option>
                         ))}
                       </select>
                     ) : null}
