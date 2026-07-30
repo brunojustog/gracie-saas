@@ -2,8 +2,11 @@
  * Camada de dados de aulas avulsas (v1.1-BD).
  *
  * Aula avulsa = pessoa paga UMA aula só, sem pacote nem matrícula. Substitui
- * o uso da lojinha. NÃO infla a contagem de matriculados. Visibilidade segue
- * v1.1-O: qualquer role do tenant vê todas; SELLER não vê valores.
+ * o uso da lojinha. NÃO infla a contagem de matriculados.
+ *
+ * v1.1-CA: a aula avulsa é a VENDA que a vendedora faz, então ela precisa
+ * cadastrar e ver o valor por aula (reunião 30/07). O card de receita
+ * agregada da página é que segue oculto pro SELLER.
  */
 import type { TenantUser } from "@prisma/client";
 
@@ -34,8 +37,7 @@ export async function getLooseClassesForList(
     orderBy: { classDate: "desc" },
   });
 
-  const isSeller = membership.role === "SELLER";
-  return rows.map((r) => ({ ...r, value: isSeller ? null : r.value }));
+  return rows;
 }
 
 export type LooseClassRow = Awaited<

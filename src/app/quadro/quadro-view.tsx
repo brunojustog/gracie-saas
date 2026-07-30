@@ -11,6 +11,9 @@ import { EXP_SPLIT_SINCE, type QuadroData } from "@/server/quadro";
 
 import { ExpPeriodFilter } from "./exp-period-filter";
 
+const brl = (n: number) =>
+  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 const PAYMENT_LABEL: Record<string, string> = {
   PIX: "Pix",
   CREDIT_CARD: "Cartão de crédito",
@@ -431,10 +434,10 @@ export function QuadroBody({
         </p>
       </Panel>
 
-      {/* v1.1-BZ: aulas particulares concluídas por professor no período. */}
+      {/* v1.1-BZ/CA: aulas particulares concluídas por professor + valor a receber. */}
       <Panel
         title={`Aulas particulares por professor · ${data.expPeriodLabel}`}
-        subtitle="Aulas particulares concluídas no período, por professor. Clique no número pra ver aluno e data (fechamento do mês)."
+        subtitle="Aulas particulares concluídas no período, por professor, com o valor a receber (60% da aula; 90% disso no cartão). Clique pra ver aluno, data e valor."
       >
         {data.professorReport.rows.length === 0 ? (
           <p className="text-xs text-muted-foreground">
@@ -448,22 +451,27 @@ export function QuadroBody({
                 className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm"
               >
                 <span className="font-medium">{p.professorName}</span>
-                <DrillNumber
-                  value={`${p.total} aula${p.total === 1 ? "" : "s"}`}
-                  title={`${p.professorName} · aulas particulares`}
-                  items={p.aulas.map((a, i) => ({
-                    id: `${p.professorId ?? "none"}-${i}`,
-                    name: a.alunoNome,
-                    sub: a.data,
-                  }))}
-                  className="font-semibold"
-                />
+                <span className="flex items-center gap-3">
+                  <DrillNumber
+                    value={`${p.total} aula${p.total === 1 ? "" : "s"}`}
+                    title={`${p.professorName} · aulas particulares`}
+                    items={p.aulas.map((a, i) => ({
+                      id: `${p.professorId ?? "none"}-${i}`,
+                      name: a.alunoNome,
+                      sub: `${a.data} · ${brl(a.valor)}`,
+                    }))}
+                  />
+                  <span className="font-semibold text-emerald-700 tabular-nums dark:text-emerald-300">
+                    {brl(p.totalValor)}
+                  </span>
+                </span>
               </div>
             ))}
             <p className="pt-1 text-[11px] text-muted-foreground">
               Total no período: <strong>{data.professorReport.totalAulas}</strong>{" "}
-              aula{data.professorReport.totalAulas === 1 ? "" : "s"} particular
-              {data.professorReport.totalAulas === 1 ? "" : "es"}.
+              aula{data.professorReport.totalAulas === 1 ? "" : "s"} ·{" "}
+              <strong>{brl(data.professorReport.totalValor)}</strong> a repassar aos
+              professores.
             </p>
           </div>
         )}

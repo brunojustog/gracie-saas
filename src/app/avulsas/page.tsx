@@ -71,9 +71,12 @@ export default async function AvulsasPage({
           )}
         </section>
 
-        <LooseToolbar options={options} hideFinancials={isSeller} initial={{ q: sp.q }} />
+        {/* v1.1-CA: aula avulsa é a VENDA da vendedora — ela precisa cadastrar
+            e ver o valor por aula. Só o card de receita agregada (acima) fica
+            oculto pra SELLER. */}
+        <LooseToolbar options={options} hideFinancials={false} initial={{ q: sp.q }} />
 
-        <LooseTable rows={rows} hideFinancials={isSeller} />
+        <LooseTable rows={rows} hideFinancials={false} />
       </main>
     </>
   );

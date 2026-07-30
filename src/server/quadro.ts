@@ -1011,14 +1011,35 @@ export type ProfessorReportRow = {
   professorId: string | null;
   professorName: string;
   total: number;
-  aulas: { alunoNome: string; data: string }[];
+  /** v1.1-CA: quanto o professor recebe no período (60% da aula; 90% disso no cartão). */
+  totalValor: number;
+  aulas: { alunoNome: string; data: string; valor: number }[];
 };
+
+/**
+ * v1.1-CA: quanto o professor recebe por UMA aula particular concluída.
+ * Regra do Bruno: 60% do valor da aula (= valor do pacote ÷ nº de aulas).
+ * Se o pacote foi pago no CARTÃO DE CRÉDITO, aplica 90% (desconto da taxa da
+ * maquininha) — ex.: pacote 8× R$1500 → aula R$187,50 → prof R$112,50; no
+ * cartão R$101,25.
+ */
+export function professorShareForSession(pkg: {
+  value: unknown;
+  totalClasses: number;
+  paymentMethod: string | null;
+}): number {
+  if (!pkg.totalClasses) return 0;
+  const perClass = Number(pkg.value) / pkg.totalClasses;
+  let share = perClass * 0.6;
+  if (pkg.paymentMethod === "CREDIT_CARD") share *= 0.9;
+  return Math.round(share * 100) / 100;
+}
 
 export async function getPrivateClassesByProfessor(
   tenantId: string,
   from: Date,
   to: Date,
-): Promise<{ rows: ProfessorReportRow[]; totalAulas: number }> {
+): Promise<{ rows: ProfessorReportRow[]; totalAulas: number; totalValor: number }> {
   const sessions = await prisma.privateSession.findMany({
     where: {
       completedAt: { gte: from, lte: to },
@@ -1028,30 +1049,43 @@ export async function getPrivateClassesByProfessor(
       completedAt: true,
       professorId: true,
       professor: { select: { name: true } },
-      package: { select: { lead: { select: { name: true } } } },
+      package: {
+        select: {
+          value: true,
+          totalClasses: true,
+          paymentMethod: true,
+          lead: { select: { name: true } },
+        },
+      },
     },
     orderBy: { completedAt: "asc" },
   });
 
   const byProf = new Map<string, ProfessorReportRow>();
+  let totalValor = 0;
   for (const s of sessions) {
     const key = s.professorId ?? "__none__";
     const row = byProf.get(key) ?? {
       professorId: s.professorId,
       professorName: s.professor?.name ?? "(sem professor)",
       total: 0,
+      totalValor: 0,
       aulas: [],
     };
+    const valor = professorShareForSession(s.package);
     row.total++;
+    row.totalValor += valor;
+    totalValor += valor;
     row.aulas.push({
       alunoNome: s.package.lead.name,
       data: s.completedAt ? format(s.completedAt, "dd/MM", { locale: ptBR }) : "—",
+      valor,
     });
     byProf.set(key, row);
   }
 
-  const rows = [...byProf.values()].sort((a, b) => b.total - a.total);
-  return { rows, totalAulas: sessions.length };
+  const rows = [...byProf.values()].sort((a, b) => b.totalValor - a.totalValor);
+  return { rows, totalAulas: sessions.length, totalValor };
 }
 
 // ──────────────────────────────────────────────────────────────────────────
