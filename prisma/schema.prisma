@@ -40,6 +40,7 @@ model User {
   confirmedPayments PaymentRecord[] @relation("PaymentConfirmedBy")
   soldPrivatePackages PrivatePackage[] @relation("PrivatePackageSeller")
   soldLooseClasses    LooseClass[]     @relation("LooseClassSeller")
+  professorProfile    Professor?
 }
 
 model Account {
@@ -171,6 +172,8 @@ model Tenant {
   looseClasses        LooseClass[]
   dailySnapshots      DailyReportSnapshot[]
   professors          Professor[]
+  classGridSlots      ClassGridSlot[]
+  taughtClasses       TaughtClass[]
 }
 
 /**
@@ -200,6 +203,8 @@ enum Role {
   ADMIN
   MANAGER
   SELLER
+  // v1.1-CB: professor — loga e vê SÓ a tela de confirmação das aulas dele.
+  PROFESSOR
 }
 
 model TenantUser {
@@ -821,13 +826,88 @@ model Professor {
   tenantId  String
   name      String
   active    Boolean  @default(true)
+  // v1.1-CB: link opcional pro usuário de login (convite por e-mail). Quando
+  // preenchido, o professor loga e vê a tela de confirmação das aulas dele.
+  userId    String?  @unique
+  email     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sessions PrivateSession[]
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessions  PrivateSession[]
+  gridSlots ClassGridSlot[]
+  taught    TaughtClass[]    @relation("TaughtProfessor")
+  auxTaught TaughtClass[]    @relation("TaughtAuxProfessor")
 
   @@index([tenantId, active])
+}
+
+/**
+ * v1.1-CB: grade PADRÃO recorrente (semanal) de aulas por professor. Serve de
+ * "cardápio" — o professor só CONFIRMA a aula do dia (não digita). dayOfWeek
+ * 1=Seg..7=Dom (ISO). `value` = valor da aula regular (default R$70).
+ */
+model ClassGridSlot {
+  id          String   @id @default(cuid())
+  tenantId    String
+  professorId String
+  dayOfWeek   Int
+  startTime   String
+  label       String
+  isKids      Boolean  @default(false)
+  value       Decimal  @default(70) @db.Decimal(10, 2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  professor Professor     @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  taught    TaughtClass[]
+
+  @@index([tenantId, dayOfWeek])
+  @@index([professorId])
+}
+
+enum TaughtClassStatus {
+  PENDING // transferida, aguardando o novo professor confirmar
+  CONFIRMED
+}
+
+/**
+ * v1.1-CB: aula REGULAR/KIDS efetivamente dada (check do professor). Aula
+ * particular NÃO entra aqui — fica em PrivateSession. Transferência: professorId
+ * = quem vai dar; titularProfessorId = titular original da grade.
+ */
+model TaughtClass {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  professorId        String
+  titularProfessorId String?
+  auxProfessorId     String?
+  gridSlotId         String?
+  date               DateTime
+  startTime          String
+  label              String
+  isKids             Boolean           @default(false)
+  value              Decimal           @db.Decimal(10, 2)
+  status             TaughtClassStatus @default(CONFIRMED)
+  notes              String?
+  confirmedAt        DateTime?
+  createdById        String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  professor    Professor      @relation("TaughtProfessor", fields: [professorId], references: [id], onDelete: Cascade)
+  auxProfessor Professor?     @relation("TaughtAuxProfessor", fields: [auxProfessorId], references: [id], onDelete: SetNull)
+  gridSlot     ClassGridSlot? @relation(fields: [gridSlotId], references: [id], onDelete: SetNull)
+
+  // Uma confirmação por slot por dia (transfere = muda o professor do mesmo slot/dia).
+  @@unique([gridSlotId, date])
+  @@index([tenantId, date])
+  @@index([professorId, date])
+  @@index([auxProfessorId, date])
 }
 
 /**

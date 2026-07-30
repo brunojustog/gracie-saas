@@ -3,6 +3,7 @@
 import {
   BarChart3,
   Calendar,
+  Dumbbell,
   GraduationCap,
   Kanban,
   LayoutDashboard,
@@ -10,6 +11,7 @@ import {
   ShoppingBag,
   Ticket,
 } from "lucide-react";
+import type { Role } from "@prisma/client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -32,6 +34,8 @@ const LINKS: NavLink[] = [
   { href: "/avulsas", label: "Aulas avulsas", icon: ShoppingBag },
   // v1.1-AK: painel gerencial só pra ADMIN.
   { href: "/quadro", label: "Quadro do Vitor", icon: BarChart3, adminOnly: true },
+  // v1.1-CB: fechamento de aulas por professor (só ADMIN).
+  { href: "/professores", label: "Professores", icon: Dumbbell, adminOnly: true },
   // v1.1-AH: Config visível pra todos — SELLER acessa /settings/planos
   // (a nav lateral do settings filtra o resto por role).
   { href: "/settings", label: "Config", icon: Settings },
@@ -41,7 +45,7 @@ export type TopNavProps = {
   tenantName: string;
   tenantColor?: string | null;
   userEmail: string;
-  role: "ADMIN" | "MANAGER" | "SELLER";
+  role: Role;
   /** Render prop pra botao "Sair" — Server Action precisa estar definida no caller. */
   signOutSlot: React.ReactNode;
 };

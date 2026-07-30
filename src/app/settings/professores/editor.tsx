@@ -18,9 +18,22 @@ import { Switch } from "@/components/ui/switch";
 
 import { createProfessor, updateProfessor } from "./actions";
 
-type Professor = { id: string; name: string; active: boolean };
+type Professor = {
+  id: string;
+  name: string;
+  active: boolean;
+  email: string | null;
+  userId: string | null;
+};
+type Member = { userId: string; label: string; email: string };
 
-export function ProfessorsEditor({ professors }: { professors: Professor[] }) {
+export function ProfessorsEditor({
+  professors,
+  members,
+}: {
+  professors: Professor[];
+  members: Member[];
+}) {
   const [editing, setEditing] = useState<Professor | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -61,6 +74,15 @@ export function ProfessorsEditor({ professors }: { professors: Professor[] }) {
                     inativo
                   </span>
                 )}
+                <div className="text-xs text-muted-foreground">
+                  {p.userId ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      login vinculado
+                    </span>
+                  ) : (
+                    <span>sem login {p.email ? `· ${p.email}` : ""}</span>
+                  )}
+                </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setEditing(p)}>
                 Editar
@@ -72,6 +94,7 @@ export function ProfessorsEditor({ professors }: { professors: Professor[] }) {
 
       <ProfessorFormDialog
         professor={editing}
+        members={members}
         creating={creating}
         onClose={() => {
           setEditing(null);
@@ -82,12 +105,16 @@ export function ProfessorsEditor({ professors }: { professors: Professor[] }) {
   );
 }
 
+const NO_LINK = "__none__";
+
 function ProfessorFormDialog({
   professor,
+  members,
   creating,
   onClose,
 }: {
   professor: Professor | null;
+  members: Member[];
   creating: boolean;
   onClose: () => void;
 }) {
@@ -99,6 +126,7 @@ function ProfessorFormDialog({
           <ProfessorFormBody
             key={professor?.id ?? "new"}
             professor={professor}
+            members={members}
             onClose={onClose}
           />
         ) : null}
@@ -109,13 +137,17 @@ function ProfessorFormDialog({
 
 function ProfessorFormBody({
   professor,
+  members,
   onClose,
 }: {
   professor: Professor | null;
+  members: Member[];
   onClose: () => void;
 }) {
   const [name, setName] = useState(professor?.name ?? "");
   const [active, setActive] = useState(professor?.active ?? true);
+  const [email, setEmail] = useState(professor?.email ?? "");
+  const [userId, setUserId] = useState(professor?.userId ?? NO_LINK);
   const [pending, startTransition] = useTransition();
 
   const handleSave = () => {
@@ -125,7 +157,13 @@ function ProfessorFormBody({
     }
     startTransition(async () => {
       const result = professor
-        ? await updateProfessor({ id: professor.id, name: name.trim(), active })
+        ? await updateProfessor({
+            id: professor.id,
+            name: name.trim(),
+            active,
+            email: email.trim() || null,
+            userId: userId === NO_LINK ? null : userId,
+          })
         : await createProfessor({ name: name.trim() });
       if (!result.ok) {
         toast.error(result.error);
@@ -154,15 +192,47 @@ function ProfessorFormBody({
           />
         </div>
         {professor ? (
-          <div className="flex items-center justify-between rounded border p-3">
-            <div>
-              <Label htmlFor="prof-active">Ativo</Label>
-              <p className="text-xs text-muted-foreground">
-                Inativos somem dos forms novos mas preservam o histórico.
+          <>
+            <div className="space-y-1">
+              <Label htmlFor="prof-email">E-mail (pro convite)</Label>
+              <Input
+                id="prof-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ex: cauemguimaraes@hotmail.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="prof-link">Login vinculado</Label>
+              <select
+                id="prof-link"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                <option value={NO_LINK}>— sem login —</option>
+                {members.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.label} · {m.email}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                Convide o professor em Config → Usuários (papel Professor). Depois
+                que ele aceitar, selecione o login dele aqui pra vincular.
               </p>
             </div>
-            <Switch id="prof-active" checked={active} onCheckedChange={setActive} />
-          </div>
+            <div className="flex items-center justify-between rounded border p-3">
+              <div>
+                <Label htmlFor="prof-active">Ativo</Label>
+                <p className="text-xs text-muted-foreground">
+                  Inativos somem dos forms novos mas preservam o histórico.
+                </p>
+              </div>
+              <Switch id="prof-active" checked={active} onCheckedChange={setActive} />
+            </div>
+          </>
         ) : null}
       </div>
 

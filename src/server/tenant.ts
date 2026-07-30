@@ -64,7 +64,12 @@ export type TenantSession = {
  * Super-admins ganham um TenantUser sintético com role ADMIN se não tiverem
  * membership explícita no tenant.
  */
-export async function requireTenantUser(): Promise<TenantSession> {
+/**
+ * Resolve tenant + user + membership. NÃO aplica o gating de PROFESSOR — é a
+ * base compartilhada por `requireTenantUser` (que redireciona professor pra
+ * /professor) e `requireProfessor` (que precisa justamente do professor).
+ */
+async function resolveTenantSession(): Promise<TenantSession> {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -107,6 +112,37 @@ export async function requireTenantUser(): Promise<TenantSession> {
   if (!membership) redirect("/tenants");
 
   return { tenant, user, membership };
+}
+
+/**
+ * Exige tenant + user + membership ativa. v1.1-CB: professor é redirecionado
+ * pra sua tela dedicada (/professor) — não acessa nenhuma tela de gestão.
+ */
+export async function requireTenantUser(): Promise<TenantSession> {
+  const session = await resolveTenantSession();
+  if (session.membership.role === "PROFESSOR") redirect("/professor");
+  return session;
+}
+
+/**
+ * v1.1-CB: acesso à tela do professor. Permite PROFESSOR (loga e vê só as
+ * aulas dele) e ADMIN (Anderson é supervisor + professor). Carrega o Professor
+ * vinculado ao usuário logado (pode ser null pra um admin sem vínculo).
+ */
+export async function requireProfessor(): Promise<
+  TenantSession & { professor: { id: string; name: string } | null }
+> {
+  const session = await resolveTenantSession();
+  const { membership, tenant, user } = session;
+  const isProfessorRole = membership.role === "PROFESSOR";
+  const isAdmin = roleAtLeast(membership.role, "ADMIN");
+  if (!isProfessorRole && !isAdmin) redirect("/dashboard");
+
+  const professor = await prisma.professor.findFirst({
+    where: { tenantId: tenant.id, userId: user.id },
+    select: { id: true, name: true },
+  });
+  return { ...session, professor };
 }
 
 /**

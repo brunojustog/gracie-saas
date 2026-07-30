@@ -12,7 +12,7 @@ import { buildTenantUrl } from "@/lib/tenant-url";
 import { sendInviteEmail, emailMode } from "@/server/email";
 import { requireRole } from "@/server/tenant";
 
-const ROLE_VALUES = ["ADMIN", "MANAGER", "SELLER"] as const satisfies readonly Role[];
+const ROLE_VALUES = ["ADMIN", "MANAGER", "SELLER", "PROFESSOR"] as const satisfies readonly Role[];
 
 const inviteSchema = z.object({
   email: z.string().email().toLowerCase(),

@@ -41,6 +41,8 @@ const ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
   { value: "ADMIN", label: "Admin" },
   { value: "MANAGER", label: "Manager" },
   { value: "SELLER", label: "Seller" },
+  // v1.1-CB: professor loga e vê só a tela de confirmação de aulas.
+  { value: "PROFESSOR", label: "Professor" },
 ];
 
 export function UsersEditor({
