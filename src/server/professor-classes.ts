@@ -137,7 +137,7 @@ export async function getProfessorEarnings(
   const [asTitular, asAux, particulares] = await Promise.all([
     prisma.taughtClass.findMany({
       where: { tenantId, professorId, status: "CONFIRMED", date: { gte: from, lte: to } },
-      select: { value: true },
+      select: { value: true, label: true },
     }),
     prisma.taughtClass.count({
       where: { tenantId, auxProfessorId: professorId, status: "CONFIRMED", date: { gte: from, lte: to } },
@@ -160,6 +160,27 @@ export async function getProfessorEarnings(
     (s, p) => s + professorShareForSession(p.package),
     0,
   );
+
+  // v1.1-CE: quebra por modalidade (pra gráfico de pizza + lista de valores).
+  const modMap = new Map<string, { count: number; valor: number }>();
+  for (const t of asTitular) {
+    const cur = modMap.get(t.label) ?? { count: 0, valor: 0 };
+    cur.count++;
+    cur.valor += Number(t.value);
+    modMap.set(t.label, cur);
+  }
+  const byModality = [...modMap.entries()]
+    .map(([label, v]) => ({ label, ...v }))
+    .sort((a, b) => b.count - a.count);
+  if (asAux > 0) byModality.push({ label: "Auxílio", count: asAux, valor: auxValor });
+  if (particulares.length > 0) {
+    byModality.push({
+      label: "Particular",
+      count: particulares.length,
+      valor: particularValor,
+    });
+  }
+
   return {
     regularCount: asTitular.length,
     regularValor,
@@ -168,13 +189,91 @@ export async function getProfessorEarnings(
     particularCount: particulares.length,
     particularValor,
     total: regularValor + auxValor + particularValor,
+    byModality,
+  };
+}
+
+/**
+ * v1.1-CE: projeção do mês a partir da GRADE PADRÃO — quantas aulas cada
+ * modalidade/professor vai ter no mês (contando as ocorrências de cada slot
+ * pelos dias da semana) e o valor estimado. Feriados são ajuste manual (fora
+ * do cálculo). Não desconta o que já foi dado — é a projeção cheia do padrão.
+ */
+export async function getMonthProjection(
+  tenantId: string,
+  monthStart: Date,
+  monthEnd: Date,
+) {
+  const slots = await prisma.classGridSlot.findMany({
+    where: { tenantId, active: true },
+    select: {
+      professorId: true,
+      dayOfWeek: true,
+      label: true,
+      isKids: true,
+      value: true,
+      professor: { select: { name: true } },
+    },
+  });
+
+  // Quantas vezes cada dia-da-semana (ISO 1..7) aparece no mês.
+  const dowCount: Record<number, number> = {};
+  for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 1)) {
+    const iso = isoDayOfWeek(d);
+    dowCount[iso] = (dowCount[iso] ?? 0) + 1;
+  }
+
+  const byModality = new Map<string, { count: number; valor: number }>();
+  const byProfessor = new Map<
+    string,
+    { professorName: string; count: number; valor: number }
+  >();
+  let totalCount = 0;
+  let totalValor = 0;
+
+  for (const s of slots) {
+    const occ = dowCount[s.dayOfWeek] ?? 0;
+    if (occ === 0) continue;
+    const valor = occ * Number(s.value);
+    totalCount += occ;
+    totalValor += valor;
+
+    const m = byModality.get(s.label) ?? { count: 0, valor: 0 };
+    m.count += occ;
+    m.valor += valor;
+    byModality.set(s.label, m);
+
+    const p = byProfessor.get(s.professorId) ?? {
+      professorName: s.professor.name,
+      count: 0,
+      valor: 0,
+    };
+    p.count += occ;
+    p.valor += valor;
+    byProfessor.set(s.professorId, p);
+  }
+
+  return {
+    totalCount,
+    totalValor,
+    byModality: [...byModality.entries()]
+      .map(([label, v]) => ({ label, ...v }))
+      .sort((a, b) => b.count - a.count),
+    byProfessor: [...byProfessor.entries()]
+      .map(([professorId, v]) => ({ professorId, ...v }))
+      .sort((a, b) => b.valor - a.valor),
   };
 }
 
 /** Fechamento por professor (aba do Anderson) — todos os professores no período. */
-export async function getProfessorClosing(tenantId: string, from: Date, to: Date) {
+export async function getProfessorClosing(
+  tenantId: string,
+  from: Date,
+  to: Date,
+  professorId?: string,
+) {
   const professors = await prisma.professor.findMany({
-    where: { tenantId },
+    where: { tenantId, ...(professorId ? { id: professorId } : {}) },
     orderBy: [{ active: "desc" }, { name: "asc" }],
     select: { id: true, name: true, active: true },
   });
@@ -192,4 +291,47 @@ export async function getProfessorClosing(tenantId: string, from: Date, to: Date
   );
   const totalGeral = withActivity.reduce((s, r) => s + r.total, 0);
   return { rows: withActivity, totalGeral };
+}
+
+/** v1.1-CE: aulas dadas (TaughtClass) no período pro Anderson gerenciar. */
+export async function getTaughtClassesForAdmin(
+  tenantId: string,
+  from: Date,
+  to: Date,
+  professorId?: string,
+) {
+  const rows = await prisma.taughtClass.findMany({
+    where: {
+      tenantId,
+      date: { gte: from, lte: to },
+      ...(professorId
+        ? { OR: [{ professorId }, { auxProfessorId: professorId }] }
+        : {}),
+    },
+    orderBy: [{ date: "desc" }, { startTime: "asc" }],
+    select: {
+      id: true,
+      date: true,
+      startTime: true,
+      label: true,
+      isKids: true,
+      value: true,
+      status: true,
+      professor: { select: { id: true, name: true } },
+      auxProfessor: { select: { id: true, name: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.date,
+    startTime: r.startTime,
+    label: r.label,
+    isKids: r.isKids,
+    value: Number(r.value),
+    status: r.status,
+    professorId: r.professor.id,
+    professorName: r.professor.name,
+    auxProfessorId: r.auxProfessor?.id ?? null,
+    auxProfessorName: r.auxProfessor?.name ?? null,
+  }));
 }

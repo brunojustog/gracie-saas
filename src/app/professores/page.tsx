@@ -1,18 +1,27 @@
-import { format } from "date-fns";
+import { endOfMonth, format, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/top-nav";
 import { ExpPeriodFilter } from "@/app/quadro/exp-period-filter";
+import { prisma } from "@/lib/prisma";
 import {
   type PeriodPreset,
   resolveCustom,
   resolvePreset,
 } from "@/lib/period";
 import { signOut } from "@/server/auth";
-import { getProfessorClosing } from "@/server/professor-classes";
+import {
+  getMonthProjection,
+  getProfessorClosing,
+  getTaughtClassesForAdmin,
+} from "@/server/professor-classes";
 import { requireRole } from "@/server/tenant";
+
+import { Pie, PIE_COLORS } from "./pie";
+import { ProfessorFilter } from "./professor-filter";
+import { TaughtManager } from "./taught-manager";
 
 const VALID_PRESETS: PeriodPreset[] = [
   "this_month",
@@ -21,7 +30,12 @@ const VALID_PRESETS: PeriodPreset[] = [
   "last_30_days",
 ];
 
-type SearchParams = Promise<{ period?: string; from?: string; to?: string }>;
+type SearchParams = Promise<{
+  period?: string;
+  from?: string;
+  to?: string;
+  professor?: string;
+}>;
 
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -40,12 +54,24 @@ export default async function ProfessoresFechamentoPage({
     : "this_month";
   const period = custom ?? resolvePreset(preset);
   const selector: PeriodPreset | "custom" = custom ? "custom" : preset;
+  const professorId = sp.professor || undefined;
+  const now = new Date();
 
-  const { rows, totalGeral } = await getProfessorClosing(
-    tenant.id,
-    period.from,
-    period.to,
-  );
+  const [{ rows, totalGeral }, projection, taught, professors] =
+    await Promise.all([
+      getProfessorClosing(tenant.id, period.from, period.to, professorId),
+      getMonthProjection(tenant.id, startOfMonth(now), endOfMonth(now)),
+      getTaughtClassesForAdmin(tenant.id, period.from, period.to, professorId),
+      prisma.professor.findMany({
+        where: { tenantId: tenant.id, active: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+  const projByProf = professorId
+    ? projection.byProfessor.filter((p) => p.professorId === professorId)
+    : projection.byProfessor;
 
   return (
     <>
@@ -67,85 +93,137 @@ export default async function ProfessoresFechamentoPage({
           </form>
         }
       />
-      <main className="mx-auto max-w-4xl space-y-4 px-4 py-4">
+      <main className="mx-auto max-w-5xl space-y-5 px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">
-              Fechamento por professor
-            </h1>
+            <h1 className="text-lg font-semibold tracking-tight">Professores</h1>
             <p className="text-xs text-muted-foreground">
-              Aulas confirmadas no período · {period.label}
+              Aulas dadas e fechamento · {period.label}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/professor"
               className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent"
             >
               Minhas aulas
             </Link>
+            <ProfessorFilter professors={professors} current={professorId ?? null} />
             <ExpPeriodFilter current={selector} from={sp.from} to={sp.to} />
           </div>
         </div>
 
+        {/* Cartões por professor: pizza por modalidade + valores */}
         {rows.length === 0 ? (
           <div className="rounded-lg border bg-card p-10 text-center text-sm text-muted-foreground">
             Nenhuma aula confirmada no período.
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border bg-card">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                  <th className="px-3 py-2 font-medium">Professor</th>
-                  <th className="px-3 py-2 text-right font-medium">Regulares</th>
-                  <th className="px-3 py-2 text-right font-medium">Auxílios</th>
-                  <th className="px-3 py-2 text-right font-medium">Particulares</th>
-                  <th className="px-3 py-2 text-right font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.professorId} className="border-b last:border-0 align-top">
-                    <td className="px-3 py-2 font-medium">
-                      {r.professorName}
-                      {!r.active ? (
-                        <span className="ml-1 rounded bg-muted px-1 text-[10px]">inativo</span>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {r.regularCount}× · {brl(r.regularValor)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {r.auxCount}× · {brl(r.auxValor)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {r.particularCount}× · {brl(r.particularValor)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold text-emerald-700 tabular-nums dark:text-emerald-300">
-                      {brl(r.total)}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-muted/40">
-                  <td className="px-3 py-2 font-semibold" colSpan={4}>
-                    Total geral a repassar
-                  </td>
-                  <td className="px-3 py-2 text-right font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
-                    {brl(totalGeral)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {rows.map((r) => (
+              <div key={r.professorId} className="rounded-xl border bg-card p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-semibold">{r.professorName}</span>
+                  <span className="text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
+                    {brl(r.total)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Pie slices={r.byModality.map((m) => ({ label: m.label, value: m.count }))} size={104} />
+                  <ul className="min-w-0 flex-1 space-y-0.5 text-xs">
+                    {r.byModality.map((m, i) => (
+                      <li key={m.label} className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+                          />
+                          <span className="truncate">{m.label}</span>
+                          <span className="text-muted-foreground">{m.count}×</span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          {brl(m.valor)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
+          </section>
         )}
 
-        <p className="text-[11px] text-muted-foreground">
-          Regular = aula da grade dada (valor do slot). Auxílio = professor
-          auxiliar em aula KIDS ({brl(35)}). Particular = 60% da aula (90% no
-          cartão). Só conta aula com check.
-        </p>
+        {rows.length > 0 ? (
+          <div className="flex items-center justify-end gap-2 text-sm">
+            <span className="text-muted-foreground">Total geral a repassar no período:</span>
+            <span className="font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
+              {brl(totalGeral)}
+            </span>
+          </div>
+        ) : null}
+
+        {/* Projeção do mês (a partir da grade padrão) */}
+        <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
+            <h2 className="text-sm font-bold capitalize">
+              Projeção de {format(now, "MMMM", { locale: ptBR })}
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              baseada na grade padrão (feriados/ajustes são manuais)
+            </span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                Por modalidade
+              </div>
+              <ul className="space-y-0.5 text-sm">
+                {projection.byModality.map((m) => (
+                  <li key={m.label} className="flex items-center justify-between">
+                    <span>{m.label} <span className="text-xs text-muted-foreground">{m.count}×</span></span>
+                    <span className="tabular-nums text-muted-foreground">{brl(m.valor)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                Por professor
+              </div>
+              <ul className="space-y-0.5 text-sm">
+                {projByProf.map((p) => (
+                  <li key={p.professorId} className="flex items-center justify-between">
+                    <span>{p.professorName} <span className="text-xs text-muted-foreground">{p.count}×</span></span>
+                    <span className="tabular-nums text-muted-foreground">{brl(p.valor)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="mt-2 border-t border-primary/20 pt-2 text-sm font-semibold">
+            Projeção total do mês: {projection.totalCount} aulas ·{" "}
+            <span className="text-emerald-700 dark:text-emerald-300">{brl(projection.totalValor)}</span>
+            <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+              (só aulas regulares/kids da grade; particulares e auxílios entram no realizado)
+            </span>
+          </div>
+        </section>
+
+        {/* Gerenciar aulas dadas (editar/excluir) */}
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold">Aulas dadas no período (gerenciar)</h2>
+          <p className="text-xs text-muted-foreground">
+            Edite quem deu / o auxiliar, ou apague um registro errado.
+          </p>
+          <TaughtManager rows={taughtToPlain(taught)} professors={professors} />
+        </section>
       </main>
     </>
   );
+}
+
+function taughtToPlain(
+  rows: Awaited<ReturnType<typeof getTaughtClassesForAdmin>>,
+) {
+  return rows.map((r) => ({ ...r, date: r.date.toISOString() }));
 }
