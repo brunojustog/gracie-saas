@@ -7,7 +7,12 @@ import { parseLocalDate } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
-import { countCompleted, deriveStatus, findPackageInScope } from "@/server/private-packages";
+import {
+  countCompleted,
+  deriveStatus,
+  findPackageInScope,
+  recomputePackageStatus,
+} from "@/server/private-packages";
 import { requireTenantUser } from "@/server/tenant";
 
 type Result = { ok: true; packageId: string } | { ok: false; error: string };
@@ -240,39 +245,8 @@ export async function cancelPrivatePackage(input: unknown): Promise<Result> {
 // ──────────────────────────────────────────────────────────────────────────
 // Sessões (aulas dentro do pacote)
 // ──────────────────────────────────────────────────────────────────────────
-
-/** Recalcula o status do pacote a partir das sessões; registra conclusão. */
-async function recomputePackageStatus(packageId: string): Promise<void> {
-  const pkg = await prisma.privatePackage.findUnique({
-    where: { id: packageId },
-    select: {
-      id: true,
-      tenantId: true,
-      leadId: true,
-      status: true,
-      totalClasses: true,
-      sessions: { select: { completedAt: true } },
-    },
-  });
-  if (!pkg) return;
-  const completed = countCompleted(pkg.sessions);
-  const next = deriveStatus(pkg.status, completed, pkg.totalClasses);
-  if (next === pkg.status) return;
-
-  await prisma.privatePackage.update({
-    where: { id: pkg.id },
-    data: { status: next },
-  });
-  if (next === "COMPLETED") {
-    await appendLeadNote({
-      tenantId: pkg.tenantId,
-      leadId: pkg.leadId,
-      kind: "PRIVATE_PACKAGE_COMPLETED",
-      body: `Contrato de aulas particulares concluído (${completed}/${pkg.totalClasses})`,
-      metadata: { packageId: pkg.id },
-    });
-  }
-}
+// v1.1-CF: recomputePackageStatus foi pra @/server/private-packages (compartilhado
+// com a confirmação pela tela do professor).
 
 const sessionSchema = z.object({
   packageId: z.string().min(1),

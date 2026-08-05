@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { recomputePackageStatus } from "@/server/private-packages";
 import { requireProfessor } from "@/server/tenant";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -198,14 +199,18 @@ export async function confirmParticularSession(input: unknown): Promise<Result> 
       professorId: ctx.professorId,
       package: { tenantId: ctx.tenantId },
     },
-    select: { id: true },
+    select: { id: true, packageId: true },
   });
   if (!s) return { ok: false, error: "aula particular não encontrada" };
   await prisma.privateSession.update({
     where: { id: s.id },
     data: { completedAt: new Date() },
   });
+  // v1.1-CF: recalcula o status do pacote (senão fica preso em "andamento"
+  // mesmo com todas as aulas confirmadas pelo professor).
+  await recomputePackageStatus(s.packageId);
   revalidatePath("/professor");
   revalidatePath("/quadro");
+  revalidatePath("/particulares");
   return { ok: true };
 }

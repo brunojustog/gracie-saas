@@ -8,6 +8,7 @@
 import type { PrivatePackageStatus, TenantUser } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { appendLeadNote } from "@/server/lead-notes";
 
 /** Sessões concluídas (com completedAt) de um conjunto de sessões. */
 export function countCompleted(
@@ -28,6 +29,45 @@ export function deriveStatus(
 ): PrivatePackageStatus {
   if (current === "CANCELED") return "CANCELED";
   return completed >= total ? "COMPLETED" : "ACTIVE";
+}
+
+/**
+ * Recalcula o status do pacote a partir das sessões (concluídas >= total →
+ * COMPLETED). v1.1-CF: fica AQUI (não mais dentro do actions de particulares)
+ * pra que a confirmação de aula PELA TELA DO PROFESSOR também dispare o
+ * recálculo — antes só o módulo de particulares chamava, então pacote com
+ * todas as aulas confirmadas pelo professor ficava preso em "andamento".
+ */
+export async function recomputePackageStatus(packageId: string): Promise<void> {
+  const pkg = await prisma.privatePackage.findUnique({
+    where: { id: packageId },
+    select: {
+      id: true,
+      tenantId: true,
+      leadId: true,
+      status: true,
+      totalClasses: true,
+      sessions: { select: { completedAt: true } },
+    },
+  });
+  if (!pkg) return;
+  const completed = countCompleted(pkg.sessions);
+  const next = deriveStatus(pkg.status, completed, pkg.totalClasses);
+  if (next === pkg.status) return;
+
+  await prisma.privatePackage.update({
+    where: { id: pkg.id },
+    data: { status: next },
+  });
+  if (next === "COMPLETED") {
+    await appendLeadNote({
+      tenantId: pkg.tenantId,
+      leadId: pkg.leadId,
+      kind: "PRIVATE_PACKAGE_COMPLETED",
+      body: `Contrato de aulas particulares concluído (${completed}/${pkg.totalClasses})`,
+      metadata: { packageId: pkg.id },
+    });
+  }
 }
 
 export async function getPrivatePackagesForList(
