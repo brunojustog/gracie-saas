@@ -7,9 +7,10 @@ import Link from "next/link";
 import { DrillNumber, type DrillItem } from "@/components/drill-number";
 import type { PeriodPreset } from "@/lib/period";
 import type { DailySnapshot } from "@/server/daily-report";
-import { EXP_SPLIT_SINCE, type QuadroData } from "@/server/quadro";
+import { EXP_SPLIT_SINCE, type QuadroData, type RangeResumo } from "@/server/quadro";
 
 import { ExpPeriodFilter } from "./exp-period-filter";
+import { DailyDaysFilter, RangeResumoFilter } from "./resumo-filters";
 
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -47,6 +48,10 @@ export function QuadroBody({
   publicMode = false,
   shareSlot,
   dailySnapshots,
+  dailyDays = 7,
+  rangeResumo,
+  rangeFrom,
+  rangeTo,
 }: {
   data: QuadroData;
   expSelector: PeriodPreset | "custom";
@@ -56,6 +61,11 @@ export function QuadroBody({
   shareSlot?: React.ReactNode;
   /** v1.1-BJ: faixa "últimos dias" (resumo diário). */
   dailySnapshots?: DailySnapshot[];
+  /** v1.1-CG: nº de dias da faixa + resumo por período. */
+  dailyDays?: number;
+  rangeResumo?: RangeResumo | null;
+  rangeFrom?: string;
+  rangeTo?: string;
 }) {
   return (
     <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-4">
@@ -73,8 +83,44 @@ export function QuadroBody({
       {/* Resumo consolidado do mês (v1.1-BM, item 4) — painel fixo grandão. */}
       <MonthBoard m={data.monthResumo} ativos={data.matriculas.totalActive} />
 
+      {/* v1.1-CG: resumo por PERÍODO escolhido (além do mês atual). */}
+      {publicMode ? null : (
+        <div className="rounded-2xl border bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold">Resumo por período</h2>
+              <p className="text-xs text-muted-foreground">
+                Escolha as datas pra ver o resumo de outro mês/período (ex.: julho).
+              </p>
+            </div>
+            <RangeResumoFilter from={rangeFrom} to={rangeTo} />
+          </div>
+          {rangeResumo ? (
+            <div className="mt-3">
+              <MonthBoard
+                m={rangeResumo}
+                ativos={rangeResumo.ativos}
+                title={`Resumo de ${rangeResumo.label}`}
+                subtitle="período escolhido · clique nos números pra ver os nomes"
+              />
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+              Nenhum período selecionado. Escolha as datas acima.
+            </p>
+          )}
+        </div>
+      )}
+
       {dailySnapshots && dailySnapshots.length > 0 ? (
-        <DailyStrip snapshots={dailySnapshots} />
+        <div className="space-y-2">
+          {publicMode ? null : (
+            <div className="flex items-center justify-end">
+              <DailyDaysFilter current={dailyDays} />
+            </div>
+          )}
+          <DailyStrip snapshots={dailySnapshots} />
+        </div>
       ) : null}
 
       {/* 1) Número de matrículas */}
@@ -683,6 +729,9 @@ function DailyStrip({ snapshots }: { snapshots: DailySnapshot[] }) {
 function MonthBoard({
   m,
   ativos,
+  title,
+  subtitle,
+  headerSlot,
 }: {
   m: {
     label: string;
@@ -704,15 +753,22 @@ function MonthBoard({
     };
   };
   ativos: number;
+  /** v1.1-CG: título/subtítulo customizáveis (reuso pro resumo por período). */
+  title?: string;
+  subtitle?: string;
+  headerSlot?: React.ReactNode;
 }) {
   const saldo = m.matriculas - m.cancelamentos;
   return (
     <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-1">
-        <h2 className="text-lg font-bold capitalize">Resumo de {m.label}</h2>
-        <span className="text-xs text-muted-foreground">
-          consolidado do mês (dia 1 até hoje) — o mesmo do WhatsApp · clique nos números pra ver os nomes
-        </span>
+        <h2 className="text-lg font-bold capitalize">{title ?? `Resumo de ${m.label}`}</h2>
+        {headerSlot ?? (
+          <span className="text-xs text-muted-foreground">
+            {subtitle ??
+              "consolidado do mês (dia 1 até hoje) — o mesmo do WhatsApp · clique nos números pra ver os nomes"}
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <Big label="Novos leads" value={m.novosLeads} items={m.names.novosLeads} />

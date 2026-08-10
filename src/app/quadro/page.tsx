@@ -8,7 +8,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getRecentSnapshots } from "@/server/daily-report";
-import { getQuadroData } from "@/server/quadro";
+import { getQuadroData, getRangeResumo, type RangeResumo } from "@/server/quadro";
 import { requireRole } from "@/server/tenant";
 
 import { PublicLinkButton } from "./public-link-button";
@@ -21,7 +21,17 @@ const VALID_PRESETS: PeriodPreset[] = [
   "last_30_days",
 ];
 
-type SearchParams = Promise<{ period?: string; from?: string; to?: string }>;
+const VALID_DAYS = [7, 14, 30] as const;
+
+type SearchParams = Promise<{
+  period?: string;
+  from?: string;
+  to?: string;
+  // v1.1-CG: resumo por período (datas próprias) + nº de dias da faixa.
+  rfrom?: string;
+  rto?: string;
+  days?: string;
+}>;
 
 export default async function QuadroPage({
   searchParams,
@@ -40,13 +50,24 @@ export default async function QuadroPage({
   const expPeriod = customPeriod ?? resolvePreset(preset);
   const expSelector: PeriodPreset | "custom" = customPeriod ? "custom" : preset;
 
-  const [data, tenantRow, snapshots] = await Promise.all([
+  // v1.1-CG: faixa de dias (7 padrão).
+  const daysNum = VALID_DAYS.includes(Number(sp.days) as (typeof VALID_DAYS)[number])
+    ? Number(sp.days)
+    : 7;
+
+  // v1.1-CG: resumo por período (só quando as duas datas vêm).
+  const rangePeriod = sp.rfrom && sp.rto ? resolveCustom(sp.rfrom, sp.rto) : null;
+
+  const [data, tenantRow, snapshots, rangeResumo] = await Promise.all([
     getQuadroData(tenant.id, expPeriod),
     prisma.tenant.findUnique({
       where: { id: tenant.id },
       select: { publicQuadroToken: true },
     }),
-    getRecentSnapshots(tenant.id, 7),
+    getRecentSnapshots(tenant.id, daysNum),
+    rangePeriod
+      ? getRangeResumo(tenant.id, rangePeriod.from, rangePeriod.to, rangePeriod.label)
+      : (Promise.resolve(null) as Promise<RangeResumo | null>),
   ]);
 
   return (
@@ -75,6 +96,10 @@ export default async function QuadroPage({
         from={sp.from}
         to={sp.to}
         dailySnapshots={snapshots}
+        dailyDays={daysNum}
+        rangeResumo={rangeResumo}
+        rangeFrom={sp.rfrom}
+        rangeTo={sp.rto}
         shareSlot={<PublicLinkButton token={tenantRow?.publicQuadroToken ?? null} />}
       />
     </>

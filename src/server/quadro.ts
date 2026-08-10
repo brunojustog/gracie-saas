@@ -1002,6 +1002,156 @@ export async function getQuadroData(
 export type QuadroData = Awaited<ReturnType<typeof getQuadroData>>;
 
 // ──────────────────────────────────────────────────────────────────────────
+// Resumo consolidado de UM PERÍODO qualquer (v1.1-CG) — mesma forma do
+// "Resumo do mês", mas pra datas escolhidas (ver julho, junho, etc.). Espelha
+// EXATAMENTE os filtros do getRangeDigest pra os números baterem.
+// ──────────────────────────────────────────────────────────────────────────
+
+export async function getRangeResumo(
+  tenantId: string,
+  from: Date,
+  to: Date,
+  label: string,
+) {
+  type Name = { id: string; name: string; sub?: string | null; href?: string };
+  const live = { lead: { deletedAt: null } };
+  const kanbanHref = (name: string) => `/kanban?q=${encodeURIComponent(name)}`;
+  const STATUS_PT: Record<string, string> = {
+    CANCEL_REQUESTED: "Solicitado",
+    CANCELED: "Cancelada",
+    JUDICIAL: "Judicial",
+  };
+
+  const [
+    digest,
+    leadRows,
+    matriculaRows,
+    cancelRows,
+    expRows,
+    looseRows,
+    ativosRows,
+  ] = await Promise.all([
+    getRangeDigest(tenantId, from, to),
+    prisma.lead.findMany({
+      where: { tenantId, deletedAt: null, firstInteractionAt: { gte: from, lte: to } },
+      select: { id: true, name: true, firstInteractionAt: true, origin: true },
+      orderBy: { firstInteractionAt: "desc" },
+    }),
+    prisma.enrollment.findMany({
+      where: { tenantId, ...live, enrolledAt: { gte: from, lte: to } },
+      select: { id: true, lead: { select: { name: true } } },
+      orderBy: { enrolledAt: "desc" },
+    }),
+    prisma.enrollment.findMany({
+      where: {
+        tenantId,
+        ...live,
+        OR: [
+          { status: { in: ["CANCELED", "JUDICIAL"] }, canceledAt: { gte: from, lte: to } },
+          { status: "CANCEL_REQUESTED", cancelRequestedAt: { gte: from, lte: to } },
+        ],
+      },
+      select: {
+        id: true,
+        status: true,
+        canceledAt: true,
+        cancelRequestedAt: true,
+        lead: { select: { name: true } },
+      },
+    }),
+    prisma.experimentalClass.findMany({
+      where: { tenantId, ...live, status: { not: "CANCELED" }, scheduledDate: { gte: from, lte: to } },
+      select: {
+        id: true,
+        status: true,
+        leadId: true,
+        scheduledDate: true,
+        lead: { select: { name: true } },
+        modality: { select: { name: true } },
+      },
+      orderBy: { scheduledDate: "desc" },
+    }),
+    prisma.looseClass.findMany({
+      where: { tenantId, classDate: { gte: from, lte: to } },
+      select: { id: true, classDate: true, lead: { select: { name: true } } },
+      orderBy: { classDate: "desc" },
+    }),
+    prisma.enrollment.findMany({
+      where: {
+        tenantId,
+        ...live,
+        enrolledAt: { lte: to },
+        OR: [{ canceledAt: null }, { canceledAt: { gt: to } }],
+        NOT: { status: "CANCEL_REQUESTED", cancelRequestedAt: { lte: to } },
+      },
+      select: { id: true, lead: { select: { name: true } } },
+      orderBy: { lead: { name: "asc" } },
+    }),
+  ]);
+
+  const seen = new Set<string>();
+  const compareceram: Name[] = [];
+  for (const c of expRows) {
+    if (c.status === "ATTENDED" && !seen.has(c.leadId)) {
+      seen.add(c.leadId);
+      compareceram.push({ id: c.leadId, name: c.lead.name, href: kanbanHref(c.lead.name) });
+    }
+  }
+
+  return {
+    label,
+    ...digest,
+    novosLeads: leadRows.length,
+    names: {
+      novosLeads: leadRows.map((l) => ({
+        id: l.id,
+        name: l.name,
+        sub: l.firstInteractionAt
+          ? `${format(l.firstInteractionAt, "dd/MM", { locale: ptBR })}${l.origin ? ` · ${l.origin}` : ""}`
+          : (l.origin ?? null),
+        href: kanbanHref(l.name),
+      })),
+      matriculas: matriculaRows.map((e) => ({
+        id: e.id,
+        name: e.lead.name,
+        href: kanbanHref(e.lead.name),
+      })),
+      cancelamentos: cancelRows.map((e) => {
+        const when = e.status === "CANCEL_REQUESTED" ? e.cancelRequestedAt : e.canceledAt;
+        return {
+          id: e.id,
+          name: e.lead.name,
+          sub: when
+            ? `${STATUS_PT[e.status] ?? e.status} · ${format(when, "dd/MM/yy", { locale: ptBR })}`
+            : (STATUS_PT[e.status] ?? e.status),
+          href: kanbanHref(e.lead.name),
+        };
+      }),
+      experimentais: expRows.map((c) => ({
+        id: c.id,
+        name: c.lead.name,
+        sub: `${format(c.scheduledDate, "dd/MM", { locale: ptBR })} · ${c.modality.name}`,
+        href: kanbanHref(c.lead.name),
+      })),
+      compareceram,
+      avulsas: looseRows.map((c) => ({
+        id: c.id,
+        name: c.lead.name,
+        sub: format(c.classDate, "dd/MM", { locale: ptBR }),
+        href: kanbanHref(c.lead.name),
+      })),
+      ativos: ativosRows.map((e) => ({
+        id: e.id,
+        name: e.lead.name,
+        href: kanbanHref(e.lead.name),
+      })),
+    },
+  };
+}
+
+export type RangeResumo = Awaited<ReturnType<typeof getRangeResumo>>;
+
+// ──────────────────────────────────────────────────────────────────────────
 // Fechamento mensal de aulas particulares por PROFESSOR (v1.1-BZ) — quais
 // professores deram quais aulas pra quais alunos no período. Base = aulas
 // CONCLUÍDAS (completedAt no intervalo).
