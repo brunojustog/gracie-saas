@@ -36,6 +36,8 @@ const updateSchema = z.object({
   email: z.string().email().max(200).nullable().optional().or(z.literal("")),
   // v1.1-CB: userId do login vinculado (ou null pra desvincular).
   userId: z.string().min(1).nullable().optional(),
+  // v1.1-CH: hora-aula (base da bonificação por conversão). Preta 70, marrom 60.
+  hourlyRate: z.number().nonnegative().max(100000).optional(),
 });
 
 export async function updateProfessor(input: unknown): Promise<Result> {
@@ -71,6 +73,7 @@ export async function updateProfessor(input: unknown): Promise<Result> {
       email: parsed.data.email ? parsed.data.email.trim() : null,
       // undefined = não mexe; null = desvincula; string = vincula.
       ...(userId !== undefined ? { userId } : {}),
+      ...(parsed.data.hourlyRate !== undefined ? { hourlyRate: parsed.data.hourlyRate } : {}),
     },
   });
   revalidatePath("/settings/professores");

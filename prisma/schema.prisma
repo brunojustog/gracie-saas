@@ -590,6 +590,8 @@ model ExperimentalClass {
   scheduledDate DateTime
   status        ExperimentalClassStatus @default(SCHEDULED)
   kind          ExperimentalClassKind   @default(INDIVIDUAL)
+  // v1.1-CH: professor responsável pela experimental (aparece na tela dele).
+  professorId   String?
   notes         String?
   attendedAt    DateTime?
 
@@ -599,10 +601,12 @@ model ExperimentalClass {
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
   modality    Modality     @relation(fields: [modalityId], references: [id])
+  professor   Professor?   @relation(fields: [professorId], references: [id], onDelete: SetNull)
   messageJobs MessageJob[]
 
   @@index([tenantId, scheduledDate])
   @@index([leadId])
+  @@index([professorId])
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -830,15 +834,19 @@ model Professor {
   // preenchido, o professor loga e vê a tela de confirmação das aulas dele.
   userId    String?  @unique
   email     String?
+  // v1.1-CH: hora-aula do professor (base da bonificação por conversão de
+  // experimental). Preta R$70, marrom R$60 (ex.: Angélica). Bônus = 1,5×.
+  hourlyRate Decimal @default(70) @db.Decimal(10, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  sessions  PrivateSession[]
-  gridSlots ClassGridSlot[]
-  taught    TaughtClass[]    @relation("TaughtProfessor")
-  auxTaught TaughtClass[]    @relation("TaughtAuxProfessor")
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user               User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessions           PrivateSession[]
+  gridSlots          ClassGridSlot[]
+  taught             TaughtClass[]       @relation("TaughtProfessor")
+  auxTaught          TaughtClass[]       @relation("TaughtAuxProfessor")
+  experimentalClasses ExperimentalClass[]
 
   @@index([tenantId, active])
 }

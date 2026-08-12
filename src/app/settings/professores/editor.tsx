@@ -24,6 +24,7 @@ type Professor = {
   active: boolean;
   email: string | null;
   userId: string | null;
+  hourlyRate: number;
 };
 type Member = { userId: string; label: string; email: string };
 
@@ -148,6 +149,7 @@ function ProfessorFormBody({
   const [active, setActive] = useState(professor?.active ?? true);
   const [email, setEmail] = useState(professor?.email ?? "");
   const [userId, setUserId] = useState(professor?.userId ?? NO_LINK);
+  const [hourlyRate, setHourlyRate] = useState(String(professor?.hourlyRate ?? 70));
   const [pending, startTransition] = useTransition();
 
   const handleSave = () => {
@@ -163,6 +165,7 @@ function ProfessorFormBody({
             active,
             email: email.trim() || null,
             userId: userId === NO_LINK ? null : userId,
+            hourlyRate: Number(hourlyRate.replace(",", ".")) || 0,
           })
         : await createProfessor({ name: name.trim() });
       if (!result.ok) {
@@ -202,6 +205,20 @@ function ProfessorFormBody({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ex: cauemguimaraes@hotmail.com"
               />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="prof-rate">Hora-aula (R$)</Label>
+              <Input
+                id="prof-rate"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                inputMode="decimal"
+                placeholder="70"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Base da bonificação por conversão de experimental (1,5×). Preta
+                R$70, marrom R$60.
+              </p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="prof-link">Login vinculado</Label>

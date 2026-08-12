@@ -19,13 +19,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { rescheduleClass, updateClassStatus } from "./actions";
+import { rescheduleClass, updateClassRoot, updateClassStatus } from "./actions";
 
 type CalendarClass = {
   id: string;
   scheduledDate: Date | string;
   status: ExperimentalClassStatus;
   kind: "INDIVIDUAL" | "GROUP";
+  professorId: string | null;
+  professor: { id: string; name: string } | null;
   notes: string | null;
   modalityId: string;
   leadId: string;
@@ -38,6 +40,8 @@ type CalendarClass = {
     assignedSeller: { id: string; name: string | null; email: string } | null;
   };
 };
+type Professor = { id: string; name: string };
+type Modality = { id: string; name: string; color: string | null };
 
 const STATUS_LABEL: Record<ExperimentalClassStatus, string> = {
   SCHEDULED: "Agendada",
@@ -50,6 +54,9 @@ const STATUS_LABEL: Record<ExperimentalClassStatus, string> = {
 
 type Props = {
   cls: CalendarClass | null;
+  professors: Professor[];
+  modalities: Modality[];
+  canEditRoot: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdated: (cls: CalendarClass) => void;
 };
@@ -59,12 +66,23 @@ function toDatetimeLocalValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
+export function ClassActionsModal({
+  cls,
+  professors,
+  modalities,
+  canEditRoot,
+  onOpenChange,
+  onUpdated,
+}: Props) {
   const [pending, startTransition] = useTransition();
   const [rescheduleMode, setRescheduleMode] = useState(false);
   // v1.1-BO: permite corrigir uma situação já finalizada (ex.: marcaram
   // "Compareceu" por engano num aluno que não foi).
   const [correcting, setCorrecting] = useState(false);
+  // v1.1-CH: edição da "raiz" (modalidade/professor) — só ADMIN.
+  const [editRoot, setEditRoot] = useState(false);
+  const [editModalityId, setEditModalityId] = useState("");
+  const [editProfessorId, setEditProfessorId] = useState("");
   const [newDateTime, setNewDateTime] = useState("");
 
   if (!cls) {
@@ -74,6 +92,37 @@ export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
       </Dialog>
     );
   }
+
+  const openEditRoot = () => {
+    setEditModalityId(cls.modalityId);
+    setEditProfessorId(cls.professorId ?? "");
+    setEditRoot(true);
+  };
+
+  const saveRoot = () => {
+    startTransition(async () => {
+      const result = await updateClassRoot({
+        classId: cls.id,
+        modalityId: editModalityId,
+        professorId: editProfessorId || null,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      const modality = modalities.find((m) => m.id === editModalityId) ?? cls.modality;
+      const professor = professors.find((p) => p.id === editProfessorId) ?? null;
+      toast.success("Aula corrigida");
+      setEditRoot(false);
+      onUpdated({
+        ...cls,
+        modalityId: editModalityId,
+        modality,
+        professorId: editProfessorId || null,
+        professor,
+      });
+    });
+  };
 
   const scheduled = new Date(cls.scheduledDate);
   const isFinalState =
@@ -145,7 +194,7 @@ export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        {cls.lead.phone || cls.notes ? (
+        {cls.lead.phone || cls.notes || cls.professor ? (
           <div className="space-y-1 rounded border bg-muted/30 p-3 text-sm">
             {cls.lead.phone ? (
               <div>
@@ -161,6 +210,12 @@ export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
                 </span>
               </div>
             ) : null}
+            {cls.professor ? (
+              <div>
+                <span className="text-xs text-muted-foreground">professor</span>{" "}
+                <span className="font-medium">{cls.professor.name}</span>
+              </div>
+            ) : null}
             {cls.notes ? (
               <div>
                 <span className="text-xs text-muted-foreground">obs</span>{" "}
@@ -168,6 +223,53 @@ export function ClassActionsModal({ cls, onOpenChange, onUpdated }: Props) {
               </div>
             ) : null}
           </div>
+        ) : null}
+
+        {/* v1.1-CH: corrigir alocação (modalidade/professor) — só ADMIN. */}
+        {canEditRoot ? (
+          editRoot ? (
+            <div className="space-y-2 rounded border p-3">
+              <div className="space-y-1">
+                <Label>Modalidade</Label>
+                <select
+                  value={editModalityId}
+                  onChange={(e) => setEditModalityId(e.target.value)}
+                  disabled={pending}
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                >
+                  {modalities.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Professor</Label>
+                <select
+                  value={editProfessorId}
+                  onChange={(e) => setEditProfessorId(e.target.value)}
+                  disabled={pending}
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                >
+                  <option value="">— a definir —</option>
+                  {professors.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditRoot(false)} disabled={pending}>
+                  Voltar
+                </Button>
+                <Button size="sm" className="flex-1" onClick={saveRoot} disabled={pending || !editModalityId}>
+                  {pending ? "Salvando…" : "Salvar correção"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="w-full" onClick={openEditRoot} disabled={pending}>
+              Corrigir alocação (modalidade/professor)
+            </Button>
+          )
         ) : null}
 
         {rescheduleMode ? (

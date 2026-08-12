@@ -229,7 +229,7 @@ export default async function AulasPage({
   const from = startOfWeek(addDays(now, -14), { weekStartsOn: 1 });
   const to = startOfWeek(addDays(now, 28), { weekStartsOn: 1 });
 
-  const [scheduleSlots, classes, leadsForPicker] = await Promise.all([
+  const [scheduleSlots, classes, leadsForPicker, professors] = await Promise.all([
     getScheduleSlots(tenant.id),
     getClassesForCalendar(membership, { from, to }),
     prisma.lead.findMany({
@@ -246,6 +246,12 @@ export default async function AulasPage({
           select: { experimentalClasses: { where: { status: { not: "CANCELED" } } } },
         },
       },
+    }),
+    // v1.1-CH: professores ativos pro select de "quem vai dar a experimental".
+    prisma.professor.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
     }),
   ]);
 
@@ -268,6 +274,8 @@ export default async function AulasPage({
           initialClasses={classes}
           modalities={modalities}
           leads={leadsForPicker}
+          professors={professors}
+          canEditRoot={membership.role === "ADMIN"}
         />
       </main>
     </>

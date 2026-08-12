@@ -27,6 +27,7 @@ import { useRouter } from "next/navigation";
 
 type Modality = { id: string; name: string; color: string | null };
 type Lead = { id: string; name: string; phone: string | null; modalityId: string | null };
+type Professor = { id: string; name: string };
 
 type ScheduleSlot = {
   id: string;
@@ -42,6 +43,8 @@ type CalendarClass = {
   scheduledDate: Date | string;
   status: ExperimentalClassStatus;
   kind: "INDIVIDUAL" | "GROUP";
+  professorId: string | null;
+  professor: { id: string; name: string } | null;
   notes: string | null;
   modalityId: string;
   leadId: string;
@@ -60,6 +63,9 @@ type Props = {
   initialClasses: CalendarClass[];
   modalities: Modality[];
   leads: Lead[];
+  professors: Professor[];
+  /** v1.1-CH: ADMIN pode editar a "raiz" da aula (modalidade/professor). */
+  canEditRoot: boolean;
 };
 
 
@@ -81,6 +87,8 @@ export function CalendarBoard({
   initialClasses,
   modalities,
   leads,
+  professors,
+  canEditRoot,
 }: Props) {
   const router = useRouter();
   const [classes, setClasses] = useState(initialClasses);
@@ -371,6 +379,7 @@ export function CalendarBoard({
         defaultDate={scheduleAt}
         modalities={modalities}
         leads={leads}
+        professors={professors}
         scheduleSlots={scheduleSlots}
         onCreated={(cls) => {
           onClassCreated(cls);
@@ -380,6 +389,9 @@ export function CalendarBoard({
 
       <ClassActionsModal
         cls={activeClass ?? null}
+        professors={professors}
+        modalities={modalities}
+        canEditRoot={canEditRoot}
         onOpenChange={(open) => {
           if (!open) setActiveClassId(null);
         }}

@@ -36,6 +36,8 @@ export async function getClassesForCalendar(
       notes: true,
       modalityId: true,
       leadId: true,
+      professorId: true,
+      professor: { select: { id: true, name: true } },
       modality: { select: { id: true, name: true, color: true } },
       lead: {
         select: {

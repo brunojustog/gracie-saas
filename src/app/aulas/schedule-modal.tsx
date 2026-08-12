@@ -49,6 +49,7 @@ type Lead = {
   _count?: { experimentalClasses: number };
 };
 type ClassKind = "INDIVIDUAL" | "GROUP";
+type Professor = { id: string; name: string };
 type ScheduleSlot = {
   id: string;
   dayOfWeek: number;
@@ -61,6 +62,8 @@ type CreatedClass = {
   scheduledDate: Date;
   status: ExperimentalClassStatus;
   kind: ClassKind;
+  professorId: string | null;
+  professor: { id: string; name: string } | null;
   notes: string | null;
   modalityId: string;
   leadId: string;
@@ -78,6 +81,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultDate: Date | null;
+  professors: Professor[];
   modalities: Modality[];
   leads: Lead[];
   scheduleSlots: ScheduleSlot[];
@@ -116,6 +120,7 @@ function ModalBody({
   onOpenChange,
   defaultDate,
   modalities,
+  professors,
   leads,
   scheduleSlots,
   onCreated,
@@ -140,6 +145,8 @@ function ModalBody({
   // v1.1-BT: etapa da experimental. null = segue a sugestão automática
   // (1ª do lead = individual; da 2ª em diante = turma). Escolher fixa.
   const [kindOverride, setKindOverride] = useState<ClassKind | null>(null);
+  // v1.1-CH: professor que vai dar a experimental (aparece na tela dele).
+  const [professorId, setProfessorId] = useState("");
   const [pending, startTransition] = useTransition();
 
   const sortedModalities = useMemo(() => {
@@ -176,6 +183,7 @@ function ModalBody({
         scheduledDate: isoDate,
         notes: notes || undefined,
         kind,
+        professorId: professorId || null,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -184,11 +192,14 @@ function ModalBody({
       toast.success("Aula agendada");
       const lead = leads.find((l) => l.id === leadId)!;
       const modality = modalities.find((m) => m.id === modalityId)!;
+      const prof = professors.find((p) => p.id === professorId) ?? null;
       onCreated({
         id: result.classId,
         scheduledDate: new Date(isoDate),
         status: "SCHEDULED",
         kind,
+        professorId: professorId || null,
+        professor: prof,
         notes: notes || null,
         modalityId,
         leadId,
@@ -309,6 +320,23 @@ function ModalBody({
                 })}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* v1.1-CH: professor que vai dar a experimental */}
+          <div className="space-y-1">
+            <Label htmlFor="prof">Professor</Label>
+            <select
+              id="prof"
+              value={professorId}
+              onChange={(e) => setProfessorId(e.target.value)}
+              disabled={pending}
+              className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="">— a definir —</option>
+              {professors.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-1">

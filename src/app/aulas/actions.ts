@@ -13,11 +13,71 @@ import {
   enqueueImmediate,
   enqueueNoShowSequence,
 } from "@/server/messaging";
-import { requireTenantUser } from "@/server/tenant";
+import { requireRole, requireTenantUser } from "@/server/tenant";
 
 type ActionResult =
   | { ok: true; classId: string }
   | { ok: false; error: string };
+
+// ──────────────────────────────────────────────────────────────────────────
+// v1.1-CH: editar a "raiz" da aula (modalidade + professor). Só ADMIN — o
+// Anderson corrige alocações trocadas (pai/filho em Kids/Juniores) direto,
+// sem virar "remarcação". Fica registrado quem fez.
+// ──────────────────────────────────────────────────────────────────────────
+
+const editRootSchema = z.object({
+  classId: z.string().min(1),
+  modalityId: z.string().min(1),
+  professorId: z.string().min(1).nullable().optional(),
+});
+
+export async function updateClassRoot(input: unknown): Promise<ActionResult> {
+  const parsed = editRootSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user } = await requireRole("ADMIN");
+  const cls = await prisma.experimentalClass.findFirst({
+    where: { id: parsed.data.classId, tenantId: tenant.id },
+    select: { id: true, leadId: true, modalityId: true, modality: { select: { name: true } } },
+  });
+  if (!cls) return { ok: false, error: "aula não encontrada" };
+
+  const modality = await prisma.modality.findFirst({
+    where: { id: parsed.data.modalityId, tenantId: tenant.id },
+    select: { id: true, name: true },
+  });
+  if (!modality) return { ok: false, error: "modalidade inválida" };
+
+  let professorId: string | null = parsed.data.professorId ?? null;
+  if (professorId) {
+    const prof = await prisma.professor.findFirst({
+      where: { id: professorId, tenantId: tenant.id },
+      select: { id: true },
+    });
+    professorId = prof?.id ?? null;
+  }
+
+  await prisma.experimentalClass.update({
+    where: { id: cls.id },
+    data: { modalityId: modality.id, professorId },
+  });
+
+  if (modality.id !== cls.modalityId) {
+    await appendLeadNote({
+      tenantId: tenant.id,
+      leadId: cls.leadId,
+      authorId: user.id,
+      kind: "CLASS_RESCHEDULED",
+      body: `Aula experimental corrigida — modalidade "${cls.modality.name}" → "${modality.name}"`,
+      metadata: { classId: cls.id, fromModality: cls.modality.name, toModality: modality.name },
+    });
+  }
+
+  revalidatePath("/aulas");
+  revalidatePath("/kanban");
+  revalidatePath("/professor");
+  return { ok: true, classId: cls.id };
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // Agendar nova aula experimental
@@ -35,6 +95,8 @@ const scheduleSchema = z.object({
    * ponto de entrada acertam sozinhos.
    */
   kind: z.enum(["INDIVIDUAL", "GROUP"]).optional(),
+  // v1.1-CH: professor responsável (aparece na tela dele).
+  professorId: z.string().min(1).nullable().optional(),
 });
 
 export async function scheduleClass(input: unknown): Promise<ActionResult> {
@@ -64,6 +126,16 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
     kind = previous === 0 ? "INDIVIDUAL" : "GROUP";
   }
 
+  // v1.1-CH: valida o professor (se veio) — precisa ser do tenant.
+  let professorId: string | null = parsed.data.professorId ?? null;
+  if (professorId) {
+    const prof = await prisma.professor.findFirst({
+      where: { id: professorId, tenantId: tenant.id },
+      select: { id: true },
+    });
+    professorId = prof?.id ?? null;
+  }
+
   const created = await prisma.experimentalClass.create({
     data: {
       tenantId: tenant.id,
@@ -72,6 +144,7 @@ export async function scheduleClass(input: unknown): Promise<ActionResult> {
       scheduledDate: scheduledFor,
       status: "SCHEDULED",
       kind,
+      professorId,
       notes: parsed.data.notes ?? null,
     },
   });
