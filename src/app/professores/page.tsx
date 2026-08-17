@@ -19,7 +19,7 @@ import {
   getProfessorClosing,
   getTaughtClassesForAdmin,
 } from "@/server/professor-classes";
-import { getInvoicesForPeriod } from "@/server/professor-invoices";
+import { getRecentInvoices } from "@/server/professor-invoices";
 import { requireRole } from "@/server/tenant";
 
 import { Pie, PIE_COLORS } from "./pie";
@@ -99,8 +99,9 @@ export default async function ProfessoresFechamentoPage({
     professorId
       ? getProfessorCalendar(tenant.id, professorId, period.from, period.to)
       : Promise.resolve(null),
-    // v1.1-CJ: notas fiscais enviadas pelos professores no período.
-    getInvoicesForPeriod(tenant.id, period.from, period.to, professorId),
+    // v1.1-CJ: notas fiscais enviadas pelos professores (recentes, sem prender
+    // ao período — o professor emite a NF do mês anterior).
+    getRecentInvoices(tenant.id, professorId),
   ]);
 
   // Link do card do professor preservando o período atual.
@@ -330,17 +331,19 @@ export default async function ProfessoresFechamentoPage({
           )}
         </section>
 
-        {/* v1.1-CJ: notas fiscais enviadas pelos professores no período. */}
+        {/* v1.1-CJ: notas fiscais enviadas pelos professores (recentes). */}
         <section className="rounded-xl border bg-card p-4">
           <div className="mb-2">
-            <h2 className="text-sm font-semibold">Notas fiscais do período</h2>
+            <h2 className="text-sm font-semibold">Notas fiscais enviadas</h2>
             <p className="text-xs text-muted-foreground">
-              PDFs anexados pelos professores no login deles. Clique pra baixar.
+              PDFs anexados pelos professores no login deles, mais recentes
+              primeiro. O selo mostra o mês de referência (competência). Clique
+              pra baixar.
             </p>
           </div>
           {invoiceGroups.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Nenhuma nota fiscal enviada no período.
+              Nenhuma nota fiscal enviada ainda.
             </p>
           ) : (
             <div className="space-y-2">

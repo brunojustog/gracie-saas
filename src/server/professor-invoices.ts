@@ -22,18 +22,6 @@ export function currentCompetencia(d: Date = new Date()): string {
   return format(d, "yyyy-MM");
 }
 
-/** Lista as competências (YYYY-MM) que um período [from,to] cobre. */
-export function competenciasInRange(from: Date, to: Date): string[] {
-  const out: string[] = [];
-  const cur = new Date(from.getFullYear(), from.getMonth(), 1);
-  const end = new Date(to.getFullYear(), to.getMonth(), 1);
-  while (cur <= end) {
-    out.push(format(cur, "yyyy-MM"));
-    cur.setMonth(cur.getMonth() + 1);
-  }
-  return out;
-}
-
 /** NFs de UM professor (metadados), mais recentes primeiro. */
 export async function getProfessorInvoices(
   tenantId: string,
@@ -52,21 +40,19 @@ export async function getProfessorInvoices(
   });
 }
 
-/** NFs do período pro admin (agrupadas por professor). */
-export async function getInvoicesForPeriod(
+/**
+ * NFs recentes pro admin (agrupadas por professor), mais novas primeiro.
+ * NÃO filtra por período do fechamento — o professor sempre emite a NF do mês
+ * anterior, então prender a lista ao "mês atual" fazia elas sumirem. Cada NF
+ * carrega o selo da competência (mês de referência) pra não perder o contexto.
+ */
+export async function getRecentInvoices(
   tenantId: string,
-  from: Date,
-  to: Date,
   professorId?: string,
 ) {
-  const competencias = competenciasInRange(from, to);
   const rows = await prisma.professorInvoice.findMany({
-    where: {
-      tenantId,
-      competencia: { in: competencias },
-      ...(professorId ? { professorId } : {}),
-    },
-    orderBy: [{ competencia: "desc" }, { uploadedAt: "desc" }],
+    where: { tenantId, ...(professorId ? { professorId } : {}) },
+    orderBy: [{ uploadedAt: "desc" }],
     select: {
       id: true,
       competencia: true,
@@ -77,7 +63,8 @@ export async function getInvoicesForPeriod(
     },
   });
 
-  // Agrupa por professor.
+  // Agrupa por professor, preservando a ordem (professor com upload mais
+  // recente aparece primeiro).
   const byProf = new Map<
     string,
     { professorId: string; professorName: string; invoices: InvoiceMeta[] }
@@ -97,7 +84,5 @@ export async function getInvoicesForPeriod(
     });
     byProf.set(r.professor.id, g);
   }
-  return [...byProf.values()].sort((a, b) =>
-    a.professorName.localeCompare(b.professorName),
-  );
+  return [...byProf.values()];
 }
