@@ -20,7 +20,13 @@ export async function GET(
 
   const inv = await prisma.professorInvoice.findFirst({
     where: { id, tenantId: tenant.id },
-    select: { data: true, mimeType: true, fileName: true, professorId: true },
+    select: {
+      data: true,
+      mimeType: true,
+      professorId: true,
+      competencia: true,
+      professor: { select: { name: true } },
+    },
   });
   if (!inv) return new Response("Nota fiscal não encontrada", { status: 404 });
 
@@ -31,12 +37,22 @@ export async function GET(
   }
 
   const bytes = new Uint8Array(inv.data);
-  const encodedName = encodeURIComponent(inv.fileName);
+  // Nome amigável pro download: "NF <Professor> <competencia>.pdf" — assim o
+  // Anderson distingue os arquivos ao baixar vários de uma vez (antes vinha o
+  // nome cru do upload, indistinguível).
+  const label = `NF ${inv.professor.name} ${inv.competencia}.pdf`;
+  const asciiName = label
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/["\\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const encodedName = encodeURIComponent(label);
   return new Response(bytes, {
     headers: {
       "Content-Type": inv.mimeType,
       "Content-Length": String(bytes.length),
-      "Content-Disposition": `inline; filename="nota.pdf"; filename*=UTF-8''${encodedName}`,
+      "Content-Disposition": `inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,
       "Cache-Control": "private, no-store",
     },
   });
