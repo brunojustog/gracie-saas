@@ -13,6 +13,7 @@ import {
 } from "@/lib/period";
 import { signOut } from "@/server/auth";
 import {
+  getConversionMap,
   getMonthProjection,
   getProfessorClosing,
   getTaughtClassesForAdmin,
@@ -57,7 +58,7 @@ export default async function ProfessoresFechamentoPage({
   const professorId = sp.professor || undefined;
   const now = new Date();
 
-  const [{ rows, totalGeral }, projection, taught, professors] =
+  const [{ rows, totalGeral }, projection, taught, professors, conversionMap] =
     await Promise.all([
       getProfessorClosing(tenant.id, period.from, period.to, professorId),
       getMonthProjection(tenant.id, startOfMonth(now), endOfMonth(now)),
@@ -67,7 +68,13 @@ export default async function ProfessoresFechamentoPage({
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),
+      getConversionMap(tenant.id, period.from, period.to),
     ]);
+
+  const conversions = [...conversionMap.entries()]
+    .filter(([pid]) => !professorId || pid === professorId)
+    .map(([pid, v]) => ({ professorId: pid, ...v }))
+    .sort((a, b) => b.valor - a.valor);
 
   const projByProf = professorId
     ? projection.byProfessor.filter((p) => p.professorId === professorId)
@@ -207,6 +214,42 @@ export default async function ProfessoresFechamentoPage({
               (só aulas regulares/kids da grade; particulares e auxílios entram no realizado)
             </span>
           </div>
+        </section>
+
+        {/* v1.1-CH: experimentais convertidas em matrícula, por professor. */}
+        <section className="rounded-xl border bg-card p-4">
+          <div className="mb-2">
+            <h2 className="text-sm font-semibold">Experimentais convertidas</h2>
+            <p className="text-xs text-muted-foreground">
+              Alunos que fizeram experimental e matricularam no período — bônus
+              de 1,5× a hora-aula pro professor que deu a aula.
+            </p>
+          </div>
+          {conversions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nenhuma conversão de experimental no período.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {conversions.map((c) => (
+                <div key={c.professorId} className="rounded border p-2.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{c.professorName}</span>
+                    <span className="font-semibold text-emerald-700 tabular-nums dark:text-emerald-300">
+                      {c.count}× · {brl(c.valor)}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                    {c.alunos.map((a, i) => (
+                      <span key={i}>
+                        {a.nome} · {format(new Date(a.data), "dd/MM", { locale: ptBR })}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Gerenciar aulas dadas (editar/excluir) */}

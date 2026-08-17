@@ -186,6 +186,58 @@ export async function confirmIncoming(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
+/** v1.1-CH: confirma que dei a experimental (marca compareceu). */
+export async function confirmExperimental(input: unknown): Promise<Result> {
+  const parsed = z.object({ classId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const ctx = await currentProfessor();
+  if (!ctx.ok) return { ok: false, error: ctx.error };
+
+  const cls = await prisma.experimentalClass.findFirst({
+    where: { id: parsed.data.classId, tenantId: ctx.tenantId, professorId: ctx.professorId },
+    select: { id: true },
+  });
+  if (!cls) return { ok: false, error: "experimental não encontrada" };
+  await prisma.experimentalClass.update({
+    where: { id: cls.id },
+    data: { status: "ATTENDED", attendedAt: new Date() },
+  });
+  revalidatePath("/professor");
+  revalidatePath("/aulas");
+  return { ok: true };
+}
+
+/** v1.1-CH: transfere a experimental pra outro professor. */
+export async function transferExperimental(input: unknown): Promise<Result> {
+  const parsed = z
+    .object({ classId: z.string().min(1), toProfessorId: z.string().min(1) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const ctx = await currentProfessor();
+  if (!ctx.ok) return { ok: false, error: ctx.error };
+
+  const cls = await prisma.experimentalClass.findFirst({
+    where: { id: parsed.data.classId, tenantId: ctx.tenantId, professorId: ctx.professorId },
+    select: { id: true },
+  });
+  if (!cls) return { ok: false, error: "experimental não encontrada" };
+  if (parsed.data.toProfessorId === ctx.professorId) {
+    return { ok: false, error: "transfira pra outro professor" };
+  }
+  const to = await prisma.professor.findFirst({
+    where: { id: parsed.data.toProfessorId, tenantId: ctx.tenantId, active: true },
+    select: { id: true },
+  });
+  if (!to) return { ok: false, error: "professor destino inválido" };
+  await prisma.experimentalClass.update({
+    where: { id: cls.id },
+    data: { professorId: to.id },
+  });
+  revalidatePath("/professor");
+  revalidatePath("/aulas");
+  return { ok: true };
+}
+
 /** Confirma uma aula PARTICULAR atribuída a mim (marca concluída). */
 export async function confirmParticularSession(input: unknown): Promise<Result> {
   const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(input);

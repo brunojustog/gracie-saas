@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import {
+  confirmExperimental,
   confirmGridClass,
   confirmIncoming,
   confirmParticularSession,
+  transferExperimental,
   transferGridClass,
   unconfirmClass,
 } from "./actions";
@@ -42,10 +44,18 @@ type Incoming = {
   status: "PENDING" | "CONFIRMED";
   auxProfessorName: string | null;
 };
+type Experimental = {
+  id: string;
+  alunoNome: string;
+  modality: string;
+  kind: "INDIVIDUAL" | "GROUP";
+  attended: boolean;
+};
 type Day = {
   gridItems: GridItem[];
   incoming: Incoming[];
   particulares: { sessionId: string; packageId: string; alunoNome: string }[];
+  experimentais: Experimental[];
   professors: Prof[];
 };
 type Earnings = {
@@ -55,6 +65,8 @@ type Earnings = {
   auxValor: number;
   particularCount: number;
   particularValor: number;
+  convCount: number;
+  convValor: number;
   total: number;
 };
 
@@ -107,6 +119,9 @@ export function ProfessorView({
           <span>{earnings.regularCount} regulares · {brl(earnings.regularValor)}</span>
           <span>{earnings.auxCount} auxílios · {brl(earnings.auxValor)}</span>
           <span>{earnings.particularCount} particulares · {brl(earnings.particularValor)}</span>
+          <span className="text-emerald-700 dark:text-emerald-300">
+            {earnings.convCount} experimentais convertidas · {brl(earnings.convValor)}
+          </span>
         </div>
       </div>
 
@@ -226,6 +241,60 @@ export function ProfessorView({
       </section>
 
       {/* Particulares atribuídas a mim no dia */}
+      {/* v1.1-CH: aulas experimentais atribuídas a mim */}
+      {day.experimentais.length > 0 ? (
+        <section className="space-y-1.5">
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground">
+            Experimentais
+          </h3>
+          {day.experimentais.map((e) => (
+            <div key={e.id} className="rounded-lg border bg-card p-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="flex-1 font-medium">
+                  {e.alunoNome}
+                  <span className="ml-1 text-[11px] text-muted-foreground">{e.modality}</span>
+                  <span
+                    className={
+                      e.kind === "INDIVIDUAL"
+                        ? "ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-800"
+                        : "ml-1 rounded bg-teal-100 px-1 text-[10px] text-teal-800"
+                    }
+                  >
+                    {e.kind === "INDIVIDUAL" ? "individual" : "em grupo"}
+                  </span>
+                </span>
+                {e.attended ? (
+                  <span className="text-xs text-emerald-600">✓ deu a aula</span>
+                ) : (
+                  <Button size="sm" disabled={pending} onClick={() => run(() => confirmExperimental({ classId: e.id }), "Experimental confirmada")}>
+                    <Check className="mr-1 h-4 w-4" /> Dei a aula
+                  </Button>
+                )}
+              </div>
+              {!e.attended ? (
+                <div className="mt-2 pl-1">
+                  <select
+                    defaultValue=""
+                    onChange={(ev) => {
+                      const to = ev.target.value;
+                      ev.target.value = "";
+                      if (to) run(() => transferExperimental({ classId: e.id, toProfessorId: to }), "Experimental transferida");
+                    }}
+                    disabled={pending}
+                    className="h-8 rounded-md border bg-background px-2 text-xs text-muted-foreground"
+                  >
+                    <option value="">Transferir pra…</option>
+                    {day.professors.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </section>
+      ) : null}
+
       {day.particulares.length > 0 ? (
         <section className="space-y-1.5">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground">

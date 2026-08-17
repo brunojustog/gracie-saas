@@ -16,6 +16,64 @@ import { professorShareForSession } from "@/server/quadro";
 /** Valor pago ao professor AUXILIAR de uma aula KIDS. */
 export const AUX_VALUE = 35;
 
+/** v1.1-CH: bonificação de conversão = 1,5× a hora-aula do professor. */
+export const CONVERSION_MULTIPLIER = 1.5;
+
+/**
+ * v1.1-CH: matrículas do período que vieram de experimental, atribuídas ao
+ * PROFESSOR da experimental (a mais recente ATTENDED com professor). Cada
+ * matrícula conta pra UM professor só (não duplica). Bônus = 1,5× hora-aula.
+ */
+export async function getConversionMap(tenantId: string, from: Date, to: Date) {
+  const enrollments = await prisma.enrollment.findMany({
+    where: {
+      tenantId,
+      enrolledAt: { gte: from, lte: to },
+      lead: {
+        deletedAt: null,
+        experimentalClasses: { some: { status: "ATTENDED", professorId: { not: null } } },
+      },
+    },
+    select: {
+      id: true,
+      enrolledAt: true,
+      lead: {
+        select: {
+          name: true,
+          experimentalClasses: {
+            where: { status: "ATTENDED", professorId: { not: null } },
+            orderBy: { scheduledDate: "desc" },
+            take: 1,
+            select: {
+              professor: { select: { id: true, name: true, hourlyRate: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const map = new Map<
+    string,
+    { professorName: string; count: number; valor: number; alunos: { nome: string; data: Date }[] }
+  >();
+  for (const e of enrollments) {
+    const prof = e.lead.experimentalClasses[0]?.professor;
+    if (!prof) continue;
+    const row = map.get(prof.id) ?? {
+      professorName: prof.name,
+      count: 0,
+      valor: 0,
+      alunos: [],
+    };
+    row.count++;
+    row.valor += Number(prof.hourlyRate) * CONVERSION_MULTIPLIER;
+    row.alunos.push({ nome: e.lead.name, data: e.enrolledAt });
+    map.set(prof.id, row);
+  }
+  return map;
+}
+
 /** JS getDay() 0=Dom..6=Sáb → ISO 1=Seg..7=Dom (como guardamos no slot). */
 export function isoDayOfWeek(d: Date): number {
   const js = d.getDay();
@@ -32,7 +90,8 @@ export async function getProfessorDay(
   const dayEnd = endOfDay(date);
   const dow = isoDayOfWeek(date);
 
-  const [mySlots, taughtToday, myParticulares, professors] = await Promise.all([
+  const [mySlots, taughtToday, myParticulares, myExperimentais, professors] =
+    await Promise.all([
     prisma.classGridSlot.findMany({
       where: { tenantId, professorId, dayOfWeek: dow, active: true },
       orderBy: { startTime: "asc" },
@@ -57,6 +116,25 @@ export async function getProfessorDay(
         id: true,
         scheduledDate: true,
         package: { select: { id: true, lead: { select: { name: true } } } },
+      },
+      orderBy: { scheduledDate: "asc" },
+    }),
+    // v1.1-CH: experimentais atribuídas a mim nesse dia (individual/grupo).
+    prisma.experimentalClass.findMany({
+      where: {
+        tenantId,
+        professorId,
+        status: { not: "CANCELED" },
+        scheduledDate: { gte: day, lte: dayEnd },
+        lead: { deletedAt: null },
+      },
+      select: {
+        id: true,
+        scheduledDate: true,
+        status: true,
+        kind: true,
+        lead: { select: { name: true } },
+        modality: { select: { name: true } },
       },
       orderBy: { scheduledDate: "asc" },
     }),
@@ -123,17 +201,33 @@ export async function getProfessorDay(
       packageId: p.package.id,
       alunoNome: p.package.lead.name,
     })),
+    experimentais: myExperimentais.map((e) => ({
+      id: e.id,
+      alunoNome: e.lead.name,
+      modality: e.modality.name,
+      kind: e.kind as "INDIVIDUAL" | "GROUP",
+      status: e.status,
+      attended: e.status === "ATTENDED",
+    })),
     professors,
   };
 }
 
-/** Ganhos do professor no período (regular/kids como titular + auxílios + particulares). */
+/** Ganhos do professor no período (regular/kids como titular + auxílios + particulares + conversões). */
 export async function getProfessorEarnings(
   tenantId: string,
   professorId: string,
   from: Date,
   to: Date,
+  /** v1.1-CH: conversões pré-calculadas (evita recomputar por professor). */
+  conversion?: { count: number; valor: number },
 ) {
+  const conv =
+    conversion ??
+    (await getConversionMap(tenantId, from, to)).get(professorId) ??
+    { count: 0, valor: 0 };
+  const convCount = conv.count;
+  const convValor = conv.valor;
   const [asTitular, asAux, particulares] = await Promise.all([
     prisma.taughtClass.findMany({
       where: { tenantId, professorId, status: "CONFIRMED", date: { gte: from, lte: to } },
@@ -180,6 +274,9 @@ export async function getProfessorEarnings(
       valor: particularValor,
     });
   }
+  if (convCount > 0) {
+    byModality.push({ label: "Experimentais convertidas", count: convCount, valor: convValor });
+  }
 
   return {
     regularCount: asTitular.length,
@@ -188,7 +285,9 @@ export async function getProfessorEarnings(
     auxValor,
     particularCount: particulares.length,
     particularValor,
-    total: regularValor + auxValor + particularValor,
+    convCount,
+    convValor,
+    total: regularValor + auxValor + particularValor + convValor,
     byModality,
   };
 }
@@ -272,17 +371,26 @@ export async function getProfessorClosing(
   to: Date,
   professorId?: string,
 ) {
-  const professors = await prisma.professor.findMany({
-    where: { tenantId, ...(professorId ? { id: professorId } : {}) },
-    orderBy: [{ active: "desc" }, { name: "asc" }],
-    select: { id: true, name: true, active: true },
-  });
+  const [professors, conversionMap] = await Promise.all([
+    prisma.professor.findMany({
+      where: { tenantId, ...(professorId ? { id: professorId } : {}) },
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+      select: { id: true, name: true, active: true },
+    }),
+    getConversionMap(tenantId, from, to),
+  ]);
   const rows = await Promise.all(
     professors.map(async (p) => ({
       professorId: p.id,
       professorName: p.name,
       active: p.active,
-      ...(await getProfessorEarnings(tenantId, p.id, from, to)),
+      ...(await getProfessorEarnings(
+        tenantId,
+        p.id,
+        from,
+        to,
+        conversionMap.get(p.id) ?? { count: 0, valor: 0 },
+      )),
     })),
   );
   // Só mostra quem teve alguma aula no período.
