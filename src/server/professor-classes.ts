@@ -8,7 +8,7 @@
  * - Aula PARTICULAR não entra aqui — fica em PrivateSession; o valor do
  *   professor é calculado à parte (server/quadro.professorShareForSession).
  */
-import { endOfDay, startOfDay } from "date-fns";
+import { endOfDay, format, startOfDay } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
 import { professorShareForSession } from "@/server/quadro";
@@ -399,6 +399,106 @@ export async function getProfessorClosing(
   );
   const totalGeral = withActivity.reduce((s, r) => s + r.total, 0);
   return { rows: withActivity, totalGeral };
+}
+
+/**
+ * v1.1-CI: calendário do professor — aulas CONFIRMADAS (dadas) por dia no
+ * período, pro Anderson conferir sem cruzar datas na mão. Junta:
+ *  - regulares/kids como titular (TaughtClass CONFIRMED)
+ *  - auxílio KIDS (TaughtClass CONFIRMED com auxProfessorId = ele)
+ *  - particulares concluídas (PrivateSession.completedAt)
+ *  - experimentais que ele deu (ExperimentalClass ATTENDED)
+ * Agrupado por dia (chave "yyyy-MM-dd" no fuso do container = America/Sao_Paulo).
+ */
+export type ProfCalKind = "regular" | "aux" | "particular" | "experimental";
+export type ProfCalEntry = {
+  kind: ProfCalKind;
+  label: string;
+  startTime: string | null;
+  isKids: boolean;
+};
+
+export async function getProfessorCalendar(
+  tenantId: string,
+  professorId: string,
+  from: Date,
+  to: Date,
+) {
+  const [titular, aux, particulares, experimentais] = await Promise.all([
+    prisma.taughtClass.findMany({
+      where: { tenantId, professorId, status: "CONFIRMED", date: { gte: from, lte: to } },
+      select: { date: true, startTime: true, label: true, isKids: true },
+    }),
+    prisma.taughtClass.findMany({
+      where: { tenantId, auxProfessorId: professorId, status: "CONFIRMED", date: { gte: from, lte: to } },
+      select: { date: true, startTime: true, label: true },
+    }),
+    prisma.privateSession.findMany({
+      where: {
+        professorId,
+        completedAt: { gte: from, lte: to },
+        package: { tenantId, lead: { deletedAt: null } },
+      },
+      select: {
+        completedAt: true,
+        scheduledDate: true,
+        package: { select: { lead: { select: { name: true } } } },
+      },
+    }),
+    prisma.experimentalClass.findMany({
+      where: {
+        tenantId,
+        professorId,
+        status: "ATTENDED",
+        scheduledDate: { gte: from, lte: to },
+        lead: { deletedAt: null },
+      },
+      select: {
+        scheduledDate: true,
+        lead: { select: { name: true } },
+        modality: { select: { name: true } },
+      },
+    }),
+  ]);
+
+  const byDay = new Map<string, ProfCalEntry[]>();
+  const push = (d: Date, e: ProfCalEntry) => {
+    const key = format(d, "yyyy-MM-dd");
+    const arr = byDay.get(key);
+    if (arr) arr.push(e);
+    else byDay.set(key, [e]);
+  };
+
+  for (const t of titular)
+    push(t.date, { kind: "regular", label: t.label, startTime: t.startTime, isKids: t.isKids });
+  for (const t of aux)
+    push(t.date, { kind: "aux", label: `${t.label} (aux)`, startTime: t.startTime, isKids: true });
+  for (const p of particulares) {
+    const day = p.completedAt ?? p.scheduledDate;
+    if (!day) continue;
+    push(day, {
+      kind: "particular",
+      label: p.package.lead.name,
+      startTime: null,
+      isKids: false,
+    });
+  }
+  for (const x of experimentais)
+    push(x.scheduledDate, {
+      kind: "experimental",
+      label: `${x.lead.name} · ${x.modality.name}`,
+      startTime: null,
+      isKids: false,
+    });
+
+  for (const arr of byDay.values())
+    arr.sort((a, b) => (a.startTime ?? "~").localeCompare(b.startTime ?? "~"));
+
+  return {
+    byDay: Object.fromEntries(byDay) as Record<string, ProfCalEntry[]>,
+    totalCount:
+      titular.length + aux.length + particulares.length + experimentais.length,
+  };
 }
 
 /** v1.1-CE: aulas dadas (TaughtClass) no período pro Anderson gerenciar. */

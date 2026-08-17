@@ -15,12 +15,14 @@ import { signOut } from "@/server/auth";
 import {
   getConversionMap,
   getMonthProjection,
+  getProfessorCalendar,
   getProfessorClosing,
   getTaughtClassesForAdmin,
 } from "@/server/professor-classes";
 import { requireRole } from "@/server/tenant";
 
 import { Pie, PIE_COLORS } from "./pie";
+import { ProfessorCalendar } from "./professor-calendar";
 import { ProfessorFilter } from "./professor-filter";
 import { TaughtManager } from "./taught-manager";
 
@@ -58,7 +60,7 @@ export default async function ProfessoresFechamentoPage({
   const professorId = sp.professor || undefined;
   const now = new Date();
 
-  const [{ rows, totalGeral }, projection, taught, professors, conversionMap] =
+  const [{ rows, totalGeral }, projection, taught, professors, conversionMap, calendar] =
     await Promise.all([
       getProfessorClosing(tenant.id, period.from, period.to, professorId),
       getMonthProjection(tenant.id, startOfMonth(now), endOfMonth(now)),
@@ -69,7 +71,21 @@ export default async function ProfessoresFechamentoPage({
         select: { id: true, name: true },
       }),
       getConversionMap(tenant.id, period.from, period.to),
+      // v1.1-CI: só monta o calendário quando um professor está selecionado.
+      professorId
+        ? getProfessorCalendar(tenant.id, professorId, period.from, period.to)
+        : Promise.resolve(null),
     ]);
+
+  // Link do card do professor preservando o período atual.
+  const professorHref = (pid: string) => {
+    const q = new URLSearchParams();
+    if (sp.period) q.set("period", sp.period);
+    if (sp.from) q.set("from", sp.from);
+    if (sp.to) q.set("to", sp.to);
+    q.set("professor", pid);
+    return `/professores?${q.toString()}`;
+  };
 
   const conversions = [...conversionMap.entries()]
     .filter(([pid]) => !professorId || pid === professorId)
@@ -128,7 +144,13 @@ export default async function ProfessoresFechamentoPage({
         ) : (
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {rows.map((r) => (
-              <div key={r.professorId} className="rounded-xl border bg-card p-4">
+              <Link
+                key={r.professorId}
+                href={professorHref(r.professorId)}
+                className={`block rounded-xl border bg-card p-4 transition-colors hover:border-primary hover:bg-accent/40 ${
+                  r.professorId === professorId ? "border-primary ring-1 ring-primary/40" : ""
+                }`}
+              >
                 <div className="mb-2 flex items-center justify-between">
                   <span className="font-semibold">{r.professorName}</span>
                   <span className="text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
@@ -155,7 +177,7 @@ export default async function ProfessoresFechamentoPage({
                     ))}
                   </ul>
                 </div>
-              </div>
+              </Link>
             ))}
           </section>
         )}
@@ -168,6 +190,36 @@ export default async function ProfessoresFechamentoPage({
             </span>
           </div>
         ) : null}
+
+        {/* v1.1-CI: calendário do professor selecionado (aulas dadas por dia). */}
+        {professorId && calendar ? (
+          <section className="rounded-xl border bg-card p-4">
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
+              <h2 className="text-sm font-semibold">
+                Calendário de aulas ·{" "}
+                {professors.find((p) => p.id === professorId)?.name ?? "professor"}
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                {calendar.totalCount} aula{calendar.totalCount === 1 ? "" : "s"} no período
+              </span>
+            </div>
+            {calendar.totalCount === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma aula confirmada no período pra esse professor.
+              </p>
+            ) : (
+              <ProfessorCalendar
+                from={period.from}
+                to={period.to}
+                byDay={calendar.byDay}
+              />
+            )}
+          </section>
+        ) : (
+          <p className="text-center text-xs text-muted-foreground">
+            Clique no card de um professor pra ver o calendário das aulas que ele deu.
+          </p>
+        )}
 
         {/* Projeção do mês (a partir da grade padrão) */}
         <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
