@@ -19,6 +19,7 @@ import {
   getProfessorClosing,
   getTaughtClassesForAdmin,
 } from "@/server/professor-classes";
+import { getInvoicesForPeriod } from "@/server/professor-invoices";
 import { requireRole } from "@/server/tenant";
 
 import { Pie, PIE_COLORS } from "./pie";
@@ -43,6 +44,22 @@ type SearchParams = Promise<{
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const MESES_ABREV = [
+  "jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez",
+];
+
+/** "2026-08" → "ago/2026". */
+const competenciaLabel = (c: string) => {
+  const [y, m] = c.split("-");
+  return `${MESES_ABREV[Number(m) - 1] ?? m}/${y}`;
+};
+
+const sizeLabel = (bytes: number) =>
+  bytes < 1024 * 1024
+    ? `${Math.round(bytes / 1024)} KB`
+    : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
 export default async function ProfessoresFechamentoPage({
   searchParams,
 }: {
@@ -60,22 +77,31 @@ export default async function ProfessoresFechamentoPage({
   const professorId = sp.professor || undefined;
   const now = new Date();
 
-  const [{ rows, totalGeral }, projection, taught, professors, conversionMap, calendar] =
-    await Promise.all([
-      getProfessorClosing(tenant.id, period.from, period.to, professorId),
-      getMonthProjection(tenant.id, startOfMonth(now), endOfMonth(now)),
-      getTaughtClassesForAdmin(tenant.id, period.from, period.to, professorId),
-      prisma.professor.findMany({
-        where: { tenantId: tenant.id, active: true },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      }),
-      getConversionMap(tenant.id, period.from, period.to),
-      // v1.1-CI: só monta o calendário quando um professor está selecionado.
-      professorId
-        ? getProfessorCalendar(tenant.id, professorId, period.from, period.to)
-        : Promise.resolve(null),
-    ]);
+  const [
+    { rows, totalGeral },
+    projection,
+    taught,
+    professors,
+    conversionMap,
+    calendar,
+    invoiceGroups,
+  ] = await Promise.all([
+    getProfessorClosing(tenant.id, period.from, period.to, professorId),
+    getMonthProjection(tenant.id, startOfMonth(now), endOfMonth(now)),
+    getTaughtClassesForAdmin(tenant.id, period.from, period.to, professorId),
+    prisma.professor.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    getConversionMap(tenant.id, period.from, period.to),
+    // v1.1-CI: só monta o calendário quando um professor está selecionado.
+    professorId
+      ? getProfessorCalendar(tenant.id, professorId, period.from, period.to)
+      : Promise.resolve(null),
+    // v1.1-CJ: notas fiscais enviadas pelos professores no período.
+    getInvoicesForPeriod(tenant.id, period.from, period.to, professorId),
+  ]);
 
   // Link do card do professor preservando o período atual.
   const professorHref = (pid: string) => {
@@ -298,6 +324,50 @@ export default async function ProfessoresFechamentoPage({
                       </span>
                     ))}
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* v1.1-CJ: notas fiscais enviadas pelos professores no período. */}
+        <section className="rounded-xl border bg-card p-4">
+          <div className="mb-2">
+            <h2 className="text-sm font-semibold">Notas fiscais do período</h2>
+            <p className="text-xs text-muted-foreground">
+              PDFs anexados pelos professores no login deles. Clique pra baixar.
+            </p>
+          </div>
+          {invoiceGroups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nenhuma nota fiscal enviada no período.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {invoiceGroups.map((g) => (
+                <div key={g.professorId} className="rounded border p-2.5">
+                  <div className="mb-1 text-sm font-medium">{g.professorName}</div>
+                  <ul className="space-y-1">
+                    {g.invoices.map((inv) => (
+                      <li key={inv.id} className="flex items-center gap-2 text-sm">
+                        <a
+                          href={`/api/professor/invoice/${inv.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="min-w-0 flex-1 truncate text-primary hover:underline"
+                          title={inv.fileName}
+                        >
+                          {inv.fileName}
+                        </a>
+                        <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+                          {competenciaLabel(inv.competencia)}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {sizeLabel(inv.size)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ))}
             </div>

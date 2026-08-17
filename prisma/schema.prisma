@@ -174,6 +174,7 @@ model Tenant {
   professors          Professor[]
   classGridSlots      ClassGridSlot[]
   taughtClasses       TaughtClass[]
+  professorInvoices   ProfessorInvoice[]
 }
 
 /**
@@ -847,8 +848,33 @@ model Professor {
   taught             TaughtClass[]       @relation("TaughtProfessor")
   auxTaught          TaughtClass[]       @relation("TaughtAuxProfessor")
   experimentalClasses ExperimentalClass[]
+  invoices           ProfessorInvoice[]
 
   @@index([tenantId, active])
+}
+
+/**
+ * v1.1-CJ: nota fiscal do professor (PDF) anexada pelo próprio no login dele.
+ * Os bytes ficam no Postgres (não há storage de arquivos na infra) — volume é
+ * baixo (poucos professores × 1 NF/mês). `competencia` = "YYYY-MM" (mês de
+ * referência do fechamento). O Anderson baixa pela aba de professores.
+ */
+model ProfessorInvoice {
+  id          String   @id @default(cuid())
+  tenantId    String
+  professorId String
+  competencia String
+  fileName    String
+  mimeType    String
+  size        Int
+  data        Bytes
+  uploadedAt  DateTime @default(now())
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  professor Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, competencia])
+  @@index([professorId, competencia])
 }
 
 /**

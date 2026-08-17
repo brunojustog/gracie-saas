@@ -7,6 +7,10 @@ import {
   getProfessorDay,
   getProfessorEarnings,
 } from "@/server/professor-classes";
+import {
+  currentCompetencia,
+  getProfessorInvoices,
+} from "@/server/professor-invoices";
 import { requireProfessor } from "@/server/tenant";
 
 import { ProfessorView } from "./professor-view";
@@ -56,6 +60,7 @@ export default async function ProfessorPage({
     startOfMonth(selected),
     endOfMonth(selected),
   );
+  const invoices = await getProfessorInvoices(tenant.id, professor.id);
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -78,6 +83,14 @@ export default async function ProfessorPage({
         day={day}
         monthLabel={format(selected, "MMMM", { locale: ptBR })}
         earnings={earnings}
+        invoices={invoices.map((i) => ({
+          id: i.id,
+          competencia: i.competencia,
+          fileName: i.fileName,
+          size: i.size,
+          uploadedAtISO: i.uploadedAt.toISOString(),
+        }))}
+        invoiceCompetencia={currentCompetencia(selected)}
       />
     </div>
   );

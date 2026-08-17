@@ -17,6 +17,7 @@ import {
   transferGridClass,
   unconfirmClass,
 } from "./actions";
+import { InvoiceUploader, type InvoiceItem } from "./invoice-uploader";
 
 type Prof = { id: string; name: string };
 type GridItem = {
@@ -79,6 +80,8 @@ export function ProfessorView({
   day,
   monthLabel,
   earnings,
+  invoices,
+  invoiceCompetencia,
 }: {
   professorName: string;
   dateISO: string;
@@ -86,6 +89,8 @@ export function ProfessorView({
   day: Day;
   monthLabel: string;
   earnings: Earnings;
+  invoices: InvoiceItem[];
+  invoiceCompetencia: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -124,6 +129,9 @@ export function ProfessorView({
           </span>
         </div>
       </div>
+
+      {/* v1.1-CJ: nota fiscal do mês */}
+      <InvoiceUploader invoices={invoices} defaultCompetencia={invoiceCompetencia} />
 
       {/* Seletor de dia */}
       <div className="flex items-center justify-between gap-2">
