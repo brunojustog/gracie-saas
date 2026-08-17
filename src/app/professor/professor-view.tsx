@@ -17,6 +17,9 @@ import {
   transferGridClass,
   unconfirmClass,
 } from "./actions";
+import { ProfessorCalendar } from "@/app/professores/professor-calendar";
+import type { ProfCalEntry } from "@/server/professor-classes";
+
 import { InvoiceUploader, type InvoiceItem } from "./invoice-uploader";
 
 type Prof = { id: string; name: string };
@@ -82,6 +85,7 @@ export function ProfessorView({
   earnings,
   invoices,
   invoiceCompetencia,
+  calendar,
 }: {
   professorName: string;
   dateISO: string;
@@ -91,6 +95,12 @@ export function ProfessorView({
   earnings: Earnings;
   invoices: InvoiceItem[];
   invoiceCompetencia: string;
+  calendar: {
+    byDay: Record<string, ProfCalEntry[]>;
+    fromISO: string;
+    toISO: string;
+    totalCount: number;
+  };
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -129,6 +139,29 @@ export function ProfessorView({
           </span>
         </div>
       </div>
+
+      {/* v1.1-CK: calendário do mês (aulas que dei, por dia) */}
+      <section className="rounded-xl border bg-card p-4">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
+          <h3 className="text-sm font-semibold capitalize">
+            Meu calendário · {monthLabel}
+          </h3>
+          <span className="text-xs text-muted-foreground">
+            {calendar.totalCount} aula{calendar.totalCount === 1 ? "" : "s"} no mês
+          </span>
+        </div>
+        {calendar.totalCount === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma aula confirmada neste mês ainda.
+          </p>
+        ) : (
+          <ProfessorCalendar
+            from={new Date(calendar.fromISO)}
+            to={new Date(calendar.toISO)}
+            byDay={calendar.byDay}
+          />
+        )}
+      </section>
 
       {/* v1.1-CJ: nota fiscal do mês */}
       <InvoiceUploader invoices={invoices} defaultCompetencia={invoiceCompetencia} />

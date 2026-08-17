@@ -4,6 +4,7 @@ import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/server/auth";
 import {
+  getProfessorCalendar,
   getProfessorDay,
   getProfessorEarnings,
 } from "@/server/professor-classes";
@@ -61,6 +62,15 @@ export default async function ProfessorPage({
     endOfMonth(selected),
   );
   const invoices = await getProfessorInvoices(tenant.id, professor.id);
+  // v1.1-CK: calendário do mês do próprio professor (aulas dadas por dia).
+  const monthStart = startOfMonth(selected);
+  const monthEnd = endOfMonth(selected);
+  const calendar = await getProfessorCalendar(
+    tenant.id,
+    professor.id,
+    monthStart,
+    monthEnd,
+  );
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -91,6 +101,12 @@ export default async function ProfessorPage({
           uploadedAtISO: i.uploadedAt.toISOString(),
         }))}
         invoiceCompetencia={currentCompetencia(selected)}
+        calendar={{
+          byDay: calendar.byDay,
+          fromISO: monthStart.toISOString(),
+          toISO: monthEnd.toISOString(),
+          totalCount: calendar.totalCount,
+        }}
       />
     </div>
   );
