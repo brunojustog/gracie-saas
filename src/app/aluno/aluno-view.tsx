@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, Loader2, MapPin } from "lucide-react";
+import { Check, Download, Loader2, MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,19 @@ export function AlunoView({
   const todayDow = ((new Date().getDay() + 6) % 7) + 1; // JS→ISO 1=Seg..7=Dom
   const [weekDay, setWeekDay] = useState(todayDow);
 
+  // PWA: captura o evento de instalação (Android) pra oferecer o botão.
+  const [installPrompt, setInstallPrompt] = useState<{
+    prompt: () => Promise<void>;
+  } | null>(null);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as unknown as { prompt: () => Promise<void> });
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
   const changeDate = (v: string) => router.push(`/aluno?date=${v}`);
 
   const doCheckin = (sessionId: string) =>
@@ -113,6 +126,20 @@ export function AlunoView({
 
   return (
     <main className="mx-auto max-w-2xl space-y-4 px-4 py-4">
+      {/* PWA: instalar como app (Android) */}
+      {installPrompt ? (
+        <button
+          type="button"
+          onClick={() => {
+            installPrompt.prompt();
+            setInstallPrompt(null);
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary"
+        >
+          <Download className="h-4 w-4" /> Instalar o app no celular
+        </button>
+      ) : null}
+
       {/* Faixa / graduação */}
       <div className="rounded-xl border bg-card p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">

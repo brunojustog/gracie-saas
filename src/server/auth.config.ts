@@ -26,7 +26,11 @@ export const authConfig = {
         // Crons são protegidos por CRON_SECRET no próprio handler.
         pathname.startsWith("/api/cron") ||
         // v1.1-BF: visão pública do Quadro por token (read-only, sem login).
-        pathname.startsWith("/p/");
+        pathname.startsWith("/p/") ||
+        // v1.2-D (PWA): manifest, service worker e ícone — públicos.
+        pathname === "/manifest.webmanifest" ||
+        pathname === "/sw.js" ||
+        pathname.startsWith("/api/pwa-icon");
 
       if (isPublic) return true;
       return isLoggedIn;

@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 
 import { getCurrentTenant } from "@/server/tenant";
 
 import "./globals.css";
+import { ServiceWorkerRegister } from "./sw-register";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,10 +20,22 @@ const geistMono = Geist_Mono({
 // Título da aba dinâmico (v1.1-AZ): usa o nome do tenant do domínio.
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getCurrentTenant();
+  const name = tenant?.name ?? "Gracie Barra Anália Franco";
   return {
-    title: tenant?.name ?? "Gracie Barra Anália Franco",
+    title: name,
     description: "Gestão comercial para academias — Simplifica Online",
+    applicationName: name,
+    appleWebApp: { capable: true, statusBarStyle: "default", title: name },
+    icons: {
+      icon: "/api/pwa-icon?s=192",
+      apple: "/api/pwa-icon?s=180",
+    },
   };
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  const tenant = await getCurrentTenant();
+  return { themeColor: tenant?.primaryColor ?? "#8B0000" };
 }
 
 export default function RootLayout({
@@ -35,6 +48,7 @@ export default function RootLayout({
       <body className="min-h-full">
         {children}
         <Toaster richColors position="top-right" />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
