@@ -14,8 +14,9 @@ export default async function AlunosSettingsPage() {
         id: true,
         matricula: true,
         active: true,
+        createdAt: true,
         user: { select: { email: true } },
-        lead: { select: { name: true, belt: true, beltDegree: true } },
+        lead: { select: { name: true, phone: true, belt: true, beltDegree: true } },
       },
     }),
     prisma.tenant.findUnique({
@@ -29,11 +30,13 @@ export default async function AlunosSettingsPage() {
       alunos={alunos.map((a) => ({
         id: a.id,
         nome: a.lead.name,
+        phone: a.lead.phone,
         email: a.user?.email ?? null,
         matricula: a.matricula,
         belt: a.lead.belt,
         beltDegree: a.lead.beltDegree,
         active: a.active,
+        createdAtISO: a.createdAt.toISOString(),
       }))}
       location={{
         latitude: tenantRow?.latitude != null ? Number(tenantRow.latitude) : null,

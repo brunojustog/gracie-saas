@@ -97,6 +97,105 @@ export async function createAlunoAccess(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
+const updateSchema = z.object({
+  alunoId: z.string().min(1),
+  name: z.string().min(2, "nome obrigatório"),
+  phone: z.string().optional(),
+  email: z.string().email("email inválido").toLowerCase(),
+  matricula: z.string().optional(),
+  belt: z.string().optional(),
+  beltDegree: z.coerce.number().int().min(0).max(6).optional(),
+  active: z.boolean(),
+});
+
+/** v1.2-E: edita a ficha do aluno (dados, faixa/grau, matrícula, login). */
+export async function updateAluno(input: unknown): Promise<Result> {
+  const parsed = updateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
+  }
+  const { tenant } = await requireRole("ADMIN");
+  const d = parsed.data;
+
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: d.alunoId, tenantId: tenant.id },
+    select: { id: true, leadId: true, userId: true },
+  });
+  if (!aluno) return { ok: false, error: "aluno não encontrado" };
+
+  if (d.matricula) {
+    const dupe = await prisma.aluno.findFirst({
+      where: { tenantId: tenant.id, matricula: d.matricula, id: { not: aluno.id } },
+      select: { id: true },
+    });
+    if (dupe) return { ok: false, error: "já existe outro aluno com essa matrícula" };
+  }
+
+  // Email é o login: se mudou, garante que não colide com outro usuário.
+  if (aluno.userId) {
+    const other = await prisma.user.findFirst({
+      where: { email: d.email, id: { not: aluno.userId } },
+      select: { id: true },
+    });
+    if (other) return { ok: false, error: "esse email já está em uso por outro usuário" };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: aluno.leadId },
+      data: {
+        name: d.name,
+        phone: d.phone || null,
+        email: d.email,
+        belt: d.belt || null,
+        beltDegree: d.belt ? d.beltDegree ?? 0 : null,
+      },
+    });
+    await tx.aluno.update({
+      where: { id: aluno.id },
+      data: { matricula: d.matricula || null, active: d.active },
+    });
+    if (aluno.userId) {
+      await tx.user.update({
+        where: { id: aluno.userId },
+        data: { name: d.name, email: d.email },
+      });
+      await tx.tenantUser.updateMany({
+        where: { tenantId: tenant.id, userId: aluno.userId, role: "ALUNO" },
+        data: { active: d.active },
+      });
+    }
+  });
+
+  revalidatePath("/settings/alunos");
+  return { ok: true };
+}
+
+/** v1.2-E: redefine a senha de acesso do aluno. */
+export async function resetAlunoPassword(input: unknown): Promise<Result> {
+  const parsed = z
+    .object({ alunoId: z.string().min(1), password: z.string().min(6, "senha de no mínimo 6 caracteres") })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
+  }
+  const { tenant } = await requireRole("ADMIN");
+
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: parsed.data.alunoId, tenantId: tenant.id },
+    select: { userId: true },
+  });
+  if (!aluno?.userId) return { ok: false, error: "aluno sem login" };
+
+  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  await prisma.user.update({
+    where: { id: aluno.userId },
+    data: { passwordHash },
+  });
+  revalidatePath("/settings/alunos");
+  return { ok: true };
+}
+
 /** Ativa/inativa o acesso de um aluno (sem apagar histórico). */
 export async function toggleAluno(input: unknown): Promise<Result> {
   const parsed = z
