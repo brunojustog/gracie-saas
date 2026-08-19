@@ -188,6 +188,7 @@ model Tenant {
   alunos              Aluno[]
   classSessions       ClassSession[]
   checkIns            CheckIn[]
+  graduations         Graduation[]
 }
 
 /**
@@ -866,6 +867,7 @@ model Professor {
   experimentalClasses ExperimentalClass[]
   invoices           ProfessorInvoice[]
   classSessions      ClassSession[]
+  graduations        Graduation[]
 
   @@index([tenantId, active])
 }
@@ -982,13 +984,41 @@ model Aluno {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  checkIns CheckIn[]
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  checkIns    CheckIn[]
+  graduations Graduation[]
 
   @@index([tenantId, active])
   @@index([tenantId, matricula])
+}
+
+/**
+ * v1.2-C (Etapa 2): evento de graduação do aluno — vira a linha do tempo.
+ * Feito pelo professor no celular (1 toque + foto opcional). Ao criar, atualiza
+ * a faixa atual (Lead.belt/beltDegree) e Aluno.lastGraduationAt. Foto guardada
+ * no Postgres (como a NF; não há storage de arquivos na infra).
+ */
+model Graduation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  alunoId     String
+  belt        String
+  beltDegree  Int      @default(0)
+  graduatedAt DateTime @default(now())
+  professorId String?
+  photoData   Bytes?
+  photoMime   String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  aluno     Aluno      @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  professor Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, alunoId])
+  @@index([alunoId, graduatedAt])
 }
 
 /**

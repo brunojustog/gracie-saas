@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getAlunoDay, getWeekSchedule } from "@/server/class-sessions";
+import { getAlunoProgress, getAlunoTimeline } from "@/server/graduations";
 import { requireAluno } from "@/server/tenant";
 
 import { AlunoView } from "./aluno-view";
@@ -47,13 +48,19 @@ export default async function AlunoPage({
 
   const selected = sp.date ? new Date(`${sp.date}T12:00:00`) : new Date();
 
-  const [belt, day, week] = await Promise.all([
-    prisma.aluno.findUnique({
-      where: { id: aluno.id },
-      select: { lead: { select: { belt: true, beltDegree: true } } },
-    }),
+  const alunoRow = await prisma.aluno.findUnique({
+    where: { id: aluno.id },
+    select: {
+      lastGraduationAt: true,
+      lead: { select: { belt: true, beltDegree: true } },
+    },
+  });
+
+  const [day, week, timeline, progress] = await Promise.all([
     getAlunoDay(tenant.id, aluno.id, selected),
     getWeekSchedule(tenant.id),
+    getAlunoTimeline(tenant.id, aluno.id),
+    getAlunoProgress(aluno.id, alunoRow?.lastGraduationAt ?? null),
   ]);
 
   const hasGeofence = await prisma.tenant
@@ -80,13 +87,23 @@ export default async function AlunoPage({
 
       <AlunoView
         alunoName={aluno.name}
-        belt={belt?.lead.belt ?? null}
-        beltDegree={belt?.lead.beltDegree ?? null}
+        belt={alunoRow?.lead.belt ?? null}
+        beltDegree={alunoRow?.lead.beltDegree ?? null}
         dateISO={format(selected, "yyyy-MM-dd")}
         dateLabel={format(selected, "EEEE, dd 'de' MMMM", { locale: ptBR })}
         day={day}
         week={week}
         hasGeofence={hasGeofence}
+        progress={progress}
+        timeline={timeline.map((t) => ({
+          id: t.id,
+          belt: t.belt,
+          beltDegree: t.beltDegree,
+          graduatedAtISO: t.graduatedAt.toISOString(),
+          note: t.note,
+          professorName: t.professorName,
+          hasPhoto: t.hasPhoto,
+        }))}
       />
     </div>
   );

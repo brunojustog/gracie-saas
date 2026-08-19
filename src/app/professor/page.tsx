@@ -90,6 +90,12 @@ export default async function ProfessorPage({
             >
               Chamada
             </Link>
+            <Link
+              href="/professor/graduar"
+              className="inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent"
+            >
+              Graduar
+            </Link>
             {SignOut}
           </div>
         </div>

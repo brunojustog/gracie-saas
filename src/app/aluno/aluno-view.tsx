@@ -40,6 +40,16 @@ function getPosition(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
+type TimelineItem = {
+  id: string;
+  belt: string;
+  beltDegree: number;
+  graduatedAtISO: string;
+  note: string | null;
+  professorName: string | null;
+  hasPhoto: boolean;
+};
+
 export function AlunoView({
   belt,
   beltDegree,
@@ -48,6 +58,8 @@ export function AlunoView({
   day,
   week,
   hasGeofence,
+  progress,
+  timeline,
 }: {
   alunoName: string;
   belt: string | null;
@@ -57,6 +69,8 @@ export function AlunoView({
   day: AlunoSession[];
   week: WeekDay[];
   hasGeofence: boolean;
+  progress: { presencas: number; threshold: number; pct: number };
+  timeline: TimelineItem[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -121,6 +135,21 @@ export function AlunoView({
             Faixa ainda não informada.
           </p>
         )}
+        {/* Progresso rumo à próxima graduação (presenças confirmadas) */}
+        <div className="mt-3">
+          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Rumo à próxima graduação</span>
+            <span className="tabular-nums">
+              {progress.presencas}/{progress.threshold} presenças
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${progress.pct}%` }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Seletor de dia */}
@@ -246,6 +275,66 @@ export function AlunoView({
             </p>
           )}
         </div>
+      </section>
+
+      {/* Linha do tempo (graduações) */}
+      <section className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase text-muted-foreground">
+          Linha do tempo
+        </h3>
+        {timeline.length === 0 ? (
+          <p className="rounded-lg border bg-card p-4 text-center text-xs text-muted-foreground">
+            Nenhuma graduação registrada ainda.
+          </p>
+        ) : (
+          <ol className="space-y-1.5">
+            {timeline.map((t) => {
+              const k = normalize(t.belt);
+              const col = BELT_BG[k] ?? "#9aa0a6";
+              return (
+                <li
+                  key={t.id}
+                  className="flex items-center gap-3 rounded-lg border bg-card p-3"
+                >
+                  <span
+                    className="h-8 w-2 shrink-0 rounded-full"
+                    style={{ background: col }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">
+                      Faixa {t.belt}
+                      {t.beltDegree ? ` · ${t.beltDegree}º grau` : ""}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {new Intl.DateTimeFormat("pt-BR", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      }).format(new Date(t.graduatedAtISO))}
+                      {t.professorName ? ` · ${t.professorName}` : ""}
+                      {t.note ? ` · ${t.note}` : ""}
+                    </div>
+                  </div>
+                  {t.hasPhoto ? (
+                    <a
+                      href={`/api/aluno/graduation/${t.id}/photo`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/aluno/graduation/${t.id}/photo`}
+                        alt="Foto da graduação"
+                        className="h-12 w-12 rounded-md object-cover"
+                      />
+                    </a>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </section>
 
       {pending ? (
