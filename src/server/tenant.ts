@@ -121,6 +121,7 @@ async function resolveTenantSession(): Promise<TenantSession> {
 export async function requireTenantUser(): Promise<TenantSession> {
   const session = await resolveTenantSession();
   if (session.membership.role === "PROFESSOR") redirect("/professor");
+  if (session.membership.role === "ALUNO") redirect("/aluno");
   return session;
 }
 
@@ -143,6 +144,34 @@ export async function requireProfessor(): Promise<
     select: { id: true, name: true },
   });
   return { ...session, professor };
+}
+
+/**
+ * v1.2-A: acesso à tela do aluno. Permite ALUNO (loga e vê só a tela dele) e
+ * ADMIN (pra suporte/teste). Carrega o Aluno vinculado ao usuário logado
+ * (null pra um admin sem vínculo). Nome vem do Lead (1:1).
+ */
+export async function requireAluno(): Promise<
+  TenantSession & {
+    aluno: { id: string; name: string; matricula: string | null } | null;
+  }
+> {
+  const session = await resolveTenantSession();
+  const { membership, tenant, user } = session;
+  const isAlunoRole = membership.role === "ALUNO";
+  const isAdmin = roleAtLeast(membership.role, "ADMIN");
+  if (!isAlunoRole && !isAdmin) redirect("/dashboard");
+
+  const aluno = await prisma.aluno.findFirst({
+    where: { tenantId: tenant.id, userId: user.id },
+    select: { id: true, matricula: true, lead: { select: { name: true } } },
+  });
+  return {
+    ...session,
+    aluno: aluno
+      ? { id: aluno.id, name: aluno.lead.name, matricula: aluno.matricula }
+      : null,
+  };
 }
 
 /**

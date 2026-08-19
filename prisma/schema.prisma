@@ -41,6 +41,7 @@ model User {
   soldPrivatePackages PrivatePackage[] @relation("PrivatePackageSeller")
   soldLooseClasses    LooseClass[]     @relation("LooseClassSeller")
   professorProfile    Professor?
+  alunoProfile        Aluno?
 }
 
 model Account {
@@ -95,6 +96,15 @@ model Tenant {
    * /p/quadro/<token>. Null = link desativado. Regerar troca o token (revoga
    * o anterior). O link público NUNCA mostra números financeiros.
    */
+  /**
+   * v1.2-A: coordenadas da academia + raio do check-in por geolocalização.
+   * O aluno só bate presença se estiver dentro de `checkinRadiusMeters` da
+   * academia. Null nas coords = geofence desligado (aceita qualquer posição).
+   */
+  latitude            Decimal? @db.Decimal(10, 7)
+  longitude           Decimal? @db.Decimal(10, 7)
+  checkinRadiusMeters Int      @default(6000)
+
   publicQuadroToken String? @unique
   /**
    * v1.1-BH: telefones que recebem o resumo diário do Quadro no WhatsApp
@@ -175,6 +185,9 @@ model Tenant {
   classGridSlots      ClassGridSlot[]
   taughtClasses       TaughtClass[]
   professorInvoices   ProfessorInvoice[]
+  alunos              Aluno[]
+  classSessions       ClassSession[]
+  checkIns            CheckIn[]
 }
 
 /**
@@ -206,6 +219,8 @@ enum Role {
   SELLER
   // v1.1-CB: professor — loga e vê SÓ a tela de confirmação das aulas dele.
   PROFESSOR
+  // v1.2-A: aluno — loga no app e vê SÓ a tela dele (cronograma + check-in).
+  ALUNO
 }
 
 model TenantUser {
@@ -457,6 +472,7 @@ model Lead {
   leadNotes           LeadNote[]
   privatePackages     PrivatePackage[]
   looseClasses        LooseClass[]
+  aluno               Aluno?
 
   @@index([tenantId])
   @@index([tenantId, stageId])
@@ -849,6 +865,7 @@ model Professor {
   auxTaught          TaughtClass[]       @relation("TaughtAuxProfessor")
   experimentalClasses ExperimentalClass[]
   invoices           ProfessorInvoice[]
+  classSessions      ClassSession[]
 
   @@index([tenantId, active])
 }
@@ -898,6 +915,7 @@ model ClassGridSlot {
   tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   professor Professor     @relation(fields: [professorId], references: [id], onDelete: Cascade)
   taught    TaughtClass[]
+  sessions  ClassSession[]
 
   @@index([tenantId, dayOfWeek])
   @@index([professorId])
@@ -942,6 +960,95 @@ model TaughtClass {
   @@index([tenantId, date])
   @@index([professorId, date])
   @@index([auxProfessorId, date])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// v1.2 — Gestão completa: Aluno + ciclo de presença (check-in)
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * v1.2-A: aluno matriculado com acesso ao app. 1:1 com Lead — reaproveita
+ * nome/contato/endereço e a faixa (Lead.belt/beltDegree). Guarda só o que é
+ * de aluno: login (userId, perfil ALUNO), matrícula e estado de graduação.
+ */
+model Aluno {
+  id               String    @id @default(cuid())
+  tenantId         String
+  leadId           String    @unique
+  userId           String?   @unique
+  matricula        String?
+  active           Boolean   @default(true)
+  lastGraduationAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  checkIns CheckIn[]
+
+  @@index([tenantId, active])
+  @@index([tenantId, matricula])
+}
+
+/**
+ * v1.2-A: ocorrência concreta de uma aula num dia — é NELA que o aluno faz
+ * check-in. Gerada da grade (ClassGridSlot) sob demanda pro dia. `date` é a
+ * meia-noite local do dia (mesmo padrão de TaughtClass). Uma sessão por
+ * slot/dia (avulsa = gridSlotId null).
+ */
+model ClassSession {
+  id           String   @id @default(cuid())
+  tenantId     String
+  gridSlotId   String?
+  date         DateTime
+  startTime    String
+  label        String
+  isKids       Boolean  @default(false)
+  professorId  String?
+  checkinLimit Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  gridSlot  ClassGridSlot? @relation(fields: [gridSlotId], references: [id], onDelete: SetNull)
+  professor Professor?     @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  checkIns  CheckIn[]
+
+  @@unique([gridSlotId, date])
+  @@index([tenantId, date])
+}
+
+/** Origem do check-in: o próprio aluno (com GPS) ou o professor (manual). */
+enum CheckInSource {
+  ALUNO
+  PROFESSOR
+}
+
+/**
+ * v1.2-A: presença do aluno numa sessão. Feita pelo aluno (com GPS validado
+ * no raio) ou marcada pelo professor. `present` = confirmada pelo professor.
+ */
+model CheckIn {
+  id          String        @id @default(cuid())
+  tenantId    String
+  sessionId   String
+  alunoId     String
+  source      CheckInSource @default(ALUNO)
+  present     Boolean       @default(false)
+  latitude    Decimal?      @db.Decimal(10, 7)
+  longitude   Decimal?      @db.Decimal(10, 7)
+  distanceM   Int?
+  createdAt   DateTime      @default(now())
+  confirmedAt DateTime?
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  aluno   Aluno        @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, alunoId])
+  @@index([tenantId, createdAt])
+  @@index([alunoId])
 }
 
 /**
