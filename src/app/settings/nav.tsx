@@ -13,6 +13,7 @@ import {
   Smartphone,
   Tag,
   Trash2,
+  UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const NAV_ITEMS: Array<{
   { href: "/settings/modalidades", label: "Modalidades", icon: Tag, minRole: "ADMIN" },
   { href: "/settings/planos", label: "Planos", icon: GraduationCap, minRole: "SELLER" },
   { href: "/settings/professores", label: "Professores", icon: Dumbbell, minRole: "ADMIN" },
+  { href: "/settings/alunos", label: "Alunos (acesso ao app)", icon: UserPlus, minRole: "ADMIN" },
   { href: "/settings/grade", label: "Grade de aulas", icon: CalendarClock, minRole: "ADMIN" },
   { href: "/settings/estagios", label: "Estágios do funil", icon: LayoutGrid, minRole: "ADMIN" },
   { href: "/settings/usuarios", label: "Usuários", icon: Users, minRole: "ADMIN" },

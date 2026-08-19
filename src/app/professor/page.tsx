@@ -1,5 +1,6 @@
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/server/auth";
@@ -82,7 +83,15 @@ export default async function ProfessorPage({
               {tenant.name} · minhas aulas
             </div>
           </div>
-          {SignOut}
+          <div className="flex items-center gap-2">
+            <Link
+              href="/professor/chamada"
+              className="inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent"
+            >
+              Chamada
+            </Link>
+            {SignOut}
+          </div>
         </div>
       </header>
 
