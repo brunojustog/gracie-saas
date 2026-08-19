@@ -7,6 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/tenant";
 
 type Result = { ok: true } | { ok: false; error: string };
+type UpdateResult =
+  | { ok: true; deactivatedSlots?: number }
+  | { ok: false; error: string };
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
@@ -40,7 +43,7 @@ const updateSchema = z.object({
   hourlyRate: z.number().nonnegative().max(100000).optional(),
 });
 
-export async function updateProfessor(input: unknown): Promise<Result> {
+export async function updateProfessor(input: unknown): Promise<UpdateResult> {
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
   const { tenant } = await requireRole("ADMIN");
@@ -65,19 +68,37 @@ export async function updateProfessor(input: unknown): Promise<Result> {
     if (clash) return { ok: false, error: "esse login já está vinculado a outro professor" };
   }
 
-  await prisma.professor.update({
-    where: { id: target.id },
-    data: {
-      name: parsed.data.name.trim(),
-      active: parsed.data.active,
-      email: parsed.data.email ? parsed.data.email.trim() : null,
-      // undefined = não mexe; null = desvincula; string = vincula.
-      ...(userId !== undefined ? { userId } : {}),
-      ...(parsed.data.hourlyRate !== undefined ? { hourlyRate: parsed.data.hourlyRate } : {}),
-    },
+  // v1.2-F: inativação segura — ao inativar, desativa também as aulas da grade
+  // dele (senão continuam gerando sessão e aparecendo no cronograma). NADA é
+  // apagado: TaughtClass, sessões, presenças e NFs ficam intactos no histórico.
+  const inactivating = target.active && !parsed.data.active;
+  let deactivatedSlots = 0;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.professor.update({
+      where: { id: target.id },
+      data: {
+        name: parsed.data.name.trim(),
+        active: parsed.data.active,
+        email: parsed.data.email ? parsed.data.email.trim() : null,
+        // undefined = não mexe; null = desvincula; string = vincula.
+        ...(userId !== undefined ? { userId } : {}),
+        ...(parsed.data.hourlyRate !== undefined ? { hourlyRate: parsed.data.hourlyRate } : {}),
+      },
+    });
+    if (inactivating) {
+      const res = await tx.classGridSlot.updateMany({
+        where: { tenantId: tenant.id, professorId: target.id, active: true },
+        data: { active: false },
+      });
+      deactivatedSlots = res.count;
+    }
   });
+
   revalidatePath("/settings/professores");
+  revalidatePath("/settings/grade");
   revalidatePath("/particulares");
   revalidatePath("/quadro");
-  return { ok: true };
+  revalidatePath("/aluno");
+  return { ok: true, deactivatedSlots };
 }

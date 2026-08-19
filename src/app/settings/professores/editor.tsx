@@ -25,6 +25,7 @@ type Professor = {
   email: string | null;
   userId: string | null;
   hourlyRate: number;
+  activeSlots: number;
 };
 type Member = { userId: string; label: string; email: string };
 
@@ -83,6 +84,9 @@ export function ProfessorsEditor({
                   ) : (
                     <span>sem login {p.email ? `· ${p.email}` : ""}</span>
                   )}
+                  {p.active && p.activeSlots > 0 ? (
+                    <span> · {p.activeSlots} aula{p.activeSlots === 1 ? "" : "s"} na grade</span>
+                  ) : null}
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setEditing(p)}>
@@ -172,7 +176,13 @@ function ProfessorFormBody({
         toast.error(result.error);
         return;
       }
-      toast.success(professor ? "Professor atualizado" : "Professor criado");
+      if ("deactivatedSlots" in result && result.deactivatedSlots) {
+        toast.success(
+          `Professor inativado · ${result.deactivatedSlots} aula(s) da grade desativada(s)`,
+        );
+      } else {
+        toast.success(professor ? "Professor atualizado" : "Professor criado");
+      }
       onClose();
     });
   };
@@ -249,6 +259,13 @@ function ProfessorFormBody({
               </div>
               <Switch id="prof-active" checked={active} onCheckedChange={setActive} />
             </div>
+            {professor && professor.active && !active && professor.activeSlots > 0 ? (
+              <p className="rounded border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                Ao inativar, as {professor.activeSlots} aula(s) da grade dele serão
+                desativadas (somem do cronograma e param de gerar check-in). O
+                histórico — aulas dadas, presenças, notas fiscais — é preservado.
+              </p>
+            ) : null}
           </>
         ) : null}
       </div>
