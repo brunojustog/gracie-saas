@@ -30,7 +30,9 @@ export const authConfig = {
         // v1.2-D (PWA): manifest, service worker e ícone — públicos.
         pathname === "/manifest.webmanifest" ||
         pathname === "/sw.js" ||
-        pathname.startsWith("/api/pwa-icon");
+        pathname.startsWith("/api/pwa-icon") ||
+        // v1.2-G: roteiro de teste público.
+        pathname === "/roteiro";
 
       if (isPublic) return true;
       return isLoggedIn;
