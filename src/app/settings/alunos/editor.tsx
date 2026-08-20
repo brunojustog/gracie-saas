@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Loader2, MapPin, Pencil } from "lucide-react";
+import { KeyRound, Loader2, MapPin, Pencil, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import {
   clearAcademyLocation,
   createAlunoAccess,
   resetAlunoPassword,
+  sendAlunoAccess,
   setAcademyLocation,
   toggleAluno,
   updateAluno,
@@ -60,6 +61,8 @@ export function AlunosEditor({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({ ...emptyCreate });
+  const [sendWaCreate, setSendWaCreate] = useState(true);
+  const [pwSendWa, setPwSendWa] = useState(true);
   const [loc, setLoc] = useState({
     latitude: location.latitude?.toString() ?? "",
     longitude: location.longitude?.toString() ?? "",
@@ -118,6 +121,12 @@ export function AlunosEditor({
     return rows;
   }, [alunos, statusFilter, faixaFilter, q, sortBy]);
 
+  const notifyWa = (wa?: { sent: boolean; error?: string }) => {
+    if (!wa) return;
+    if (wa.sent) toast.success("Acesso enviado no WhatsApp");
+    else toast.warning(`WhatsApp não enviado: ${wa.error ?? "erro"}`);
+  };
+
   const submitCreate = () =>
     startTransition(async () => {
       const r = await createAlunoAccess({
@@ -128,10 +137,20 @@ export function AlunosEditor({
         matricula: form.matricula || undefined,
         belt: form.belt || undefined,
         beltDegree: form.belt ? Number(form.beltDegree) : undefined,
+        sendWhatsapp: sendWaCreate && !!form.phone,
       });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Aluno cadastrado com acesso ao app");
+      notifyWa(r.wa);
       setForm({ ...emptyCreate });
+      router.refresh();
+    });
+
+  const sendAccess = (alunoId: string) =>
+    startTransition(async () => {
+      const r = await sendAlunoAccess({ alunoId });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Acesso enviado no WhatsApp");
       router.refresh();
     });
 
@@ -170,9 +189,10 @@ export function AlunosEditor({
   const savePassword = (alunoId: string) => {
     const password = pwRef.current?.value ?? "";
     startTransition(async () => {
-      const r = await resetAlunoPassword({ alunoId, password });
+      const r = await resetAlunoPassword({ alunoId, password, sendWhatsapp: pwSendWa });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Senha redefinida");
+      notifyWa(r.wa);
       setPwId(null);
       router.refresh();
     });
@@ -270,9 +290,22 @@ export function AlunosEditor({
             </label>
           </div>
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button size="sm" disabled={pending} onClick={submitCreate}>Cadastrar aluno</Button>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={sendWaCreate}
+              onChange={(e) => setSendWaCreate(e.target.checked)}
+              disabled={pending}
+            />
+            <span>Enviar acesso (link + login + senha) por WhatsApp</span>
+          </label>
         </div>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Precisa do telefone preenchido e da instância WhatsApp (Wuzapi)
+          configurada em Config → WhatsApp.
+        </p>
       </section>
 
       {/* Localização da academia (geofence) */}
@@ -362,6 +395,11 @@ export function AlunosEditor({
                     {a.belt ? ` · ${a.belt}${a.beltDegree ? ` ${a.beltDegree}º` : ""}` : ""}
                   </div>
                 </div>
+                {a.phone ? (
+                  <Button size="sm" variant="ghost" disabled={pending} onClick={() => sendAccess(a.id)} title="Enviar acesso por WhatsApp">
+                    <Send className="h-4 w-4" />
+                  </Button>
+                ) : null}
                 <Button size="sm" variant={editId === a.id ? "secondary" : "outline"} disabled={pending} onClick={() => (editId === a.id ? setEditId(null) : openEdit(a))}>
                   <Pencil className="mr-1 h-4 w-4" /> Editar
                 </Button>
@@ -416,9 +454,15 @@ export function AlunosEditor({
                     </Button>
                   </div>
                   {pwId === a.id ? (
-                    <div className="flex items-center gap-2 pt-1">
-                      <Input ref={pwRef} type="text" placeholder="Nova senha (mín. 6)" className="h-9" disabled={pending} />
-                      <Button size="sm" disabled={pending} onClick={() => savePassword(a.id)}>Salvar senha</Button>
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center gap-2">
+                        <Input ref={pwRef} type="text" placeholder="Nova senha (mín. 6)" className="h-9" disabled={pending} />
+                        <Button size="sm" disabled={pending} onClick={() => savePassword(a.id)}>Salvar senha</Button>
+                      </div>
+                      <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <input type="checkbox" checked={pwSendWa} onChange={(e) => setPwSendWa(e.target.checked)} disabled={pending} />
+                        <span>Enviar a nova senha por WhatsApp</span>
+                      </label>
                     </div>
                   ) : null}
                 </div>

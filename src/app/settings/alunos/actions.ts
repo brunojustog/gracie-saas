@@ -2,12 +2,53 @@
 
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 
+import { buildTenantUrl } from "@/lib/tenant-url";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/tenant";
+import { sendText } from "@/server/wuzapi";
 
 type Result = { ok: true } | { ok: false; error: string };
+/** Info do envio de acesso por WhatsApp anexada às respostas. */
+type Wa = { sent: boolean; error?: string };
+
+/**
+ * v1.2-G: envia o acesso do aluno por WhatsApp (link + login, e senha quando
+ * disponível). Best-effort — nunca derruba a ação principal. Usa a instância
+ * Wuzapi do tenant.
+ */
+async function sendAccessWhatsapp(
+  tenant: { slug: string; name: string; wuzapiUrl: string | null; wuzapiToken: string | null },
+  phone: string | null,
+  email: string,
+  password?: string,
+): Promise<Wa> {
+  if (!phone) return { sent: false, error: "aluno sem telefone" };
+  if (!tenant.wuzapiUrl || !tenant.wuzapiToken) {
+    return { sent: false, error: "WhatsApp (Wuzapi) não configurado no tenant" };
+  }
+  const h = await headers();
+  const link = buildTenantUrl({
+    slug: tenant.slug,
+    host: h.get("host") ?? "",
+    forwardedProto: h.get("x-forwarded-proto"),
+    path: "/login",
+  });
+  const body =
+    `Olá! 🥋 Seu acesso ao app da ${tenant.name}:\n\n` +
+    `🔗 ${link}\n` +
+    `Login: ${email}\n` +
+    (password ? `Senha: ${password}\n` : "") +
+    `\nAbra no celular e instale como app: no Android toque em "Instalar o app"; ` +
+    `no iPhone use Compartilhar → Adicionar à Tela de Início.`;
+  const res = await sendText(
+    { url: tenant.wuzapiUrl, token: tenant.wuzapiToken },
+    { phone, body },
+  );
+  return res.ok ? { sent: true } : { sent: false, error: res.message };
+}
 
 const createSchema = z.object({
   name: z.string().min(2, "nome obrigatório"),
@@ -17,6 +58,7 @@ const createSchema = z.object({
   matricula: z.string().optional(),
   email: z.string().email("email inválido").toLowerCase(),
   password: z.string().min(6, "senha de no mínimo 6 caracteres"),
+  sendWhatsapp: z.boolean().optional(),
 });
 
 /**
@@ -24,7 +66,9 @@ const createSchema = z.object({
  * TenantUser(ALUNO) + Lead (1:1) + Aluno, tudo numa transação. O lead entra no
  * estágio de matrícula (isWon) — ou no primeiro estágio, se não houver.
  */
-export async function createAlunoAccess(input: unknown): Promise<Result> {
+export async function createAlunoAccess(
+  input: unknown,
+): Promise<{ ok: true; wa?: Wa } | { ok: false; error: string }> {
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
@@ -93,8 +137,13 @@ export async function createAlunoAccess(input: unknown): Promise<Result> {
     });
   });
 
+  let wa: Wa | undefined;
+  if (d.sendWhatsapp) {
+    wa = await sendAccessWhatsapp(tenant, d.phone || null, d.email, d.password);
+  }
+
   revalidatePath("/settings/alunos");
-  return { ok: true };
+  return { ok: true, wa };
 }
 
 const updateSchema = z.object({
@@ -171,10 +220,16 @@ export async function updateAluno(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
-/** v1.2-E: redefine a senha de acesso do aluno. */
-export async function resetAlunoPassword(input: unknown): Promise<Result> {
+/** v1.2-E/G: redefine a senha de acesso do aluno (e opcionalmente avisa no zap). */
+export async function resetAlunoPassword(
+  input: unknown,
+): Promise<{ ok: true; wa?: Wa } | { ok: false; error: string }> {
   const parsed = z
-    .object({ alunoId: z.string().min(1), password: z.string().min(6, "senha de no mínimo 6 caracteres") })
+    .object({
+      alunoId: z.string().min(1),
+      password: z.string().min(6, "senha de no mínimo 6 caracteres"),
+      sendWhatsapp: z.boolean().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
@@ -183,7 +238,11 @@ export async function resetAlunoPassword(input: unknown): Promise<Result> {
 
   const aluno = await prisma.aluno.findFirst({
     where: { id: parsed.data.alunoId, tenantId: tenant.id },
-    select: { userId: true },
+    select: {
+      userId: true,
+      lead: { select: { phone: true, email: true } },
+      user: { select: { email: true } },
+    },
   });
   if (!aluno?.userId) return { ok: false, error: "aluno sem login" };
 
@@ -192,7 +251,37 @@ export async function resetAlunoPassword(input: unknown): Promise<Result> {
     where: { id: aluno.userId },
     data: { passwordHash },
   });
+
+  let wa: Wa | undefined;
+  if (parsed.data.sendWhatsapp) {
+    const email = aluno.user?.email ?? aluno.lead.email ?? "";
+    wa = await sendAccessWhatsapp(tenant, aluno.lead.phone, email, parsed.data.password);
+  }
+
   revalidatePath("/settings/alunos");
+  return { ok: true, wa };
+}
+
+/** v1.2-G: envia o link + login do aluno por WhatsApp (sem senha). */
+export async function sendAlunoAccess(input: unknown): Promise<Result & { wa?: Wa }> {
+  const parsed = z.object({ alunoId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant } = await requireRole("ADMIN");
+
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: parsed.data.alunoId, tenantId: tenant.id },
+    select: {
+      lead: { select: { phone: true, email: true } },
+      user: { select: { email: true } },
+    },
+  });
+  if (!aluno) return { ok: false, error: "aluno não encontrado" };
+
+  const email = aluno.user?.email ?? aluno.lead.email ?? "";
+  if (!email) return { ok: false, error: "aluno sem login (email)" };
+
+  const wa = await sendAccessWhatsapp(tenant, aluno.lead.phone, email);
+  if (!wa.sent) return { ok: false, error: wa.error ?? "falha no envio" };
   return { ok: true };
 }
 
