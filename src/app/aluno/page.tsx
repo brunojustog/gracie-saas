@@ -1,7 +1,11 @@
-import { format } from "date-fns";
+import {
+  eachDayOfInterval,
+  endOfWeek,
+  format,
+  startOfWeek,
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getAlunoDay, getWeekSchedule } from "@/server/class-sessions";
@@ -27,26 +31,31 @@ export default async function AlunoPage({
         await signOut({ redirectTo: "/login" });
       }}
     >
-      <Button type="submit" variant="outline" size="sm" className="h-8">
-        Sair
-      </Button>
+      <button type="submit" className="gb-icon-btn" title="Sair" aria-label="Sair">
+        {/* ícone de logout inline (sem depender de client) */}
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
     </form>
   );
 
   if (!aluno) {
     return (
-      <main className="mx-auto max-w-lg px-4 py-16 text-center">
-        <h1 className="text-lg font-semibold">Área do aluno</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+      <main className="gb-shell" style={{ textAlign: "center", paddingTop: 80 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 700 }}>Área do aluno</h1>
+        <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 8 }}>
           Seu usuário ({user.email}) ainda não está vinculado a um aluno. Peça
           pra recepção liberar seu acesso.
         </p>
-        <div className="mt-4">{SignOut}</div>
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
+          {SignOut}
+        </div>
       </main>
     );
   }
 
   const selected = sp.date ? new Date(`${sp.date}T12:00:00`) : new Date();
+  const weekStart = startOfWeek(selected, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(selected, { weekStartsOn: 1 });
 
   const alunoRow = await prisma.aluno.findUnique({
     where: { id: aluno.id },
@@ -56,55 +65,71 @@ export default async function AlunoPage({
     },
   });
 
-  const [day, week, timeline, progress] = await Promise.all([
-    getAlunoDay(tenant.id, aluno.id, selected),
-    getWeekSchedule(tenant.id),
-    getAlunoTimeline(tenant.id, aluno.id),
-    getAlunoProgress(aluno.id, alunoRow?.lastGraduationAt ?? null),
-  ]);
+  const [day, week, timeline, progress, weekCheckins, tenantGeo] =
+    await Promise.all([
+      getAlunoDay(tenant.id, aluno.id, selected),
+      getWeekSchedule(tenant.id),
+      getAlunoTimeline(tenant.id, aluno.id),
+      getAlunoProgress(aluno.id, alunoRow?.lastGraduationAt ?? null),
+      prisma.checkIn.findMany({
+        where: {
+          alunoId: aluno.id,
+          session: { date: { gte: weekStart, lte: weekEnd } },
+        },
+        select: { session: { select: { date: true } } },
+      }),
+      prisma.tenant.findUnique({
+        where: { id: tenant.id },
+        select: { latitude: true, longitude: true },
+      }),
+    ]);
 
-  const hasGeofence = await prisma.tenant
-    .findUnique({
-      where: { id: tenant.id },
-      select: { latitude: true, longitude: true },
-    })
-    .then((t) => t?.latitude != null && t?.longitude != null);
+  const trained = new Set(
+    weekCheckins.map((c) => format(c.session.date, "yyyy-MM-dd")),
+  );
+  const DOW = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+  const todayISO = format(new Date(), "yyyy-MM-dd");
+  const selectedISO = format(selected, "yyyy-MM-dd");
+  const weekStrip = eachDayOfInterval({ start: weekStart, end: weekEnd }).map(
+    (d, i) => {
+      const iso = format(d, "yyyy-MM-dd");
+      return {
+        iso,
+        dow: DOW[i],
+        num: format(d, "d"),
+        trained: trained.has(iso),
+        isToday: iso === todayISO,
+        isSelected: iso === selectedISO,
+      };
+    },
+  );
+
+  const hasGeofence = tenantGeo?.latitude != null && tenantGeo?.longitude != null;
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <div>
-            <div className="text-sm font-semibold">{aluno.name}</div>
-            <div className="text-xs text-muted-foreground">
-              {tenant.name}
-              {aluno.matricula ? ` · matrícula ${aluno.matricula}` : ""}
-            </div>
-          </div>
-          {SignOut}
-        </div>
-      </header>
-
-      <AlunoView
-        alunoName={aluno.name}
-        belt={alunoRow?.lead.belt ?? null}
-        beltDegree={alunoRow?.lead.beltDegree ?? null}
-        dateISO={format(selected, "yyyy-MM-dd")}
-        dateLabel={format(selected, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-        day={day}
-        week={week}
-        hasGeofence={hasGeofence}
-        progress={progress}
-        timeline={timeline.map((t) => ({
-          id: t.id,
-          belt: t.belt,
-          beltDegree: t.beltDegree,
-          graduatedAtISO: t.graduatedAt.toISOString(),
-          note: t.note,
-          professorName: t.professorName,
-          hasPhoto: t.hasPhoto,
-        }))}
-      />
-    </div>
+    <AlunoView
+      alunoName={aluno.name}
+      matricula={aluno.matricula}
+      belt={alunoRow?.lead.belt ?? null}
+      beltDegree={alunoRow?.lead.beltDegree ?? null}
+      dateISO={selectedISO}
+      dateLabel={format(selected, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+      day={day}
+      week={week}
+      weekStrip={weekStrip}
+      hasGeofence={hasGeofence}
+      progress={progress}
+      timeline={timeline.map((t) => ({
+        id: t.id,
+        belt: t.belt,
+        beltDegree: t.beltDegree,
+        graduatedAtISO: t.graduatedAt.toISOString(),
+        note: t.note,
+        professorName: t.professorName,
+        hasPhoto: t.hasPhoto,
+      }))}
+      tenantName={tenant.name}
+      signOutSlot={SignOut}
+    />
   );
 }

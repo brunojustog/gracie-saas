@@ -1,0 +1,135 @@
+/* v1.2-H: design system do app do aluno — identidade Gracie Barra
+   (vermelho #E1251B, azul #11286D, branco), base escura. Escopado em
+   .gb-aluno pra não afetar as telas de gestão. */
+.gb-aluno {
+  --red: #e1251b;
+  --red-600: #c51d15;
+  --blue: #11286d;
+  --blue-400: #2a52c9;
+  --white: #ffffff;
+
+  --bg: #0e1116;
+  --surface: #171b22;
+  --surface-2: #1f242d;
+  --surface-3: #262c37;
+  --border: #2a313d;
+  --ink: #f4f6fa;
+  --muted: #98a2b3;
+  --muted-2: #6b7480;
+
+  --ok: #22c55e;
+  --future: #eab308;
+  --event: #a855f7;
+
+  /* faixas */
+  --f-branca: #eceae6; --f-cinza: #9aa0a6; --f-amarela: #f2c200;
+  --f-laranja: #e8791e; --f-verde: #2e8b57; --f-azul: #245ba6;
+  --f-roxa: #6a2f9c; --f-marrom: #6a4327; --f-preta: #14100e;
+
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100dvh;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Container do app (largura de celular) + espaço pro bottom nav */
+.gb-shell { max-width: 480px; margin: 0 auto; padding: 14px 16px 92px; }
+
+/* Topbar */
+.gb-top { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px 12px; }
+.gb-top .brand { display: flex; align-items: center; gap: 10px; }
+.gb-top .brand img { width: 34px; height: 34px; border-radius: 8px; }
+.gb-top .brand .n { font-weight: 700; font-size: 13px; letter-spacing: .02em; line-height: 1.1; }
+.gb-top .brand .n small { display: block; font-weight: 500; font-size: 10px; color: var(--muted); letter-spacing: .08em; }
+.gb-icon-btn { background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; }
+
+/* Card de perfil (gradiente vermelho→azul) */
+.gb-profile {
+  border-radius: 18px; padding: 16px; color: #fff;
+  background: linear-gradient(135deg, var(--red) 0%, #8f1a3a 55%, var(--blue) 130%);
+  box-shadow: 0 10px 30px -14px rgba(225,37,27,.5);
+}
+.gb-profile .row { display: flex; gap: 14px; align-items: center; }
+.gb-avatar { width: 66px; height: 66px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,.85); background: #0006; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 22px; }
+.gb-profile .name { font-size: 19px; font-weight: 700; line-height: 1.1; }
+.gb-profile .mat { font-size: 12px; opacity: .85; margin-top: 2px; }
+.gb-belt {
+  margin-top: 10px; display: inline-flex; align-items: center; gap: 10px;
+  background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18);
+  padding: 8px 12px; border-radius: 12px;
+}
+.gb-belt .bar { width: 40px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.35); position: relative; }
+.gb-belt .bar::after { content: ""; position: absolute; right: 5px; top: -1px; bottom: -1px; width: 8px; background: rgba(0,0,0,.55); border-radius: 2px; }
+.gb-belt .lbl { font-size: 12px; font-weight: 700; letter-spacing: .04em; line-height: 1.15; }
+.gb-belt .lbl small { display: block; font-weight: 500; opacity: .85; }
+.gb-progress { margin-top: 14px; }
+.gb-progress .head { display: flex; justify-content: space-between; font-size: 11.5px; opacity: .9; margin-bottom: 5px; }
+.gb-progress .track { height: 7px; background: rgba(0,0,0,.3); border-radius: 999px; overflow: hidden; }
+.gb-progress .fill { height: 100%; background: #fff; border-radius: 999px; }
+
+/* Seções */
+.gb-sec { margin-top: 20px; }
+.gb-sec-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.gb-sec-h h2 { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.gb-sec-h .link { font-size: 12px; color: var(--red); font-weight: 600; background: none; border: 0; display: inline-flex; align-items: center; gap: 3px; }
+
+/* Semana (strip) */
+.gb-week { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; }
+.gb-day { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 0 7px; text-align: center; }
+.gb-day .dow { font-size: 9.5px; letter-spacing: .06em; color: var(--muted-2); text-transform: uppercase; }
+.gb-day .num { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.gb-day .dot { width: 5px; height: 5px; border-radius: 50%; margin: 4px auto 0; background: transparent; }
+.gb-day.on { border-color: var(--red); background: linear-gradient(180deg, rgba(225,37,27,.16), var(--surface)); }
+.gb-day.on .num { color: #fff; }
+.gb-day .dot.treinou { background: var(--ok); }
+
+/* Botão check-in grande */
+.gb-cta {
+  width: 100%; margin-top: 14px; border: 0; cursor: pointer;
+  background: linear-gradient(135deg, var(--red), var(--red-600));
+  color: #fff; border-radius: 16px; padding: 16px; display: flex; align-items: center;
+  justify-content: center; gap: 10px; box-shadow: 0 12px 26px -12px rgba(225,37,27,.6);
+}
+.gb-cta .t { text-align: left; line-height: 1.1; }
+.gb-cta .t b { font-size: 15px; font-weight: 700; letter-spacing: .04em; display: block; }
+.gb-cta .t span { font-size: 11.5px; opacity: .9; }
+.gb-cta:disabled { opacity: .6; }
+
+/* Lista de aulas */
+.gb-class { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 11px 12px; margin-bottom: 8px; }
+.gb-class .ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; flex: none; background: var(--surface-3); }
+.gb-class .mid { min-width: 0; flex: 1; }
+.gb-class .time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gb-class .ttl { display: flex; align-items: center; gap: 7px; margin-top: 1px; }
+.gb-class .ttl .prog { font-size: 15px; font-weight: 700; }
+.gb-class .prof { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.gb-tag { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; }
+.gb-tag.kids { background: rgba(168,85,247,.18); color: #c99bf5; }
+.gb-chev { color: var(--muted-2); flex: none; }
+.gb-class .status { font-size: 11px; font-weight: 700; color: var(--ok); flex: none; }
+.gb-class.done { border-color: rgba(34,197,94,.35); }
+
+.gb-empty { background: var(--surface); border: 1px dashed var(--border); border-radius: 14px; padding: 22px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* Botões utilitários */
+.gb-btn { border: 0; border-radius: 11px; padding: 9px 14px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.gb-btn.primary { background: var(--red); color: #fff; }
+.gb-btn.ghost { background: var(--surface-2); color: var(--ink); border: 1px solid var(--border); }
+.gb-btn:disabled { opacity: .55; }
+
+/* Install banner */
+.gb-install { width: 100%; margin-bottom: 12px; background: var(--surface-2); border: 1px solid var(--blue-400); color: var(--ink); border-radius: 12px; padding: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; }
+
+/* Bottom nav */
+.gb-nav { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(14,17,22,.94); backdrop-filter: blur(8px); border-top: 1px solid var(--border); }
+.gb-nav .inner { max-width: 480px; margin: 0 auto; display: grid; grid-template-columns: repeat(5,1fr); }
+.gb-nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 0 calc(9px + env(safe-area-inset-bottom)); color: var(--muted-2); font-size: 10px; font-weight: 600; text-decoration: none; }
+.gb-nav a.on { color: var(--red); }
+.gb-nav a .cico { display: grid; place-items: center; }
+
+/* Timeline */
+.gb-tl { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 11px 12px; margin-bottom: 8px; }
+.gb-tl .swatch { width: 8px; height: 34px; border-radius: 4px; flex: none; }
+.gb-tl .g-ttl { font-size: 14px; font-weight: 700; }
+.gb-tl .g-sub { font-size: 11px; color: var(--muted); }
+.gb-tl img { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex: none; }
