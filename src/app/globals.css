@@ -115,3 +115,11 @@
     font-family: var(--font-sans), system-ui, sans-serif;
   }
 }
+
+/* v1.2-R: menu lateral da gestão — empurra o conteúdo no desktop. Só nas telas
+   que renderizam o TopNav (aluno/professor têm layout próprio, sem essa classe). */
+@media (min-width: 1024px) {
+  body.has-sidebar {
+    padding-left: 15rem;
+  }
+}
