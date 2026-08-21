@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, Dumbbell, Loader2, MapPin } from "lucide-react";
+import { Check, ChevronLeft, Dumbbell, Loader2, MapPin, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import type { AlunoSession } from "@/server/class-sessions";
 
-import { checkInToSession } from "../actions";
+import { checkInToSession, undoCheckIn } from "../actions";
 
 function getPosition(): Promise<{ lat: number; lng: number } | null> {
   return new Promise((resolve) => {
@@ -42,6 +42,14 @@ export function CheckinView({
       const r = await checkInToSession({ sessionId: s.id, lat: coords?.lat, lng: coords?.lng });
       if (!r.ok) return void toast.error(r.error);
       setDone(s);
+      router.refresh();
+    });
+
+  const doUndo = (sessionId: string) =>
+    startTransition(async () => {
+      const r = await undoCheckIn({ sessionId });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Check-in cancelado");
       router.refresh();
     });
 
@@ -93,13 +101,7 @@ export function CheckinView({
           const confirmed = s.myCheckin?.present ?? false;
           const doneCheck = s.myCheckin !== null;
           return (
-            <button
-              key={s.id}
-              className={`gb-class${doneCheck ? " done" : ""}`}
-              style={{ width: "100%", textAlign: "left", cursor: doneCheck ? "default" : "pointer" }}
-              disabled={pending || doneCheck}
-              onClick={() => doCheckin(s)}
-            >
+            <div key={s.id} className={`gb-class${doneCheck ? " done" : ""}`}>
               <div className="ico"><Dumbbell size={18} color="var(--red)" /></div>
               <div className="mid">
                 <div className="time">{s.startTime}</div>
@@ -112,11 +114,15 @@ export function CheckinView({
               {confirmed ? (
                 <span className="status">✓ presente</span>
               ) : doneCheck ? (
-                <span className="status">check-in feito</span>
+                <button className="gb-btn ghost" disabled={pending} onClick={() => doUndo(s.id)}>
+                  <X size={14} /> cancelar
+                </button>
               ) : (
-                <span className="gb-go"><ChevronRight size={18} color="#fff" /></span>
+                <button className="gb-btn primary" disabled={pending} onClick={() => doCheckin(s)}>
+                  <MapPin size={14} /> Check-in
+                </button>
               )}
-            </button>
+            </div>
           );
         })
       )}
