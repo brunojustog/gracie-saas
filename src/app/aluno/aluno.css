@@ -150,6 +150,11 @@
 .gb-daylist .st.done { background: var(--ok); border-color: var(--ok); }
 .gb-daylist .st.pend { border-color: var(--future); }
 
+/* Tela dedicada de check-in */
+.gb-checkin-hero { width: 92px; height: 92px; border-radius: 50%; margin: 6px auto 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, var(--red), var(--red-600)); box-shadow: 0 0 40px -6px rgba(225,37,27,.7); }
+.gb-success-ring { width: 100px; height: 100px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #22c55e, #15803d); box-shadow: 0 0 46px -6px rgba(34,197,94,.7); }
+.gb-go { width: 30px; height: 30px; border-radius: 50%; background: var(--red); display: grid; place-items: center; flex: none; }
+
 /* Timeline */
 .gb-tl { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 11px 12px; margin-bottom: 8px; }
 .gb-tl .swatch { width: 8px; height: 34px; border-radius: 4px; flex: none; }
