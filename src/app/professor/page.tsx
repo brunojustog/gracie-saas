@@ -10,9 +10,9 @@ import {
   getProfessorEarnings,
 } from "@/server/professor-classes";
 import {
-  currentCompetencia,
-  getProfessorInvoices,
-} from "@/server/professor-invoices";
+  competenciaLabel,
+  getProfessorPayouts,
+} from "@/server/professor-payouts";
 import { requireProfessor } from "@/server/tenant";
 
 import { ProfessorView } from "./professor-view";
@@ -62,7 +62,7 @@ export default async function ProfessorPage({
     startOfMonth(selected),
     endOfMonth(selected),
   );
-  const invoices = await getProfessorInvoices(tenant.id, professor.id);
+  const payouts = await getProfessorPayouts(tenant.id, professor.id);
   // v1.1-CK: calendário do mês do próprio professor (aulas dadas por dia).
   const monthStart = startOfMonth(selected);
   const monthEnd = endOfMonth(selected);
@@ -108,14 +108,20 @@ export default async function ProfessorPage({
         day={day}
         monthLabel={format(selected, "MMMM", { locale: ptBR })}
         earnings={earnings}
-        invoices={invoices.map((i) => ({
-          id: i.id,
-          competencia: i.competencia,
-          fileName: i.fileName,
-          size: i.size,
-          uploadedAtISO: i.uploadedAt.toISOString(),
+        payouts={payouts.map((p) => ({
+          id: p.id,
+          competencia: p.competencia,
+          compLabel: competenciaLabel(p.competencia),
+          total: p.total,
+          regular: p.regularValor,
+          aux: p.auxValor,
+          particular: p.particularValor,
+          conv: p.convValor,
+          paid: p.paidAt != null,
+          received: p.receivedAt != null,
+          invoiceId: p.invoiceId,
+          invoiceName: p.invoiceName,
         }))}
-        invoiceCompetencia={currentCompetencia(selected)}
         calendar={{
           byDay: calendar.byDay,
           fromISO: monthStart.toISOString(),

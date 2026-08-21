@@ -1,4 +1,4 @@
-import { endOfMonth, format, startOfMonth } from "date-fns";
+import { addMonths, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Link from "next/link";
 
@@ -20,8 +20,10 @@ import {
   getTaughtClassesForAdmin,
 } from "@/server/professor-classes";
 import { getRecentInvoices } from "@/server/professor-invoices";
+import { currentCompetencia, getMonthPayouts } from "@/server/professor-payouts";
 import { requireRole } from "@/server/tenant";
 
+import { AdminPayouts } from "./admin-payouts";
 import { Pie, PIE_COLORS } from "./pie";
 import { ProfessorCalendar } from "./professor-calendar";
 import { ProfessorFilter } from "./professor-filter";
@@ -39,6 +41,7 @@ type SearchParams = Promise<{
   from?: string;
   to?: string;
   professor?: string;
+  payoutMonth?: string;
 }>;
 
 const brl = (n: number) =>
@@ -77,6 +80,20 @@ export default async function ProfessoresFechamentoPage({
   const professorId = sp.professor || undefined;
   const now = new Date();
 
+  // v1.2-P: fechamento mensal (histórico). Default = mês anterior. Não passa do
+  // último mês fechado (mês atual ainda é projeção).
+  const lastClosed = format(subMonths(now, 1), "yyyy-MM");
+  const payoutMonth =
+    sp.payoutMonth && sp.payoutMonth < currentCompetencia()
+      ? sp.payoutMonth
+      : lastClosed;
+  const payoutStart = new Date(
+    Number(payoutMonth.split("-")[0]),
+    Number(payoutMonth.split("-")[1]) - 1,
+    1,
+  );
+  const payoutNext = format(addMonths(payoutStart, 1), "yyyy-MM");
+
   const [
     { rows, totalGeral },
     projection,
@@ -85,6 +102,7 @@ export default async function ProfessoresFechamentoPage({
     conversionMap,
     calendar,
     invoiceGroups,
+    payouts,
   ] = await Promise.all([
     getProfessorClosing(tenant.id, period.from, period.to, professorId),
     getMonthProjection(tenant.id, startOfMonth(now), endOfMonth(now)),
@@ -102,7 +120,10 @@ export default async function ProfessoresFechamentoPage({
     // v1.1-CJ: notas fiscais enviadas pelos professores (recentes, sem prender
     // ao período — o professor emite a NF do mês anterior).
     getRecentInvoices(tenant.id, professorId),
+    getMonthPayouts(tenant.id, payoutMonth),
   ]);
+
+  const payoutTotal = payouts.reduce((s, p) => s + p.total, 0);
 
   // Link do card do professor preservando o período atual.
   const professorHref = (pid: string) => {
@@ -330,6 +351,27 @@ export default async function ProfessoresFechamentoPage({
             </div>
           )}
         </section>
+
+        {/* v1.2-P: fechamento mensal dos professores (Pago/Recebido + NF). */}
+        <AdminPayouts
+          payouts={payouts.map((p) => ({
+            id: p.id,
+            professorName: p.professorName,
+            total: p.total,
+            regular: p.regularValor,
+            aux: p.auxValor,
+            particular: p.particularValor,
+            conv: p.convValor,
+            paid: p.paidAt != null,
+            received: p.receivedAt != null,
+            invoiceId: p.invoiceId,
+            invoiceName: p.invoiceName,
+          }))}
+          monthLabel={format(payoutStart, "MMMM yyyy", { locale: ptBR })}
+          prevMonth={format(subMonths(payoutStart, 1), "yyyy-MM")}
+          nextMonth={payoutNext < currentCompetencia() ? payoutNext : null}
+          totalGeral={payoutTotal}
+        />
 
         {/* v1.1-CJ: notas fiscais enviadas pelos professores (recentes). */}
         <section className="rounded-xl border bg-card p-4">

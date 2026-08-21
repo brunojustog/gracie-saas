@@ -238,6 +238,30 @@ export async function transferExperimental(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
+/** v1.2-P: professor marca/desmarca "Recebido" no fechamento mensal dele. */
+export async function toggleReceived(input: unknown): Promise<Result> {
+  const parsed = z
+    .object({ payoutId: z.string().min(1), received: z.boolean() })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const ctx = await currentProfessor();
+  if (!ctx.ok) return { ok: false, error: ctx.error };
+
+  const payout = await prisma.professorPayout.findFirst({
+    where: { id: parsed.data.payoutId, tenantId: ctx.tenantId, professorId: ctx.professorId },
+    select: { id: true },
+  });
+  if (!payout) return { ok: false, error: "fechamento não encontrado" };
+
+  await prisma.professorPayout.update({
+    where: { id: payout.id },
+    data: { receivedAt: parsed.data.received ? new Date() : null },
+  });
+  revalidatePath("/professor");
+  revalidatePath("/professores");
+  return { ok: true };
+}
+
 /** Confirma uma aula PARTICULAR atribuída a mim (marca concluída). */
 export async function confirmParticularSession(input: unknown): Promise<Result> {
   const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(input);

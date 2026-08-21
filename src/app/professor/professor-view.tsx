@@ -20,7 +20,7 @@ import {
 import { ProfessorCalendar } from "@/app/professores/professor-calendar";
 import type { ProfCalEntry } from "@/server/professor-classes";
 
-import { InvoiceUploader, type InvoiceItem } from "./invoice-uploader";
+import { PayoutList, type PayoutItem } from "./payout-list";
 
 type Prof = { id: string; name: string };
 type GridItem = {
@@ -83,8 +83,7 @@ export function ProfessorView({
   day,
   monthLabel,
   earnings,
-  invoices,
-  invoiceCompetencia,
+  payouts,
   calendar,
 }: {
   professorName: string;
@@ -93,8 +92,7 @@ export function ProfessorView({
   day: Day;
   monthLabel: string;
   earnings: Earnings;
-  invoices: InvoiceItem[];
-  invoiceCompetencia: string;
+  payouts: PayoutItem[];
   calendar: {
     byDay: Record<string, ProfCalEntry[]>;
     fromISO: string;
@@ -163,8 +161,13 @@ export function ProfessorView({
         )}
       </section>
 
-      {/* v1.1-CJ: nota fiscal do mês */}
-      <InvoiceUploader invoices={invoices} defaultCompetencia={invoiceCompetencia} />
+      {/* v1.2-P: recebimentos dos meses fechados (Pago/Recebido + NF) */}
+      <section className="space-y-1.5">
+        <h3 className="text-xs font-semibold uppercase text-muted-foreground">
+          Meus recebimentos
+        </h3>
+        <PayoutList payouts={payouts} />
+      </section>
 
       {/* Seletor de dia */}
       <div className="flex items-center justify-between gap-2">
