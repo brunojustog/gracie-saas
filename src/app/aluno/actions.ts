@@ -97,6 +97,30 @@ export async function checkInToSession(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
+/** v1.2-I: o aluno sobe/troca a própria foto de perfil (avatar). */
+export async function uploadMyPhoto(formData: FormData): Promise<Result> {
+  const ctx = await currentAluno();
+  if (!ctx.ok) return { ok: false, error: ctx.error };
+
+  const file = formData.get("photo");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "selecione uma imagem" };
+  }
+  if (!file.type.startsWith("image/")) {
+    return { ok: false, error: "o arquivo precisa ser uma imagem" };
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return { ok: false, error: "imagem grande demais (máx. 5 MB)" };
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  await prisma.aluno.update({
+    where: { id: ctx.alunoId },
+    data: { photoData: bytes, photoMime: file.type },
+  });
+  revalidatePath("/aluno");
+  return { ok: true };
+}
+
 /** v1.2-A: desfaz o próprio check-in (enquanto o professor não confirmou). */
 export async function undoCheckIn(input: unknown): Promise<Result> {
   const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(input);

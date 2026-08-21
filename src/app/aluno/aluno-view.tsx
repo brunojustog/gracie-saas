@@ -3,7 +3,7 @@
 import {
   Bell,
   CalendarDays,
-  ChevronRight,
+  Camera,
   Dumbbell,
   Home,
   Loader2,
@@ -12,13 +12,14 @@ import {
   User,
   Wallet,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import type { AlunoSession, WeekDay } from "@/server/class-sessions";
 
-import { checkInToSession, undoCheckIn } from "./actions";
+import { checkInToSession, undoCheckIn, uploadMyPhoto } from "./actions";
 
 type TimelineItem = {
   id: string; belt: string; beltDegree: number; graduatedAtISO: string;
@@ -46,9 +47,11 @@ function getPosition(): Promise<{ lat: number; lng: number } | null> {
 }
 
 export function AlunoView({
-  alunoName, matricula, belt, beltDegree, dateISO, dateLabel, day,
+  alunoId, hasPhoto, alunoName, matricula, belt, beltDegree, dateISO, dateLabel, day,
   weekStrip, hasGeofence, progress, timeline, tenantName, signOutSlot,
 }: {
+  alunoId: string;
+  hasPhoto: boolean;
   alunoName: string;
   matricula: string | null;
   belt: string | null;
@@ -66,6 +69,21 @@ export function AlunoView({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  const onPhotoPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.set("photo", file);
+    startTransition(async () => {
+      const r = await uploadMyPhoto(fd);
+      if (photoRef.current) photoRef.current.value = "";
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Foto atualizada!");
+      router.refresh();
+    });
+  };
 
   const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void> } | null>(null);
   useEffect(() => {
@@ -125,7 +143,29 @@ export function AlunoView({
         {/* Card de perfil */}
         <div className="gb-profile">
           <div className="row">
-            <div className="gb-avatar">{initials}</div>
+            <button
+              type="button"
+              className="gb-avatar-btn"
+              onClick={() => photoRef.current?.click()}
+              disabled={pending}
+              aria-label="Trocar foto"
+            >
+              {hasPhoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="gb-avatar" src={`/api/aluno/${alunoId}/avatar`} alt="" />
+              ) : (
+                <span className="gb-avatar">{initials}</span>
+              )}
+              <span className="gb-avatar-cam"><Camera size={13} /></span>
+            </button>
+            <input
+              ref={photoRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={onPhotoPick}
+              style={{ display: "none" }}
+            />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div className="name">{alunoName}</div>
               <div className="mat">{matricula ? `Matrícula ${matricula}` : "Aluno"}</div>
@@ -151,11 +191,9 @@ export function AlunoView({
         <div className="gb-sec">
           <div className="gb-sec-h">
             <h2>Calendário</h2>
-            <input
-              type="date" value={dateISO} onChange={(e) => changeDate(e.target.value)}
-              disabled={pending}
-              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--ink)", borderRadius: 9, padding: "4px 8px", fontSize: 12 }}
-            />
+            <Link href={`/aluno/calendario?date=${dateISO}`} className="link">
+              <CalendarDays size={14} /> ver mês
+            </Link>
           </div>
           <div className="gb-week">
             {weekStrip.map((d) => (

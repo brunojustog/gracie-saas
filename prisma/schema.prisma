@@ -981,6 +981,9 @@ model Aluno {
   matricula        String?
   active           Boolean   @default(true)
   lastGraduationAt DateTime?
+  // v1.2-I: foto de perfil (avatar). Bytes no Postgres, servida por rota.
+  photoData        Bytes?
+  photoMime        String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

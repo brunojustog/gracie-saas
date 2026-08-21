@@ -61,6 +61,7 @@ export default async function AlunoPage({
     where: { id: aluno.id },
     select: {
       lastGraduationAt: true,
+      photoMime: true,
       lead: { select: { belt: true, beltDegree: true } },
     },
   });
@@ -108,6 +109,8 @@ export default async function AlunoPage({
 
   return (
     <AlunoView
+      alunoId={aluno.id}
+      hasPhoto={alunoRow?.photoMime != null}
       alunoName={aluno.name}
       matricula={aluno.matricula}
       belt={alunoRow?.lead.belt ?? null}
