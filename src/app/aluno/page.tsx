@@ -91,7 +91,7 @@ export default async function AlunoPage({
       }),
       prisma.tenant.findUnique({
         where: { id: tenant.id },
-        select: { latitude: true, longitude: true },
+        select: { latitude: true, longitude: true, showAlunoProgress: true },
       }),
     ]);
 
@@ -134,6 +134,7 @@ export default async function AlunoPage({
       week={week}
       weekStrip={weekStrip}
       hasGeofence={hasGeofence}
+      showProgress={tenantGeo?.showAlunoProgress ?? true}
       progress={progress}
       timeline={timeline.map((t) => ({
         id: t.id,

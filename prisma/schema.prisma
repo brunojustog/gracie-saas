@@ -104,6 +104,11 @@ model Tenant {
   latitude            Decimal? @db.Decimal(10, 7)
   longitude           Decimal? @db.Decimal(10, 7)
   checkinRadiusMeters Int      @default(6000)
+  /**
+   * v1.2-S: mostra a barra "rumo à próxima graduação" pro aluno. O Anderson
+   * quer poder desligar pra aluno não cobrar grau prematuramente. Default on.
+   */
+  showAlunoProgress   Boolean  @default(true)
 
   publicQuadroToken String? @unique
   /**

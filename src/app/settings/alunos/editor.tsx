@@ -14,6 +14,7 @@ import {
   resetAlunoPassword,
   sendAlunoAccess,
   setAcademyLocation,
+  setShowProgress,
   toggleAluno,
   updateAluno,
 } from "./actions";
@@ -57,9 +58,11 @@ const emptyCreate = {
 export function AlunosEditor({
   alunos,
   location,
+  showProgress,
 }: {
   alunos: AlunoRow[];
   location: Location;
+  showProgress: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -241,6 +244,14 @@ export function AlunosEditor({
     );
   };
 
+  const toggleProgress = (show: boolean) =>
+    startTransition(async () => {
+      const r = await setShowProgress({ show });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success(show ? "Progresso visível pro aluno" : "Progresso escondido do aluno");
+      router.refresh();
+    });
+
   const disableGeofence = () =>
     startTransition(async () => {
       const r = await clearAcademyLocation();
@@ -365,6 +376,25 @@ export function AlunosEditor({
             <Button size="sm" variant="ghost" disabled={pending} onClick={disableGeofence}>Desligar geofence</Button>
           ) : null}
         </div>
+      </section>
+
+      {/* Progresso de graduação visível pro aluno */}
+      <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-4">
+        <div>
+          <h2 className="text-sm font-semibold">Barra de progresso do aluno</h2>
+          <p className="text-xs text-muted-foreground">
+            Mostra “rumo à próxima graduação” no app do aluno. Desligue se não
+            quiser que cobrem grau.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant={showProgress ? "secondary" : "outline"}
+          disabled={pending}
+          onClick={() => toggleProgress(!showProgress)}
+        >
+          {showProgress ? "Visível — desligar" : "Escondido — ligar"}
+        </Button>
       </section>
 
       {/* Lista + filtros */}

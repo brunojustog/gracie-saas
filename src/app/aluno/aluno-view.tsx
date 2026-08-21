@@ -36,10 +36,11 @@ const BELT_BG: Record<string, string> = {
 
 export function AlunoView({
   alunoId, hasPhoto, alunoName, matricula, belt, beltDegree, dateISO,
-  weekStrip, progress, timeline, tenantName, signOutSlot,
+  weekStrip, progress, timeline, tenantName, signOutSlot, showProgress,
 }: {
   alunoId: string;
   hasPhoto: boolean;
+  showProgress: boolean;
   alunoName: string;
   matricula: string | null;
   belt: string | null;
@@ -143,13 +144,15 @@ export function AlunoView({
               </div>
             </div>
           </div>
-          <div className="gb-progress">
-            <div className="head">
-              <span>Rumo à próxima graduação</span>
-              <span>{progress.presencas} / {progress.threshold} presenças</span>
+          {showProgress ? (
+            <div className="gb-progress">
+              <div className="head">
+                <span>Rumo à próxima graduação</span>
+                <span>{progress.presencas} / {progress.threshold} presenças</span>
+              </div>
+              <div className="track"><div className="fill" style={{ width: `${progress.pct}%` }} /></div>
             </div>
-            <div className="track"><div className="fill" style={{ width: `${progress.pct}%` }} /></div>
-          </div>
+          ) : null}
         </div>
 
         {/* Calendário (semana) */}
@@ -219,8 +222,8 @@ export function AlunoView({
           <a className="on" href="/aluno"><span className="cico"><Home size={19} /></span>Início</a>
           <Link href={`/aluno/checkin?date=${dateISO}`} style={btnReset as React.CSSProperties}><span className="cico"><CalendarDays size={19} /></span>Treinos</Link>
           <Link href={`/aluno/checkin?date=${dateISO}`} style={btnReset as React.CSSProperties}><span className="cico"><MapPin size={19} /></span>Check-in</Link>
-          <button type="button" onClick={soon} style={btnReset}><span className="cico"><Wallet size={19} /></span>Financeiro</button>
-          <button type="button" onClick={soon} style={btnReset}><span className="cico"><User size={19} /></span>Perfil</button>
+          <Link href="/aluno/financeiro" style={btnReset as React.CSSProperties}><span className="cico"><Wallet size={19} /></span>Financeiro</Link>
+          <Link href="/aluno/perfil" style={btnReset as React.CSSProperties}><span className="cico"><User size={19} /></span>Perfil</Link>
         </div>
       </nav>
 

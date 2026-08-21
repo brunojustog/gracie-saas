@@ -26,7 +26,7 @@ export default async function AlunosSettingsPage() {
     }),
     prisma.tenant.findUnique({
       where: { id: tenant.id },
-      select: { latitude: true, longitude: true, checkinRadiusMeters: true },
+      select: { latitude: true, longitude: true, checkinRadiusMeters: true, showAlunoProgress: true },
     }),
   ]);
 
@@ -52,6 +52,7 @@ export default async function AlunosSettingsPage() {
         longitude: tenantRow?.longitude != null ? Number(tenantRow.longitude) : null,
         radiusMeters: tenantRow?.checkinRadiusMeters ?? 6000,
       }}
+      showProgress={tenantRow?.showAlunoProgress ?? true}
     />
   );
 }

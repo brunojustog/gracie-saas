@@ -354,6 +354,20 @@ export async function setAcademyLocation(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
+/** v1.2-S: liga/desliga a barra de progresso do aluno (gestão). */
+export async function setShowProgress(input: unknown): Promise<Result> {
+  const parsed = z.object({ show: z.boolean() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant } = await requireRole("ADMIN");
+  await prisma.tenant.update({
+    where: { id: tenant.id },
+    data: { showAlunoProgress: parsed.data.show },
+  });
+  revalidatePath("/settings/alunos");
+  revalidatePath("/aluno");
+  return { ok: true };
+}
+
 /** Desliga o geofence (check-in aceita qualquer localização). */
 export async function clearAcademyLocation(): Promise<Result> {
   const { tenant } = await requireRole("ADMIN");

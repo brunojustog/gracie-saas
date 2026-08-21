@@ -1,5 +1,6 @@
 "use server";
 
+import bcrypt from "bcryptjs";
 import { startOfDay } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -94,6 +95,39 @@ export async function checkInToSession(input: unknown): Promise<Result> {
     update: {},
   });
   revalidatePath("/aluno");
+  return { ok: true };
+}
+
+/** v1.2-S: o aluno edita o próprio contato (telefone). */
+export async function updateMyContact(input: unknown): Promise<Result> {
+  const parsed = z.object({ phone: z.string().max(30).optional() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant, aluno } = await requireAluno();
+  if (!aluno) return { ok: false, error: "sem vínculo de aluno" };
+  const row = await prisma.aluno.findFirst({
+    where: { id: aluno.id, tenantId: tenant.id },
+    select: { leadId: true },
+  });
+  if (!row) return { ok: false, error: "aluno não encontrado" };
+  await prisma.lead.update({
+    where: { id: row.leadId },
+    data: { phone: parsed.data.phone || null },
+  });
+  revalidatePath("/aluno/perfil");
+  return { ok: true };
+}
+
+/** v1.2-S: o aluno troca a própria senha. */
+export async function changeMyPassword(input: unknown): Promise<Result> {
+  const parsed = z
+    .object({ password: z.string().min(6, "senha de no mínimo 6 caracteres") })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
+  }
+  const { user } = await requireAluno();
+  const hash = await bcrypt.hash(parsed.data.password, 10);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hash } });
   return { ok: true };
 }
 
