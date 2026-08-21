@@ -50,16 +50,25 @@ async function sendAccessWhatsapp(
   return res.ok ? { sent: true } : { sent: false, error: res.message };
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 const createSchema = z.object({
   name: z.string().min(2, "nome obrigatório"),
   phone: z.string().optional(),
   belt: z.string().optional(),
   beltDegree: z.coerce.number().int().min(0).max(6).optional(),
   matricula: z.string().optional(),
+  gender: z.enum(["MALE", "FEMALE"]).optional(),
+  birthDate: z.string().regex(DATE_RE).optional().or(z.literal("")),
   email: z.string().email("email inválido").toLowerCase(),
   password: z.string().min(6, "senha de no mínimo 6 caracteres"),
   sendWhatsapp: z.boolean().optional(),
 });
+
+/** "YYYY-MM-DD" → Date (meia-noite local) ou null. */
+function parseBirth(s: string | undefined): Date | null {
+  return s && DATE_RE.test(s) ? new Date(`${s}T00:00:00`) : null;
+}
 
 /**
  * v1.2-A: cria um aluno com acesso ao app. Cria User (login email/senha) +
@@ -122,6 +131,8 @@ export async function createAlunoAccess(
         email: d.email,
         belt: d.belt || null,
         beltDegree: d.beltDegree ?? null,
+        gender: d.gender ?? null,
+        birthDate: parseBirth(d.birthDate),
         stageId: stage.id,
         origin: "OTHER",
       },
@@ -154,6 +165,8 @@ const updateSchema = z.object({
   matricula: z.string().optional(),
   belt: z.string().optional(),
   beltDegree: z.coerce.number().int().min(0).max(6).optional(),
+  gender: z.enum(["MALE", "FEMALE"]).optional(),
+  birthDate: z.string().regex(DATE_RE).optional().or(z.literal("")),
   active: z.boolean(),
 });
 
@@ -198,6 +211,8 @@ export async function updateAluno(input: unknown): Promise<Result> {
         email: d.email,
         belt: d.belt || null,
         beltDegree: d.belt ? d.beltDegree ?? 0 : null,
+        gender: d.gender ?? null,
+        birthDate: parseBirth(d.birthDate),
       },
     });
     await tx.aluno.update({

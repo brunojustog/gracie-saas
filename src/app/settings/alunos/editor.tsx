@@ -26,6 +26,8 @@ type AlunoRow = {
   matricula: string | null;
   belt: string | null;
   beltDegree: number | null;
+  gender: "MALE" | "FEMALE" | null;
+  birthDateISO: string | null;
   active: boolean;
   createdAtISO: string;
 };
@@ -49,6 +51,7 @@ const rankOf = (belt: string | null) =>
 
 const emptyCreate = {
   name: "", email: "", password: "", phone: "", matricula: "", belt: "", beltDegree: "0",
+  gender: "", birthDate: "",
 };
 
 export function AlunosEditor({
@@ -78,7 +81,8 @@ export function AlunosEditor({
   // Edição inline
   const [editId, setEditId] = useState<string | null>(null);
   const [edit, setEdit] = useState({
-    name: "", phone: "", email: "", matricula: "", belt: "", beltDegree: "0", active: true,
+    name: "", phone: "", email: "", matricula: "", belt: "", beltDegree: "0",
+    gender: "", birthDate: "", active: true,
   });
   const [pwId, setPwId] = useState<string | null>(null);
   const pwRef = useRef<HTMLInputElement>(null);
@@ -137,6 +141,8 @@ export function AlunosEditor({
         matricula: form.matricula || undefined,
         belt: form.belt || undefined,
         beltDegree: form.belt ? Number(form.beltDegree) : undefined,
+        gender: form.gender || undefined,
+        birthDate: form.birthDate || undefined,
         sendWhatsapp: sendWaCreate && !!form.phone,
       });
       if (!r.ok) return void toast.error(r.error);
@@ -164,6 +170,8 @@ export function AlunosEditor({
       matricula: a.matricula ?? "",
       belt: a.belt ?? "",
       beltDegree: String(a.beltDegree ?? 0),
+      gender: a.gender ?? "",
+      birthDate: a.birthDateISO ?? "",
       active: a.active,
     });
   };
@@ -178,6 +186,8 @@ export function AlunosEditor({
         matricula: edit.matricula || undefined,
         belt: edit.belt || undefined,
         beltDegree: edit.belt ? Number(edit.beltDegree) : undefined,
+        gender: edit.gender || undefined,
+        birthDate: edit.birthDate || undefined,
         active: edit.active,
       });
       if (!r.ok) return void toast.error(r.error);
@@ -274,6 +284,20 @@ export function AlunosEditor({
             <span className="mb-0.5 block text-muted-foreground">Matrícula</span>
             <Input value={form.matricula} onChange={(e) => setC("matricula", e.target.value)} disabled={pending} />
           </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs">
+              <span className="mb-0.5 block text-muted-foreground">Sexo</span>
+              <select value={form.gender} onChange={(e) => setC("gender", e.target.value)} disabled={pending} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
+                <option value="">—</option>
+                <option value="FEMALE">Feminino</option>
+                <option value="MALE">Masculino</option>
+              </select>
+            </label>
+            <label className="text-xs">
+              <span className="mb-0.5 block text-muted-foreground">Nascimento</span>
+              <Input type="date" value={form.birthDate} onChange={(e) => setC("birthDate", e.target.value)} disabled={pending} />
+            </label>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs">
               <span className="mb-0.5 block text-muted-foreground">Faixa</span>
@@ -424,6 +448,20 @@ export function AlunosEditor({
                       <span className="mb-0.5 block text-muted-foreground">Matrícula</span>
                       <Input value={edit.matricula} onChange={(e) => setEdit((p) => ({ ...p, matricula: e.target.value }))} disabled={pending} />
                     </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-xs">
+                        <span className="mb-0.5 block text-muted-foreground">Sexo</span>
+                        <select value={edit.gender} onChange={(e) => setEdit((p) => ({ ...p, gender: e.target.value }))} disabled={pending} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
+                          <option value="">—</option>
+                          <option value="FEMALE">Feminino</option>
+                          <option value="MALE">Masculino</option>
+                        </select>
+                      </label>
+                      <label className="text-xs">
+                        <span className="mb-0.5 block text-muted-foreground">Nascimento</span>
+                        <Input type="date" value={edit.birthDate} onChange={(e) => setEdit((p) => ({ ...p, birthDate: e.target.value }))} disabled={pending} />
+                      </label>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="text-xs">
                         <span className="mb-0.5 block text-muted-foreground">Faixa</span>

@@ -14,6 +14,7 @@ import { Check, ChevronLeft, ChevronRight, X } from "lucide-react";
 import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
+import { ageFromBirth, canAttend, type AlunoProfile } from "@/server/class-eligibility";
 import { getAlunoDay } from "@/server/class-sessions";
 import { requireAluno } from "@/server/tenant";
 
@@ -43,7 +44,7 @@ export default async function CalendarioPage({
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
 
-  const [checkins, day] = await Promise.all([
+  const [checkins, allDay, alunoRow] = await Promise.all([
     prisma.checkIn.findMany({
       where: {
         alunoId: aluno.id,
@@ -53,7 +54,18 @@ export default async function CalendarioPage({
       select: { session: { select: { date: true } } },
     }),
     getAlunoDay(tenant.id, aluno.id, selected),
+    prisma.aluno.findUnique({
+      where: { id: aluno.id },
+      select: { lead: { select: { belt: true, beltDegree: true, gender: true, birthDate: true } } },
+    }),
   ]);
+  const profile: AlunoProfile = {
+    belt: alunoRow?.lead.belt ?? null,
+    grau: alunoRow?.lead.beltDegree ?? 0,
+    age: ageFromBirth(alunoRow?.lead.birthDate ?? null, new Date()),
+    gender: alunoRow?.lead.gender ?? null,
+  };
+  const day = allDay.filter((s) => canAttend(profile, s.label));
   const trained = new Set(
     checkins.map((c) => format(c.session.date, "yyyy-MM-dd")),
   );

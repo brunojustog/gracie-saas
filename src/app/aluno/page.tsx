@@ -8,6 +8,7 @@ import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
+import { ageFromBirth, canAttend, type AlunoProfile } from "@/server/class-eligibility";
 import { getAlunoDay, getWeekSchedule } from "@/server/class-sessions";
 import { getAlunoProgress, getAlunoTimeline } from "@/server/graduations";
 import { requireAluno } from "@/server/tenant";
@@ -62,9 +63,18 @@ export default async function AlunoPage({
     select: {
       lastGraduationAt: true,
       photoMime: true,
-      lead: { select: { belt: true, beltDegree: true } },
+      lead: {
+        select: { belt: true, beltDegree: true, gender: true, birthDate: true },
+      },
     },
   });
+
+  const profile: AlunoProfile = {
+    belt: alunoRow?.lead.belt ?? null,
+    grau: alunoRow?.lead.beltDegree ?? 0,
+    age: ageFromBirth(alunoRow?.lead.birthDate ?? null, new Date()),
+    gender: alunoRow?.lead.gender ?? null,
+  };
 
   const [day, week, timeline, progress, weekCheckins, tenantGeo] =
     await Promise.all([
@@ -84,6 +94,9 @@ export default async function AlunoPage({
         select: { latitude: true, longitude: true },
       }),
     ]);
+
+  // v1.2-J: filtro por perfil — o aluno só vê as aulas que pode fazer.
+  const visibleDay = day.filter((s) => canAttend(profile, s.label));
 
   const trained = new Set(
     weekCheckins.map((c) => format(c.session.date, "yyyy-MM-dd")),
@@ -117,7 +130,7 @@ export default async function AlunoPage({
       beltDegree={alunoRow?.lead.beltDegree ?? null}
       dateISO={selectedISO}
       dateLabel={format(selected, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-      day={day}
+      day={visibleDay}
       week={week}
       weekStrip={weekStrip}
       hasGeofence={hasGeofence}

@@ -16,7 +16,12 @@ export default async function AlunosSettingsPage() {
         active: true,
         createdAt: true,
         user: { select: { email: true } },
-        lead: { select: { name: true, phone: true, belt: true, beltDegree: true } },
+        lead: {
+          select: {
+            name: true, phone: true, belt: true, beltDegree: true,
+            gender: true, birthDate: true,
+          },
+        },
       },
     }),
     prisma.tenant.findUnique({
@@ -35,6 +40,10 @@ export default async function AlunosSettingsPage() {
         matricula: a.matricula,
         belt: a.lead.belt,
         beltDegree: a.lead.beltDegree,
+        gender: a.lead.gender,
+        birthDateISO: a.lead.birthDate
+          ? a.lead.birthDate.toISOString().slice(0, 10)
+          : null,
         active: a.active,
         createdAtISO: a.createdAt.toISOString(),
       }))}

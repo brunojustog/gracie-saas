@@ -387,6 +387,9 @@ model Lead {
   phone        String?
   email        String?
   gender       Gender?
+  /** v1.2-J: data de nascimento — base das regras de idade do filtro de aula
+   * por perfil (kids 3-10, juniores 11-15, GBF 15+, adulto 16+). */
+  birthDate    DateTime? @db.Date
   /**
    * v1.1-AL: graduação (faixa) do aluno — vale pra lead, matrícula e aula
    * particular. `belt` guarda o nome da faixa ("Azul", "Cinza", …) e
