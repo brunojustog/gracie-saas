@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Camera,
   Home,
+  Image as ImageIcon,
   Loader2,
   MapPin,
   User,
@@ -56,16 +57,18 @@ export function AlunoView({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const photoRef = useRef<HTMLInputElement>(null);
+  const camRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const [photoMenu, setPhotoMenu] = useState(false);
 
   const onPhotoPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     const fd = new FormData();
     fd.set("photo", file);
     startTransition(async () => {
       const r = await uploadMyPhoto(fd);
-      if (photoRef.current) photoRef.current.value = "";
       if (!r.ok) return void toast.error(r.error);
       toast.success("Foto atualizada!");
       router.refresh();
@@ -114,7 +117,7 @@ export function AlunoView({
             <button
               type="button"
               className="gb-avatar-btn"
-              onClick={() => photoRef.current?.click()}
+              onClick={() => setPhotoMenu(true)}
               disabled={pending}
               aria-label="Trocar foto"
             >
@@ -126,14 +129,8 @@ export function AlunoView({
               )}
               <span className="gb-avatar-cam"><Camera size={13} /></span>
             </button>
-            <input
-              ref={photoRef}
-              type="file"
-              accept="image/*"
-              capture="user"
-              onChange={onPhotoPick}
-              style={{ display: "none" }}
-            />
+            <input ref={camRef} type="file" accept="image/*" capture="user" onChange={onPhotoPick} style={{ display: "none" }} />
+            <input ref={galleryRef} type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div className="name">{alunoName}</div>
               <div className="mat">{matricula ? `Matrícula ${matricula}` : "Aluno"}</div>
@@ -226,6 +223,22 @@ export function AlunoView({
           <button type="button" onClick={soon} style={btnReset}><span className="cico"><User size={19} /></span>Perfil</button>
         </div>
       </nav>
+
+      {/* Sheet de foto: tirar (câmera) ou carregar (galeria) */}
+      {photoMenu ? (
+        <div className="gb-sheet-backdrop" onClick={() => setPhotoMenu(false)}>
+          <div className="gb-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="gb-sheet-title">Foto de perfil</div>
+            <button className="gb-sheet-item" onClick={() => { setPhotoMenu(false); camRef.current?.click(); }}>
+              <Camera size={18} /> Tirar foto
+            </button>
+            <button className="gb-sheet-item" onClick={() => { setPhotoMenu(false); galleryRef.current?.click(); }}>
+              <ImageIcon size={18} /> Carregar foto
+            </button>
+            <button className="gb-sheet-cancel" onClick={() => setPhotoMenu(false)}>Cancelar</button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

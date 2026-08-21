@@ -155,6 +155,14 @@
 .gb-success-ring { width: 100px; height: 100px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #22c55e, #15803d); box-shadow: 0 0 46px -6px rgba(34,197,94,.7); }
 .gb-go { width: 30px; height: 30px; border-radius: 50%; background: var(--red); display: grid; place-items: center; flex: none; }
 
+/* Sheet de foto (tirar/carregar) */
+.gb-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+.gb-sheet { width: 100%; max-width: 480px; background: var(--surface-2); border-top-left-radius: 20px; border-top-right-radius: 20px; border: 1px solid var(--border); padding: 10px 12px calc(14px + env(safe-area-inset-bottom)); }
+.gb-sheet-title { text-align: center; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 8px 0 10px; }
+.gb-sheet-item { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.gb-sheet-item:active { background: var(--surface-3); }
+.gb-sheet-cancel { width: 100%; background: none; border: 0; color: var(--muted); padding: 12px; font-size: 14px; font-weight: 600; }
+
 /* Timeline */
 .gb-tl { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 11px 12px; margin-bottom: 8px; }
 .gb-tl .swatch { width: 8px; height: 34px; border-radius: 4px; flex: none; }
