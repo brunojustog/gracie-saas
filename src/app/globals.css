@@ -13,8 +13,8 @@
   --popover: 0 0% 100%;
   --popover-foreground: 0 0% 3.9%;
 
-  --primary: 333 73% 51%; /* v1.1-AW: rosa da marca (#DB2777) */
-  --primary-foreground: 0 0% 98%;
+  --primary: 3 79% 49%; /* v1.2-O: vermelho Gracie Barra oficial (#E1251B) */
+  --primary-foreground: 0 0% 100%;
 
   --secondary: 0 0% 96.1%;
   --secondary-foreground: 0 0% 9%;
@@ -30,39 +30,41 @@
 
   --border: 0 0% 89.8%;
   --input: 0 0% 89.8%;
-  --ring: 351 86% 42%;
+  --ring: 3 79% 49%;
 
   --radius: 0.5rem;
 }
 
+/* v1.2-O: tema escuro da marca — neutros de concreto/grafite + vermelho GB.
+   Usado no app do professor (escopo .dark). */
 .dark {
-  --background: 0 0% 3.9%;
-  --foreground: 0 0% 98%;
+  --background: 210 11% 7%;   /* #101214 */
+  --foreground: 0 0% 96%;
 
-  --card: 0 0% 3.9%;
-  --card-foreground: 0 0% 98%;
+  --card: 214 12% 11%;        /* #191c20 */
+  --card-foreground: 0 0% 96%;
 
-  --popover: 0 0% 3.9%;
-  --popover-foreground: 0 0% 98%;
+  --popover: 214 12% 11%;
+  --popover-foreground: 0 0% 96%;
 
-  --primary: 330 81% 60%; /* v1.1-AW: rosa da marca (dark) */
-  --primary-foreground: 0 0% 98%;
+  --primary: 3 79% 49%;       /* vermelho GB (#E1251B) */
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 0 0% 14.9%;
-  --secondary-foreground: 0 0% 98%;
+  --secondary: 216 13% 15%;   /* #22262c */
+  --secondary-foreground: 0 0% 96%;
 
-  --muted: 0 0% 14.9%;
-  --muted-foreground: 0 0% 63.9%;
+  --muted: 216 13% 15%;
+  --muted-foreground: 210 6% 63%; /* #9aa0a6 */
 
-  --accent: 0 0% 14.9%;
-  --accent-foreground: 0 0% 98%;
+  --accent: 216 13% 15%;
+  --accent-foreground: 0 0% 96%;
 
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 62.8% 40%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 0 0% 14.9%;
-  --input: 0 0% 14.9%;
-  --ring: 351 86% 50%;
+  --border: 215 11% 22%;      /* #33383f */
+  --input: 215 11% 22%;
+  --ring: 3 79% 49%;
 }
 
 @theme inline {

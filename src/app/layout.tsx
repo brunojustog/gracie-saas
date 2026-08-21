@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Barlow, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 
 import { getCurrentTenant } from "@/server/tenant";
@@ -7,9 +7,12 @@ import { getCurrentTenant } from "@/server/tenant";
 import "./globals.css";
 import { ServiceWorkerRegister } from "./sw-register";
 
-const geistSans = Geist({
+// v1.2-O: fonte da marca (Barlow ≈ AdiHaus DIN). Mantém o nome da variável
+// --font-geist-sans pra não mexer no globals.css / componentes.
+const geistSans = Barlow({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
