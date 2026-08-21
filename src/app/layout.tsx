@@ -30,8 +30,8 @@ export async function generateMetadata(): Promise<Metadata> {
     applicationName: name,
     appleWebApp: { capable: true, statusBarStyle: "default", title: name },
     icons: {
-      icon: "/api/pwa-icon?s=192",
-      apple: "/api/pwa-icon?s=180",
+      icon: "/icon-192.png",
+      apple: "/icon-180.png",
     },
   };
 }

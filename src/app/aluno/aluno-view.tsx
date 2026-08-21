@@ -96,7 +96,7 @@ export function AlunoView({
         <div className="gb-top">
           <div className="brand">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/api/pwa-icon?s=64" alt="" />
+            <img src="/icon-192.png" alt="" />
             <div className="n">GRACIE BARRA<small>{tenantName.toUpperCase()}</small></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
