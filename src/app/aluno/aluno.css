@@ -2,20 +2,22 @@
    (vermelho #E1251B, azul #11286D, branco), base escura. Escopado em
    .gb-aluno pra não afetar as telas de gestão. */
 .gb-aluno {
+  /* cores oficiais (manual da marca) */
   --red: #e1251b;
-  --red-600: #c51d15;
+  --red-600: #c11f15;
   --blue: #11286d;
-  --blue-400: #2a52c9;
+  --blue-400: #1c3a94;
   --white: #ffffff;
 
-  --bg: #0e1116;
-  --surface: #171b22;
-  --surface-2: #1f242d;
-  --surface-3: #262c37;
-  --border: #2a313d;
-  --ink: #f4f6fa;
-  --muted: #98a2b3;
-  --muted-2: #6b7480;
+  /* neutros de concreto / grafite (K100 / K65 / K45) */
+  --bg: #101214;
+  --surface: #191c20;
+  --surface-2: #22262c;
+  --surface-3: #2b3037;
+  --border: #33383f;
+  --ink: #f3f4f5;
+  --muted: #9aa0a6;
+  --muted-2: #6c7278;
 
   --ok: #22c55e;
   --future: #eab308;
@@ -29,7 +31,16 @@
   background: var(--bg);
   color: var(--ink);
   min-height: 100dvh;
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--gb-font), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tipografia DIN-humanista (Barlow Semi Condensed ≈ AdiHaus DIN) nos títulos */
+.gb-aluno h1, .gb-aluno h2, .gb-aluno h3,
+.gb-sec-h h2, .gb-profile .name, .gb-cta .t b, .brand .n,
+.gb-belt .lbl, .gb-cal-title, .gb-cal-month .m,
+.gb-class .ttl .prog, .gb-day .num, .gb-cal-cell {
+  font-family: var(--gb-display), system-ui, sans-serif;
 }
 
 /* Container do app (largura de celular) + espaço pro bottom nav */
@@ -45,15 +56,23 @@
 
 /* Card de perfil (gradiente vermelho→azul) */
 .gb-profile {
+  position: relative; overflow: hidden;
   border-radius: 18px; padding: 16px; color: #fff;
-  background: linear-gradient(135deg, var(--red) 0%, #8f1a3a 55%, var(--blue) 130%);
+  background: var(--red);
+  background-image: radial-gradient(135% 130% at 112% -12%, var(--blue) 0%, rgba(17,40,109,0) 54%);
   box-shadow: 0 10px 30px -14px rgba(225,37,27,.5);
 }
+.gb-profile::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  opacity: .10; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.gb-profile .row, .gb-profile .gb-progress { position: relative; z-index: 1; }
 .gb-profile .row { display: flex; gap: 14px; align-items: center; }
 .gb-avatar { width: 66px; height: 66px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,.85); background: #0006; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 22px; color: #fff; }
 .gb-avatar-btn { position: relative; border: 0; background: none; padding: 0; cursor: pointer; flex: none; }
 .gb-avatar-btn:disabled { opacity: .7; }
-.gb-avatar-cam { position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #fff; display: grid; place-items: center; border: 2px solid #8f1a3a; }
+.gb-avatar-cam { position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #fff; display: grid; place-items: center; border: 2px solid rgba(0,0,0,.35); }
 .gb-profile .name { font-size: 19px; font-weight: 700; line-height: 1.1; }
 .gb-profile .mat { font-size: 12px; opacity: .85; margin-top: 2px; }
 .gb-belt {
