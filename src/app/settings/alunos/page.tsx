@@ -1,6 +1,9 @@
+import { format } from "date-fns";
+
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/tenant";
 
+import type { AdminEvent } from "./aluno-events";
 import { AlunosEditor } from "./editor";
 
 export default async function AlunosSettingsPage() {
@@ -30,6 +33,27 @@ export default async function AlunosSettingsPage() {
     }),
   ]);
 
+  // v1.2-U: eventos da linha do tempo, agrupados por aluno (só metadados).
+  const allEvents = await prisma.timelineEvent.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: { eventDate: "desc" },
+    select: {
+      id: true, alunoId: true, kind: true, title: true, eventDate: true,
+      note: true, photos: { select: { id: true } },
+    },
+  });
+  const eventsByAluno: Record<string, AdminEvent[]> = {};
+  for (const e of allEvents) {
+    (eventsByAluno[e.alunoId] ??= []).push({
+      id: e.id,
+      kind: e.kind,
+      title: e.title,
+      dateISO: format(e.eventDate, "yyyy-MM-dd"),
+      note: e.note,
+      photoIds: e.photos.map((p) => p.id),
+    });
+  }
+
   return (
     <AlunosEditor
       alunos={alunos.map((a) => ({
@@ -53,6 +77,7 @@ export default async function AlunosSettingsPage() {
         radiusMeters: tenantRow?.checkinRadiusMeters ?? 6000,
       }}
       showProgress={tenantRow?.showAlunoProgress ?? true}
+      eventsByAluno={eventsByAluno}
     />
   );
 }

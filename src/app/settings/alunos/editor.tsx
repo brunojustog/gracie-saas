@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+import { AlunoEvents, type AdminEvent } from "./aluno-events";
 import {
   clearAcademyLocation,
   createAlunoAccess,
@@ -59,10 +60,12 @@ export function AlunosEditor({
   alunos,
   location,
   showProgress,
+  eventsByAluno,
 }: {
   alunos: AlunoRow[];
   location: Location;
   showProgress: boolean;
+  eventsByAluno: Record<string, AdminEvent[]>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -438,7 +441,11 @@ export function AlunosEditor({
           filtered.map((a) => (
             <div key={a.id} className="rounded-lg border bg-card p-3 text-sm">
               <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => (editId === a.id ? setEditId(null) : openEdit(a))}
+                >
                   <div className="font-medium">
                     {a.nome}
                     {a.matricula ? <span className="ml-1 text-[10px] text-muted-foreground">#{a.matricula}</span> : null}
@@ -448,7 +455,7 @@ export function AlunosEditor({
                     {a.email ?? "sem login"}
                     {a.belt ? ` · ${a.belt}${a.beltDegree ? ` ${a.beltDegree}º` : ""}` : ""}
                   </div>
-                </div>
+                </button>
                 {a.phone ? (
                   <Button size="sm" variant="ghost" disabled={pending} onClick={() => sendAccess(a.id)} title="Enviar acesso por WhatsApp">
                     <Send className="h-4 w-4" />
@@ -533,6 +540,7 @@ export function AlunosEditor({
                       </label>
                     </div>
                   ) : null}
+                  <AlunoEvents alunoId={a.id} events={eventsByAluno[a.id] ?? []} />
                 </div>
               ) : null}
             </div>

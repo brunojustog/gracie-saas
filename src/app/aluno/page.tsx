@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { ageFromBirth, canAttend, type AlunoProfile } from "@/server/class-eligibility";
 import { getAlunoDay, getWeekSchedule } from "@/server/class-sessions";
-import { getAlunoProgress, getAlunoTimeline } from "@/server/graduations";
+import { getAlunoProgress } from "@/server/graduations";
+import { getAlunoTimeline } from "@/server/timeline-events";
 import { requireAluno } from "@/server/tenant";
 
 import { AlunoView } from "./aluno-view";
@@ -136,15 +137,7 @@ export default async function AlunoPage({
       hasGeofence={hasGeofence}
       showProgress={tenantGeo?.showAlunoProgress ?? true}
       progress={progress}
-      timeline={timeline.map((t) => ({
-        id: t.id,
-        belt: t.belt,
-        beltDegree: t.beltDegree,
-        graduatedAtISO: t.graduatedAt.toISOString(),
-        note: t.note,
-        professorName: t.professorName,
-        hasPhoto: t.hasPhoto,
-      }))}
+      timeline={timeline}
       tenantName={tenant.name}
       signOutSlot={SignOut}
     />

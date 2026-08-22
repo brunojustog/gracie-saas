@@ -21,8 +21,17 @@ import type { AlunoSession, WeekDay } from "@/server/class-sessions";
 import { uploadMyPhoto } from "./actions";
 
 type TimelineItem = {
-  id: string; belt: string; beltDegree: number; graduatedAtISO: string;
-  note: string | null; professorName: string | null; hasPhoto: boolean;
+  id: string;
+  kind: "GRADUACAO" | "GRAU" | "CAMPEONATO" | "INICIO" | "OUTRO";
+  title: string;
+  subtitle: string | null;
+  dateISO: string;
+  belt: string | null;
+  photos: string[];
+};
+const KIND_COLOR: Record<TimelineItem["kind"], string> = {
+  GRADUACAO: "var(--red)", GRAU: "#eab308", CAMPEONATO: "#e8791e",
+  INICIO: "var(--blue-400)", OUTRO: "var(--muted-2)",
 };
 type WeekDayStrip = {
   iso: string; dow: string; num: string; trained: boolean; isToday: boolean; isSelected: boolean;
@@ -189,23 +198,33 @@ export function AlunoView({
           {timeline.length === 0 ? (
             <div className="gb-empty">Nenhuma graduação registrada ainda.</div>
           ) : (
-            timeline.map((t) => (
-              <div key={t.id} className="gb-tl">
-                <span className="swatch" style={{ background: BELT_BG[t.belt.toLowerCase()] ?? "var(--f-cinza)" }} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div className="g-ttl">Faixa {t.belt}{t.beltDegree ? ` · ${t.beltDegree}º grau` : ""}</div>
-                  <div className="g-sub">
-                    {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(t.graduatedAtISO))}
-                    {t.professorName ? ` · ${t.professorName}` : ""}
-                    {t.note ? ` · ${t.note}` : ""}
+            timeline.map((t) => {
+              const swatch = t.kind === "GRADUACAO" && t.belt
+                ? BELT_BG[t.belt.toLowerCase()] ?? "var(--f-cinza)"
+                : KIND_COLOR[t.kind];
+              return (
+                <div key={t.id} className="gb-tl">
+                  <span className="swatch" style={{ background: swatch }} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="g-ttl">{t.title}</div>
+                    <div className="g-sub">
+                      {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${t.dateISO}T12:00:00`))}
+                      {t.subtitle ? ` · ${t.subtitle}` : ""}
+                    </div>
                   </div>
+                  {t.photos.length > 0 ? (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {t.photos.slice(0, 3).map((src, i) => (
+                        <a key={i} href={src} target="_blank" rel="noopener noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={src} alt="" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-                {t.hasPhoto ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={`/api/aluno/graduation/${t.id}/photo`} alt="" />
-                ) : null}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

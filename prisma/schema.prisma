@@ -195,6 +195,7 @@ model Tenant {
   checkIns            CheckIn[]
   graduations         Graduation[]
   professorPayouts    ProfessorPayout[]
+  timelineEvents      TimelineEvent[]
 }
 
 /**
@@ -1030,9 +1031,53 @@ model Aluno {
   user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   checkIns    CheckIn[]
   graduations Graduation[]
+  events      TimelineEvent[]
 
   @@index([tenantId, active])
   @@index([tenantId, matricula])
+}
+
+/** v1.2-U: tipo de evento da linha do tempo do aluno. */
+enum TimelineEventKind {
+  GRADUACAO
+  GRAU
+  CAMPEONATO
+  INICIO
+  OUTRO
+}
+
+/**
+ * v1.2-U: evento da linha do tempo do aluno, adicionado pela gestão no perfil
+ * do aluno (graduação, campeonato, início no jiu-jitsu, grau, outro). Fotos em
+ * galeria (várias por evento), bytes no Postgres.
+ */
+model TimelineEvent {
+  id        String            @id @default(cuid())
+  tenantId  String
+  alunoId   String
+  kind      TimelineEventKind @default(OUTRO)
+  title     String
+  eventDate DateTime          @db.Date
+  note      String?
+  createdAt DateTime          @default(now())
+
+  tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  aluno  Aluno                @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  photos TimelineEventPhoto[]
+
+  @@index([alunoId, eventDate])
+  @@index([tenantId])
+}
+
+model TimelineEventPhoto {
+  id      String @id @default(cuid())
+  eventId String
+  data    Bytes
+  mime    String
+
+  event TimelineEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
 }
 
 /**
