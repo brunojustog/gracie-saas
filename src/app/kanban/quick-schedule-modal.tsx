@@ -34,11 +34,13 @@ import { cn } from "@/lib/utils";
 import { scheduleClass } from "../aulas/actions";
 
 type Modality = { id: string; name: string };
+type Professor = { id: string; name: string };
 type ClassKind = "INDIVIDUAL" | "GROUP";
 
 type Props = {
   lead: { id: string; name: string; modalityId: string | null } | null;
   modalities: Modality[];
+  professors: Professor[];
   onClose: () => void;
   onScheduled?: () => void;
 };
@@ -58,6 +60,7 @@ function nextHourIso(): { date: string; time: string } {
 export function QuickScheduleModal({
   lead,
   modalities,
+  professors,
   onClose,
   onScheduled,
 }: Props) {
@@ -69,6 +72,7 @@ export function QuickScheduleModal({
             key={lead.id}
             lead={lead}
             modalities={modalities}
+            professors={professors}
             onClose={onClose}
             onScheduled={onScheduled}
           />
@@ -81,11 +85,13 @@ export function QuickScheduleModal({
 function Body({
   lead,
   modalities,
+  professors,
   onClose,
   onScheduled,
 }: {
   lead: { id: string; name: string; modalityId: string | null };
   modalities: Modality[];
+  professors: Professor[];
   onClose: () => void;
   onScheduled?: () => void;
 }) {
@@ -94,6 +100,10 @@ function Body({
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(initial.time);
   const [notes, setNotes] = useState("");
+  // v1.2-V: vendedora/atendente também pode atribuir o professor da
+  // experimental (antes só o Anderson fazia via /aulas). Aparece na tela do
+  // professor escolhido.
+  const [professorId, setProfessorId] = useState("");
   // v1.1-BV: tipo da aula. O agendamento pelo kanban só dispara pra lead sem
   // aula (é a 1ª), então o default é individual — mas o aluno pode preferir
   // começar pela turma, então deixamos escolher.
@@ -120,6 +130,7 @@ function Body({
         scheduledDate: localISO,
         notes: notes.trim() || undefined,
         kind,
+        professorId: professorId || null,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -184,6 +195,23 @@ function Body({
               disabled={pending}
             />
           </div>
+        </div>
+
+        {/* v1.2-V: professor da experimental — liberado pra vendedora/atendente */}
+        <div className="space-y-1">
+          <Label htmlFor="quick-prof">Professor</Label>
+          <select
+            id="quick-prof"
+            value={professorId}
+            onChange={(e) => setProfessorId(e.target.value)}
+            disabled={pending}
+            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+          >
+            <option value="">— a definir —</option>
+            {professors.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-1">

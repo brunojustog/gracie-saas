@@ -51,7 +51,7 @@ export default async function KanbanPage({
       }/chat/`
     : null;
 
-  const [stages, leadsRaw, modalities, sellers] = await Promise.all([
+  const [stages, leadsRaw, modalities, sellers, professors] = await Promise.all([
     prisma.stage.findMany({
       where: { tenantId: tenant.id, active: true },
       orderBy: { order: "asc" },
@@ -84,6 +84,12 @@ export default async function KanbanPage({
           name: r.user.name ?? r.user.email,
         })),
       ),
+    // v1.2-V: professores ativos pro select do modal de agendar experimental.
+    prisma.professor.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   ]);
 
   // Hidrata cada card com o estado de follow-up (badge "M3/8", "pausado",
@@ -151,6 +157,7 @@ export default async function KanbanPage({
           leads={leads}
           modalities={modalities}
           sellers={sellers}
+          professors={professors}
           canReassign={true}
           currentUserId={user.id}
           isSeller={membership.role === "SELLER"}

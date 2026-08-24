@@ -55,12 +55,15 @@ type Stage = {
 
 type Modality = { id: string; name: string };
 type Seller = { id: string; name: string };
+type Professor = { id: string; name: string };
 
 type Props = {
   stages: Stage[];
   leads: Lead[];
   modalities: Modality[];
   sellers: Seller[];
+  /** Professores ativos — pro select "quem vai dar a experimental" no modal. */
+  professors: Professor[];
   /** ADMIN/MANAGER pode reatribuir leads e filtrar por vendedora. */
   canReassign: boolean;
   /** UserId do usuário logado — usado como default sellerId quando SELLER cria lead manual. */
@@ -81,6 +84,7 @@ export function KanbanBoard({
   leads: initialLeads,
   modalities,
   sellers,
+  professors,
   canReassign,
   currentUserId,
   isSeller,
@@ -346,6 +350,7 @@ export function KanbanBoard({
       <QuickScheduleModal
         lead={scheduleLead}
         modalities={modalities}
+        professors={professors}
         onClose={() => setScheduleLead(null)}
         onScheduled={async () => {
           // Move o lead pro stage de agendamento (que disparou a intercept).
