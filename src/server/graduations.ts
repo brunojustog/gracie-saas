@@ -99,6 +99,60 @@ export async function getGraduationList(tenantId: string): Promise<GradListRow[]
   );
 }
 
+/**
+ * IDs dos alunos que já atingiram o gatilho de graduação — usado pra sinalizar
+ * "pode graduar" no check-in do professor (chamada). v1.2-X.
+ */
+export async function getAvailableGraduationAlunoIds(
+  tenantId: string,
+): Promise<string[]> {
+  const rows = await getGraduationList(tenantId);
+  return rows.filter((r) => r.disponivel).map((r) => r.alunoId);
+}
+
+export type ProfessorGradHistory = {
+  id: string;
+  alunoNome: string;
+  belt: string;
+  beltDegree: number;
+  graduatedAt: Date;
+};
+
+/**
+ * Painel de graduações do professor (v1.2-X): quantos alunos estão prontos
+ * pra graduar (pendentes) + histórico das graduações que ELE já fez.
+ */
+export async function getProfessorGraduationPanel(
+  tenantId: string,
+  professorId: string,
+): Promise<{ pendingCount: number; history: ProfessorGradHistory[] }> {
+  const [available, history] = await Promise.all([
+    getAvailableGraduationAlunoIds(tenantId),
+    prisma.graduation.findMany({
+      where: { tenantId, professorId },
+      orderBy: { graduatedAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        belt: true,
+        beltDegree: true,
+        graduatedAt: true,
+        aluno: { select: { lead: { select: { name: true } } } },
+      },
+    }),
+  ]);
+  return {
+    pendingCount: available.length,
+    history: history.map((h) => ({
+      id: h.id,
+      alunoNome: h.aluno.lead.name,
+      belt: h.belt,
+      beltDegree: h.beltDegree,
+      graduatedAt: h.graduatedAt,
+    })),
+  };
+}
+
 export type TimelineItem = {
   id: string;
   belt: string;

@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale";
 import Link from "next/link";
 
 import { getActiveAlunos, getChamadaForDay } from "@/server/class-sessions";
+import { getAvailableGraduationAlunoIds } from "@/server/graduations";
 import { roleAtLeast } from "@/server/rbac";
 import { requireProfessor } from "@/server/tenant";
 
@@ -31,9 +32,10 @@ export default async function ChamadaPage({
   }
 
   const selected = sp.date ? new Date(`${sp.date}T12:00:00`) : new Date();
-  const [sessions, alunos] = await Promise.all([
+  const [sessions, alunos, gradAvailable] = await Promise.all([
     getChamadaForDay(tenant.id, professor?.id ?? null, selected, isAdmin),
     getActiveAlunos(tenant.id),
+    getAvailableGraduationAlunoIds(tenant.id),
   ]);
 
   return (
@@ -60,6 +62,7 @@ export default async function ChamadaPage({
         dateLabel={format(selected, "EEEE, dd 'de' MMMM", { locale: ptBR })}
         sessions={sessions}
         alunos={alunos}
+        gradAvailable={gradAvailable}
       />
     </div>
   );

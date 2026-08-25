@@ -9,6 +9,7 @@ import {
   getProfessorDay,
   getProfessorEarnings,
 } from "@/server/professor-classes";
+import { getProfessorGraduationPanel } from "@/server/graduations";
 import {
   competenciaLabel,
   getProfessorPayouts,
@@ -72,6 +73,8 @@ export default async function ProfessorPage({
     monthStart,
     monthEnd,
   );
+  // v1.2-X: painel de graduações (pendentes + histórico do professor).
+  const gradPanel = await getProfessorGraduationPanel(tenant.id, professor.id);
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -127,6 +130,16 @@ export default async function ProfessorPage({
           fromISO: monthStart.toISOString(),
           toISO: monthEnd.toISOString(),
           totalCount: calendar.totalCount,
+        }}
+        gradPanel={{
+          pendingCount: gradPanel.pendingCount,
+          history: gradPanel.history.map((h) => ({
+            id: h.id,
+            alunoNome: h.alunoNome,
+            belt: h.belt,
+            beltDegree: h.beltDegree,
+            dateLabel: format(h.graduatedAt, "dd/MM/yyyy"),
+          })),
         }}
       />
     </div>

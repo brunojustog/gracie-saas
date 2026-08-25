@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, Loader2 } from "lucide-react";
+import { Award, Check, Download, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,17 @@ type Earnings = {
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+type GradPanel = {
+  pendingCount: number;
+  history: {
+    id: string;
+    alunoNome: string;
+    belt: string;
+    beltDegree: number;
+    dateLabel: string;
+  }[];
+};
+
 export function ProfessorView({
   dateISO,
   dateLabel,
@@ -85,6 +97,7 @@ export function ProfessorView({
   earnings,
   payouts,
   calendar,
+  gradPanel,
 }: {
   professorName: string;
   dateISO: string;
@@ -99,11 +112,20 @@ export function ProfessorView({
     toISO: string;
     totalCount: number;
   };
+  gradPanel: GradPanel;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   // Auxiliar escolhido por aula KIDS (antes de confirmar).
   const [auxBySlot, setAuxBySlot] = useState<Record<string, string>>({});
+  const [showHistory, setShowHistory] = useState(false);
+  // PWA install (mesmo app pro professor — unificação pedida 25/08).
+  const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void> } | null>(null);
+  useEffect(() => {
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e as unknown as { prompt: () => Promise<void> }); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok?: string) =>
     startTransition(async () => {
@@ -120,6 +142,62 @@ export function ProfessorView({
 
   return (
     <main className="mx-auto max-w-2xl space-y-4 px-4 py-4">
+      {installPrompt ? (
+        <button
+          onClick={() => { installPrompt.prompt(); setInstallPrompt(null); }}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm font-medium text-primary"
+        >
+          <Download className="h-4 w-4" /> Instalar o app no celular
+        </button>
+      ) : null}
+
+      {/* v1.2-X: painel de graduações (pendentes + histórico do professor) */}
+      <section className="rounded-xl border bg-card p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+            <Award className="h-4 w-4 text-primary" /> Graduações
+          </h3>
+          <Link
+            href="/professor/graduar"
+            className="inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium hover:bg-accent"
+          >
+            Graduar
+          </Link>
+        </div>
+        <div className="mt-2 flex items-baseline gap-1.5">
+          <span className="text-2xl font-bold tabular-nums">{gradPanel.pendingCount}</span>
+          <span className="text-xs text-muted-foreground">
+            aluno{gradPanel.pendingCount === 1 ? "" : "s"} pronto{gradPanel.pendingCount === 1 ? "" : "s"} pra graduar
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowHistory((v) => !v)}
+          className="mt-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+        >
+          {showHistory ? "ocultar" : "ver"} histórico ({gradPanel.history.length})
+        </button>
+        {showHistory ? (
+          gradPanel.history.length === 0 ? (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Você ainda não registrou graduações.
+            </p>
+          ) : (
+            <ul className="mt-1.5 space-y-1">
+              {gradPanel.history.map((h) => (
+                <li key={h.id} className="flex items-center gap-2 rounded-lg border p-2 text-xs">
+                  <span className="flex-1 font-medium">{h.alunoNome}</span>
+                  <span className="text-muted-foreground">
+                    {h.belt}{h.beltDegree ? ` ${h.beltDegree}º` : ""}
+                  </span>
+                  <span className="tabular-nums text-muted-foreground">{h.dateLabel}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : null}
+      </section>
+
       {/* Total do mês */}
       <div className="rounded-xl border bg-card p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">

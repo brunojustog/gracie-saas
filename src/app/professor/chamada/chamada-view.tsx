@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Loader2, Plus, X } from "lucide-react";
+import { Award, Check, Loader2, Plus, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -23,15 +24,19 @@ export function ChamadaView({
   dateLabel,
   sessions,
   alunos,
+  gradAvailable,
 }: {
   dateISO: string;
   dateLabel: string;
   sessions: ChamadaSession[];
   alunos: Aluno[];
+  gradAvailable: string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [addBySession, setAddBySession] = useState<Record<string, string>>({});
+  // Alunos que já bateram o gatilho de graduação — sinalizados no check-in.
+  const gradSet = new Set(gradAvailable);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok?: string) =>
     startTransition(async () => {
@@ -114,6 +119,15 @@ export function ChamadaView({
                           <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] text-amber-800">
                             add. prof
                           </span>
+                        ) : null}
+                        {gradSet.has(c.alunoId) ? (
+                          <Link
+                            href="/professor/graduar"
+                            className="ml-1 inline-flex items-center gap-0.5 rounded bg-red-100 px-1 text-[10px] font-medium text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-300"
+                            title="Aluno pronto pra graduar"
+                          >
+                            <Award className="h-3 w-3" /> graduar
+                          </Link>
                         ) : null}
                       </span>
                       {c.present ? (

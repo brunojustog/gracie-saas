@@ -19,12 +19,16 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#ffffff",
+    // Splash na cor da marca (azul GB) em vez de branco — pedido do Anderson
+    // (25/08): a tela de carregamento aparecia branca com o logo no meio.
+    background_color: "#11286D",
     theme_color: theme,
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      // Maskable com respiro (zona segura) pra não cortar o anel do logo em
+      // celulares de ícone quadrado/redondo (Anderson, 25/08).
+      { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

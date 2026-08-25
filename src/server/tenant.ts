@@ -160,6 +160,9 @@ export async function requireAluno(): Promise<
   const { membership, tenant, user } = session;
   const isAlunoRole = membership.role === "ALUNO";
   const isAdmin = roleAtLeast(membership.role, "ADMIN");
+  // Professor que abre o PWA (start_url=/aluno) cai direto na tela dele — o app
+  // é único, login-direcionado (unificação pedida pelo Anderson, 25/08).
+  if (membership.role === "PROFESSOR") redirect("/professor");
   if (!isAlunoRole && !isAdmin) redirect("/dashboard");
 
   const aluno = await prisma.aluno.findFirst({
