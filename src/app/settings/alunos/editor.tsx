@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ALL_BELTS, beltRank as rankOf } from "@/lib/belts";
 
 import { AlunoEvents, type AdminEvent } from "./aluno-events";
 import {
@@ -39,17 +40,7 @@ type Location = {
   radiusMeters: number;
 };
 
-const BELTS = [
-  "Branca", "Cinza", "Amarela", "Laranja", "Verde",
-  "Azul", "Roxa", "Marrom", "Preta",
-];
-// Ordem de graduação (kids → adulto) pra ordenar por faixa E grau corretamente.
-const BELT_RANK: Record<string, number> = {
-  branca: 0, cinza: 1, amarela: 2, laranja: 3, verde: 4,
-  azul: 5, roxa: 6, marrom: 7, preta: 8,
-};
-const rankOf = (belt: string | null) =>
-  belt ? BELT_RANK[belt.toLowerCase()] ?? -1 : -1;
+const BELTS = ALL_BELTS;
 
 const emptyCreate = {
   name: "", email: "", password: "", phone: "", matricula: "", belt: "", beltDegree: "0",

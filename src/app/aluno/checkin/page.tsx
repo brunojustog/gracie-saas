@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { prisma } from "@/lib/prisma";
-import { ageFromBirth, canAttend, type AlunoProfile } from "@/server/class-eligibility";
+import { ageFromBirth, canAttend, nivelLabel, type AlunoProfile } from "@/server/class-eligibility";
 import { getAlunoDay } from "@/server/class-sessions";
 import { requireAluno } from "@/server/tenant";
 
@@ -45,7 +45,13 @@ export default async function CheckinPage({
     age: ageFromBirth(alunoRow?.lead.birthDate ?? null, new Date()),
     gender: alunoRow?.lead.gender ?? null,
   };
-  const day = allDay.filter((s) => canAttend(profile, s.label));
+  // v1.2-W: mostra TODAS as aulas do dia; o check-in fica liberado só nas que
+  // o perfil (faixa/idade/sexo) permite. Cada aula ganha nível + flag.
+  const day = allDay.map((s) => ({
+    ...s,
+    canCheckin: canAttend(profile, s.label),
+    nivel: nivelLabel(s.label),
+  }));
   const firstName = aluno.name.split(" ")[0] ?? aluno.name;
 
   return (

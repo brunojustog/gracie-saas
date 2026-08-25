@@ -23,6 +23,19 @@ export type AlunoProfile = {
 
 const COLORED_ADULT = new Set(["azul", "roxa", "marrom", "preta", "coral", "vermelha"]);
 
+/** Nível amigável da aula (pra exibir na grade do aluno). */
+export function nivelLabel(label: string): string {
+  switch (classCategory(label)) {
+    case "GB1": return "Iniciante";
+    case "GB2": return "Avançado";
+    case "NOGI": return "No-Gi";
+    case "GBK_PC": return "Kids 3–10";
+    case "GBK_JUV": return "Kids 11–15";
+    case "GBF": return "Feminino";
+    default: return "Todos os níveis";
+  }
+}
+
 /** Categoriza a aula pelo nome (padronizado na grade da academia). */
 export function classCategory(label: string): ClassCategory {
   const s = label.toLowerCase();

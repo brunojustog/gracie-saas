@@ -5,13 +5,10 @@ import Link from "next/link";
 import { useRef, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { changeMyPassword, updateMyContact, uploadMyPhoto } from "../actions";
+import { beltStyle } from "@/lib/belts";
 
-const BELT_BG: Record<string, string> = {
-  branca: "var(--f-branca)", cinza: "var(--f-cinza)", amarela: "var(--f-amarela)",
-  laranja: "var(--f-laranja)", verde: "var(--f-verde)", azul: "var(--f-azul)",
-  roxa: "var(--f-roxa)", marrom: "var(--f-marrom)", preta: "var(--f-preta)",
-};
+import { changeMyPassword, updateMyContact, uploadMyPhoto } from "../actions";
+import { Lightbox } from "../lightbox";
 
 export function PerfilView({
   alunoId, hasPhoto, name, matricula, email, phone: phone0, belt, beltDegree,
@@ -32,11 +29,12 @@ export function PerfilView({
   const [phone, setPhone] = useState(phone0);
   const [pw, setPw] = useState("");
   const [photoMenu, setPhotoMenu] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
 
   const initials = name.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
-  const beltColor = belt ? BELT_BG[belt.toLowerCase()] ?? "var(--f-cinza)" : "var(--f-cinza)";
+  const beltColor = beltStyle(belt).background;
 
   const onPhotoPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -142,6 +140,11 @@ export function PerfilView({
         <div className="gb-sheet-backdrop" onClick={() => setPhotoMenu(false)}>
           <div className="gb-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="gb-sheet-title">Foto de perfil</div>
+            {hasPhoto ? (
+              <button className="gb-sheet-item" onClick={() => { setPhotoMenu(false); setLightbox(`/api/aluno/${alunoId}/avatar`); }}>
+                <ImageIcon size={18} /> Ver foto
+              </button>
+            ) : null}
             <button className="gb-sheet-item" onClick={() => { setPhotoMenu(false); camRef.current?.click(); }}>
               <Camera size={18} /> Tirar foto
             </button>
@@ -152,6 +155,8 @@ export function PerfilView({
           </div>
         </div>
       ) : null}
+
+      {lightbox ? <Lightbox src={lightbox} onClose={() => setLightbox(null)} /> : null}
     </>
   );
 }

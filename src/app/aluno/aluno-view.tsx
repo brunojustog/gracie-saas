@@ -16,9 +16,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { beltStyle } from "@/lib/belts";
 import type { AlunoSession, WeekDay } from "@/server/class-sessions";
 
 import { uploadMyPhoto } from "./actions";
+import { Lightbox } from "./lightbox";
 
 type TimelineItem = {
   id: string;
@@ -35,12 +37,6 @@ const KIND_COLOR: Record<TimelineItem["kind"], string> = {
 };
 type WeekDayStrip = {
   iso: string; dow: string; num: string; trained: boolean; isToday: boolean; isSelected: boolean;
-};
-
-const BELT_BG: Record<string, string> = {
-  branca: "var(--f-branca)", cinza: "var(--f-cinza)", amarela: "var(--f-amarela)",
-  laranja: "var(--f-laranja)", verde: "var(--f-verde)", azul: "var(--f-azul)",
-  roxa: "var(--f-roxa)", marrom: "var(--f-marrom)", preta: "var(--f-preta)",
 };
 
 export function AlunoView({
@@ -70,6 +66,7 @@ export function AlunoView({
   const camRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [photoMenu, setPhotoMenu] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   const onPhotoPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,8 +92,7 @@ export function AlunoView({
   const changeDate = (v: string) => router.push(`/aluno?date=${v}`);
   const soon = () => toast.info("Em breve 🥋");
 
-  const beltKey = belt ? belt.toLowerCase() : null;
-  const beltColor = beltKey ? BELT_BG[beltKey] ?? "var(--f-cinza)" : "var(--f-cinza)";
+  const beltBg = beltStyle(belt).background;
   const initials = alunoName.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
 
   return (
@@ -145,7 +141,7 @@ export function AlunoView({
               <div className="name">{alunoName}</div>
               <div className="mat">{matricula ? `Matrícula ${matricula}` : "Aluno"}</div>
               <div className="gb-belt">
-                <span className="bar" style={{ background: beltColor }} />
+                <span className="bar" style={{ background: beltBg }} />
                 <span className="lbl">
                   {belt ? `FAIXA ${belt.toUpperCase()}` : "SEM FAIXA"}
                   <small>{beltDegree ? `${beltDegree}º grau` : "—"}</small>
@@ -200,7 +196,7 @@ export function AlunoView({
           ) : (
             timeline.map((t) => {
               const swatch = t.kind === "GRADUACAO" && t.belt
-                ? BELT_BG[t.belt.toLowerCase()] ?? "var(--f-cinza)"
+                ? beltStyle(t.belt).background
                 : KIND_COLOR[t.kind];
               return (
                 <div key={t.id} className="gb-tl">
@@ -215,10 +211,16 @@ export function AlunoView({
                   {t.photos.length > 0 ? (
                     <div style={{ display: "flex", gap: 4 }}>
                       {t.photos.slice(0, 3).map((src, i) => (
-                        <a key={i} href={src} target="_blank" rel="noopener noreferrer">
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setLightbox(src)}
+                          style={{ padding: 0, border: 0, background: "none", cursor: "pointer" }}
+                          aria-label="Ver foto"
+                        >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={src} alt="" />
-                        </a>
+                        </button>
                       ))}
                     </div>
                   ) : null}
@@ -239,7 +241,7 @@ export function AlunoView({
       <nav className="gb-nav">
         <div className="inner">
           <a className="on" href="/aluno"><span className="cico"><Home size={19} /></span>Início</a>
-          <Link href={`/aluno/checkin?date=${dateISO}`} style={btnReset as React.CSSProperties}><span className="cico"><CalendarDays size={19} /></span>Treinos</Link>
+          <Link href="/aluno/grade" style={btnReset as React.CSSProperties}><span className="cico"><CalendarDays size={19} /></span>Grade</Link>
           <Link href={`/aluno/checkin?date=${dateISO}`} style={btnReset as React.CSSProperties}><span className="cico"><MapPin size={19} /></span>Check-in</Link>
           <Link href="/aluno/financeiro" style={btnReset as React.CSSProperties}><span className="cico"><Wallet size={19} /></span>Financeiro</Link>
           <Link href="/aluno/perfil" style={btnReset as React.CSSProperties}><span className="cico"><User size={19} /></span>Perfil</Link>
@@ -251,6 +253,11 @@ export function AlunoView({
         <div className="gb-sheet-backdrop" onClick={() => setPhotoMenu(false)}>
           <div className="gb-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="gb-sheet-title">Foto de perfil</div>
+            {hasPhoto ? (
+              <button className="gb-sheet-item" onClick={() => { setPhotoMenu(false); setLightbox(`/api/aluno/${alunoId}/avatar`); }}>
+                <ImageIcon size={18} /> Ver foto
+              </button>
+            ) : null}
             <button className="gb-sheet-item" onClick={() => { setPhotoMenu(false); camRef.current?.click(); }}>
               <Camera size={18} /> Tirar foto
             </button>
@@ -261,6 +268,8 @@ export function AlunoView({
           </div>
         </div>
       ) : null}
+
+      {lightbox ? <Lightbox src={lightbox} onClose={() => setLightbox(null)} /> : null}
     </>
   );
 }

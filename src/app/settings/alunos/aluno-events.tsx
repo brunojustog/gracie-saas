@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, Loader2, Trash2 } from "lucide-react";
+import { CalendarPlus, Loader2, Trash2, X } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -38,6 +38,7 @@ export function AlunoEvents({
 }) {
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({ ...emptyForm });
+  const [preview, setPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const submit = () => {
@@ -118,10 +119,16 @@ export function AlunoEvents({
               {ev.photoIds.length > 0 ? (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {ev.photoIds.map((pid) => (
-                    <a key={pid} href={`/api/aluno/event-photo/${pid}`} target="_blank" rel="noopener noreferrer">
+                    <button
+                      key={pid}
+                      type="button"
+                      onClick={() => setPreview(`/api/aluno/event-photo/${pid}`)}
+                      className="rounded ring-offset-2 focus:outline-none focus-visible:ring-2"
+                      aria-label="Ver foto"
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/api/aluno/event-photo/${pid}`} alt="" className="h-12 w-12 rounded object-cover" />
-                    </a>
+                      <img src={`/api/aluno/event-photo/${pid}`} alt="" className="h-12 w-12 cursor-pointer rounded object-cover" />
+                    </button>
                   ))}
                 </div>
               ) : null}
@@ -136,6 +143,31 @@ export function AlunoEvents({
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" /> processando…
         </p>
+      ) : null}
+
+      {preview ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-5"
+          onClick={() => setPreview(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={() => setPreview(null)}
+            className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25"
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={preview}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[88vh] max-w-full rounded-lg object-contain"
+          />
+        </div>
       ) : null}
     </div>
   );

@@ -7,14 +7,12 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ALL_BELTS } from "@/lib/belts";
 import type { GradListRow } from "@/server/graduations";
 
 import { graduateAluno } from "../graduar-actions";
 
-const BELTS = [
-  "Branca", "Cinza", "Amarela", "Laranja", "Verde",
-  "Azul", "Roxa", "Marrom", "Preta",
-];
+const BELTS = ALL_BELTS;
 
 function beltLabel(belt: string | null, grau: number | null) {
   if (!belt) return "sem faixa";
@@ -159,7 +157,6 @@ export function GraduarView({ rows }: { rows: GradListRow[] }) {
                     ref={fileRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     disabled={pending}
                     className="h-9 cursor-pointer"
                   />

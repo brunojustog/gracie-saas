@@ -11,7 +11,14 @@ import { prisma } from "@/lib/prisma";
 export const AULAS_POR_GRADUACAO = 40;
 
 const ADULT = ["Branca", "Azul", "Roxa", "Marrom", "Preta"];
-const KIDS = ["Branca", "Cinza", "Amarela", "Laranja", "Verde"];
+// GBK (kids): sequência completa com as faixas intermediárias bicolores.
+const KIDS = [
+  "Branca",
+  "Cinza e Branca", "Cinza", "Cinza e Preta",
+  "Amarela e Branca", "Amarela", "Amarela e Preta",
+  "Laranja e Branca", "Laranja", "Laranja e Preta",
+  "Verde e Branca", "Verde", "Verde e Preta",
+];
 
 function maxGrau(belt: string): number {
   return belt.trim().toLowerCase() === "preta" ? 6 : 4;

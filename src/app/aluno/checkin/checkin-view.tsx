@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronLeft, Dumbbell, Loader2, MapPin, X } from "lucide-react";
+import { Check, ChevronLeft, Dumbbell, Loader2, Lock, MapPin, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import type { AlunoSession } from "@/server/class-sessions";
 
 import { checkInToSession, undoCheckIn } from "../actions";
+
+type GradeSession = AlunoSession & { canCheckin: boolean; nivel: string };
 
 function getPosition(): Promise<{ lat: number; lng: number } | null> {
   return new Promise((resolve) => {
@@ -28,15 +30,15 @@ export function CheckinView({
   firstName,
 }: {
   dateLabel: string;
-  day: AlunoSession[];
+  day: GradeSession[];
   hasGeofence: boolean;
   firstName: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [done, setDone] = useState<AlunoSession | null>(null);
+  const [done, setDone] = useState<GradeSession | null>(null);
 
-  const doCheckin = (s: AlunoSession) =>
+  const doCheckin = (s: GradeSession) =>
     startTransition(async () => {
       const coords = hasGeofence ? await getPosition() : null;
       const r = await checkInToSession({ sessionId: s.id, lat: coords?.lat, lng: coords?.lng });
@@ -95,16 +97,16 @@ export function CheckinView({
       </div>
 
       {day.length === 0 ? (
-        <div className="gb-empty">Nenhuma aula pra você neste dia.</div>
+        <div className="gb-empty">Nenhuma aula neste dia.</div>
       ) : (
         day.map((s) => {
           const confirmed = s.myCheckin?.present ?? false;
           const doneCheck = s.myCheckin !== null;
           return (
-            <div key={s.id} className={`gb-class${doneCheck ? " done" : ""}`}>
+            <div key={s.id} className={`gb-class${doneCheck ? " done" : ""}${!s.canCheckin && !doneCheck ? " locked" : ""}`}>
               <div className="ico"><Dumbbell size={18} color="var(--red)" /></div>
               <div className="mid">
-                <div className="time">{s.startTime}</div>
+                <div className="time">{s.startTime} · {s.nivel}</div>
                 <div className="ttl">
                   <span className="prog">{s.label}</span>
                   {s.isKids ? <span className="gb-tag kids">Kids</span> : null}
@@ -117,10 +119,12 @@ export function CheckinView({
                 <button className="gb-btn ghost" disabled={pending} onClick={() => doUndo(s.id)}>
                   <X size={14} /> cancelar
                 </button>
-              ) : (
+              ) : s.canCheckin ? (
                 <button className="gb-btn primary" disabled={pending} onClick={() => doCheckin(s)}>
                   <MapPin size={14} /> Check-in
                 </button>
+              ) : (
+                <span className="gb-lock" title="Aula de outra faixa/idade"><Lock size={13} /> outra faixa</span>
               )}
             </div>
           );
