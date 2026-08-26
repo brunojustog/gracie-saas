@@ -19,9 +19,9 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    // Splash na cor da marca (azul GB) em vez de branco — pedido do Anderson
-    // (25/08): a tela de carregamento aparecia branca com o logo no meio.
-    background_color: "#11286D",
+    // Splash nativo no cinza da arte de boas-vindas (v1.2-Z) pra emendar sem
+    // corte com a imagem que o overlay mostra logo em seguida.
+    background_color: "#D9D9D9",
     theme_color: theme,
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
