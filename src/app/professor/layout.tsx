@@ -4,6 +4,8 @@
  * componentes shadcn (Button, cards, inputs) virarem escuros + vermelho GB,
  * sem reescrever as telas. A gestão/admin segue no tema claro.
  */
+import { AppSplash } from "@/components/app-splash";
+
 export default function ProfessorLayout({
   children,
 }: {
@@ -11,6 +13,7 @@ export default function ProfessorLayout({
 }) {
   return (
     <div className="dark min-h-screen bg-background text-foreground">
+      <AppSplash />
       {children}
     </div>
   );

@@ -1,5 +1,7 @@
 import { Barlow, Barlow_Semi_Condensed } from "next/font/google";
 
+import { AppSplash } from "@/components/app-splash";
+
 import "./aluno.css";
 
 /**
@@ -28,6 +30,7 @@ export default function AlunoLayout({
 }) {
   return (
     <div className={`gb-aluno ${body.variable} ${display.variable}`}>
+      <AppSplash />
       {children}
     </div>
   );
