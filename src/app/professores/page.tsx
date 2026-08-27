@@ -136,6 +136,15 @@ export default async function ProfessoresFechamentoPage({
   };
   const professorHref = (pid: string) => `/professores?${withPeriod(pid)}`;
   const relatorioHref = (pid: string) => `/professores/relatorio?${withPeriod(pid)}`;
+  // Relatório geral (todos os professores) preservando só o período.
+  const relatorioTodosHref = (() => {
+    const q = new URLSearchParams();
+    if (sp.period) q.set("period", sp.period);
+    if (sp.from) q.set("from", sp.from);
+    if (sp.to) q.set("to", sp.to);
+    q.set("todos", "1");
+    return `/professores/relatorio?${q.toString()}`;
+  })();
 
   const conversions = [...conversionMap.entries()]
     .filter(([pid]) => !professorId || pid === professorId)
@@ -183,6 +192,12 @@ export default async function ProfessoresFechamentoPage({
             </Link>
             <ProfessorFilter professors={professors} current={professorId ?? null} />
             <ExpPeriodFilter current={selector} from={sp.from} to={sp.to} />
+            <Link
+              href={relatorioTodosHref}
+              className="inline-flex h-9 items-center gap-1 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Relatório de todos
+            </Link>
           </div>
         </div>
 

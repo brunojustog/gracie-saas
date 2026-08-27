@@ -604,16 +604,22 @@ export async function getProfessorReport(
     days.set(iso, (days.get(iso) ?? 0) + 1);
   };
 
-  // Titulares agrupadas por categoria (regular / GBK / juniores).
-  let reg = { c: 0, v: 0 };
-  let gbk = { c: 0, v: 0 };
-  let juv = { c: 0, v: 0 };
+  // Titulares agrupadas por categoria (regular / GBK / juniores) e por
+  // modalidade/label (pro gráfico de pizza, igual ao da lista de professores).
+  const reg = { c: 0, v: 0 };
+  const gbk = { c: 0, v: 0 };
+  const juv = { c: 0, v: 0 };
+  const modMap = new Map<string, { count: number; valor: number }>();
   for (const t of titular) {
     const v = Number(t.value);
     const cat = classCategory(t.label);
     if (cat === "GBK_PC") { gbk.c++; gbk.v += v; }
     else if (cat === "GBK_JUV") { juv.c++; juv.v += v; }
     else { reg.c++; reg.v += v; }
+    const cur = modMap.get(t.label) ?? { count: 0, valor: 0 };
+    cur.count++;
+    cur.valor += v;
+    modMap.set(t.label, cur);
     addDay(t.date);
   }
   for (const a of aux) addDay(a.date);
@@ -647,8 +653,19 @@ export async function getProfessorReport(
     .map(([dateISO, count]) => ({ dateISO, count }))
     .sort((a, b) => a.dateISO.localeCompare(b.dateISO));
 
+  // Pizza por modalidade (mesma lógica dos cartões de /professores).
+  const byModality = [...modMap.entries()]
+    .map(([label, v]) => ({ label, ...v }))
+    .sort((a, b) => b.count - a.count);
+  if (aux.length > 0) byModality.push({ label: "Auxílio", count: aux.length, valor: auxValor });
+  if (particularItems.length > 0)
+    byModality.push({ label: "Particular", count: particularItems.length, valor: particularValor });
+  if (conversion.count > 0)
+    byModality.push({ label: "Experimentais convertidas", count: conversion.count, valor: conversion.valor });
+
   return {
     categories: categories.filter((c) => c.count > 0),
+    byModality,
     particulars: particularItems.sort((a, b) => a.dateISO.localeCompare(b.dateISO)),
     days: dayList,
     total,
