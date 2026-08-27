@@ -15,6 +15,7 @@ import {
 } from "@/server/professor-classes";
 import { requireRole } from "@/server/tenant";
 
+import { Pie, PIE_COLORS } from "../pie";
 import { PrintButton } from "./print-button";
 import { ReportBlock } from "./report-block";
 
@@ -110,6 +111,33 @@ export default async function ProfessorReportPage({
               {brl(totalGeral)}
             </span>
           </div>
+          {/* v1.2-AC: pizza combinada — todos os professores juntos (fatia por
+              professor, tamanho = nº de aulas). Pedido do Anderson. */}
+          {withActivity.length > 0 ? (
+            <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-primary/20 pt-3">
+              <Pie
+                slices={withActivity.map((b) => ({ label: b.name, value: b.report.totalAulas }))}
+                size={128}
+              />
+              <ul className="min-w-0 flex-1 space-y-0.5 text-sm">
+                {withActivity.map((b, i) => (
+                  <li key={b.name} className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+                      />
+                      <span className="truncate">{b.name}</span>
+                      <span className="text-xs text-muted-foreground">{b.report.totalAulas} aulas</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {brl(b.report.total)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
 
         {withActivity.length === 0 ? (
