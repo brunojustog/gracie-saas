@@ -11,6 +11,7 @@
 import { endOfDay, format, startOfDay } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
+import { classCategory } from "@/server/class-eligibility";
 import { professorShareForSession } from "@/server/quadro";
 
 /** Valor pago ao professor AUXILIAR de uma aula KIDS. */
@@ -542,4 +543,115 @@ export async function getTaughtClassesForAdmin(
     auxProfessorId: r.auxProfessor?.id ?? null,
     auxProfessorName: r.auxProfessor?.name ?? null,
   }));
+}
+
+/**
+ * v1.2-AA: relatório de aulas de UM professor no período — categorias
+ * agrupadas (regulares / GBK / juniores / particulares + auxílio +
+ * experimentais convertidas), nomes das particulares, dias em que deu aula e
+ * total a pagar. Pro Anderson gerar e imprimir o acerto de cada professor.
+ */
+export type ReportCategory = {
+  key: string;
+  label: string;
+  count: number;
+  valor: number;
+};
+export type ReportParticular = { nome: string; dateISO: string; valor: number };
+export type ReportDay = { dateISO: string; count: number };
+
+export async function getProfessorReport(
+  tenantId: string,
+  professorId: string,
+  from: Date,
+  to: Date,
+) {
+  const [titular, aux, particulares, conversion] = await Promise.all([
+    prisma.taughtClass.findMany({
+      where: { tenantId, professorId, status: "CONFIRMED", date: { gte: from, lte: to } },
+      select: { date: true, label: true, value: true },
+    }),
+    prisma.taughtClass.findMany({
+      where: { tenantId, auxProfessorId: professorId, status: "CONFIRMED", date: { gte: from, lte: to } },
+      select: { date: true },
+    }),
+    prisma.privateSession.findMany({
+      where: {
+        professorId,
+        completedAt: { gte: from, lte: to },
+        package: { tenantId, lead: { deletedAt: null } },
+      },
+      select: {
+        completedAt: true,
+        package: {
+          select: {
+            value: true,
+            totalClasses: true,
+            paymentMethod: true,
+            lead: { select: { name: true } },
+          },
+        },
+      },
+    }),
+    getConversionMap(tenantId, from, to).then(
+      (m) => m.get(professorId) ?? { count: 0, valor: 0 },
+    ),
+  ]);
+
+  const days = new Map<string, number>();
+  const addDay = (d: Date) => {
+    const iso = format(d, "yyyy-MM-dd");
+    days.set(iso, (days.get(iso) ?? 0) + 1);
+  };
+
+  // Titulares agrupadas por categoria (regular / GBK / juniores).
+  let reg = { c: 0, v: 0 };
+  let gbk = { c: 0, v: 0 };
+  let juv = { c: 0, v: 0 };
+  for (const t of titular) {
+    const v = Number(t.value);
+    const cat = classCategory(t.label);
+    if (cat === "GBK_PC") { gbk.c++; gbk.v += v; }
+    else if (cat === "GBK_JUV") { juv.c++; juv.v += v; }
+    else { reg.c++; reg.v += v; }
+    addDay(t.date);
+  }
+  for (const a of aux) addDay(a.date);
+
+  const particularItems: ReportParticular[] = particulares.map((p) => {
+    if (p.completedAt) addDay(p.completedAt);
+    return {
+      nome: p.package.lead.name,
+      dateISO: p.completedAt ? format(p.completedAt, "yyyy-MM-dd") : "",
+      valor: professorShareForSession(p.package),
+    };
+  });
+  const particularValor = particularItems.reduce((s, i) => s + i.valor, 0);
+  const auxValor = aux.length * AUX_VALUE;
+
+  const categories: ReportCategory[] = [
+    { key: "REGULARES", label: "Aulas regulares", count: reg.c, valor: reg.v },
+    { key: "GBK", label: "GBK (kids)", count: gbk.c, valor: gbk.v },
+    { key: "JUNIORES", label: "Juniores", count: juv.c, valor: juv.v },
+    { key: "PARTICULARES", label: "Particulares", count: particularItems.length, valor: particularValor },
+  ];
+  if (aux.length > 0)
+    categories.push({ key: "AUXILIO", label: "Auxílio (kids)", count: aux.length, valor: auxValor });
+  if (conversion.count > 0)
+    categories.push({ key: "EXPERIMENTAIS", label: "Experimentais convertidas", count: conversion.count, valor: conversion.valor });
+
+  const total = reg.v + gbk.v + juv.v + particularValor + auxValor + conversion.valor;
+  const totalAulas = titular.length + aux.length + particularItems.length;
+
+  const dayList: ReportDay[] = [...days.entries()]
+    .map(([dateISO, count]) => ({ dateISO, count }))
+    .sort((a, b) => a.dateISO.localeCompare(b.dateISO));
+
+  return {
+    categories: categories.filter((c) => c.count > 0),
+    particulars: particularItems.sort((a, b) => a.dateISO.localeCompare(b.dateISO)),
+    days: dayList,
+    total,
+    totalAulas,
+  };
 }

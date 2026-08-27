@@ -126,14 +126,16 @@ export default async function ProfessoresFechamentoPage({
   const payoutTotal = payouts.reduce((s, p) => s + p.total, 0);
 
   // Link do card do professor preservando o período atual.
-  const professorHref = (pid: string) => {
+  const withPeriod = (pid: string) => {
     const q = new URLSearchParams();
     if (sp.period) q.set("period", sp.period);
     if (sp.from) q.set("from", sp.from);
     if (sp.to) q.set("to", sp.to);
     q.set("professor", pid);
-    return `/professores?${q.toString()}`;
+    return q.toString();
   };
+  const professorHref = (pid: string) => `/professores?${withPeriod(pid)}`;
+  const relatorioHref = (pid: string) => `/professores/relatorio?${withPeriod(pid)}`;
 
   const conversions = [...conversionMap.entries()]
     .filter(([pid]) => !professorId || pid === professorId)
@@ -242,14 +244,22 @@ export default async function ProfessoresFechamentoPage({
         {/* v1.1-CI: calendário do professor selecionado (aulas dadas por dia). */}
         {professorId && calendar ? (
           <section className="rounded-xl border bg-card p-4">
-            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">
                 Calendário de aulas ·{" "}
                 {professors.find((p) => p.id === professorId)?.name ?? "professor"}
               </h2>
-              <span className="text-xs text-muted-foreground">
-                {calendar.totalCount} aula{calendar.totalCount === 1 ? "" : "s"} no período
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {calendar.totalCount} aula{calendar.totalCount === 1 ? "" : "s"} no período
+                </span>
+                <Link
+                  href={relatorioHref(professorId)}
+                  className="inline-flex h-8 items-center gap-1 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
+                >
+                  Gerar relatório
+                </Link>
+              </div>
             </div>
             {calendar.totalCount === 0 ? (
               <p className="text-xs text-muted-foreground">
