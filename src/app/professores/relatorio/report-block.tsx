@@ -41,7 +41,7 @@ export function ReportBlock({
       ) : null}
 
       {/* Total + pizza */}
-      <section className="break-inside-avoid rounded-xl border bg-card p-4">
+      <section className="rounded-xl border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium text-muted-foreground">
@@ -75,7 +75,7 @@ export function ReportBlock({
       </section>
 
       {/* Aulas por tipo */}
-      <section className="break-inside-avoid">
+      <section>
         <h3 className="mb-2 text-sm font-semibold">Aulas por tipo</h3>
         {report.categories.length === 0 ? (
           <p className="rounded-lg border bg-card p-4 text-center text-sm text-muted-foreground">

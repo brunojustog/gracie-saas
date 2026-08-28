@@ -90,6 +90,20 @@ export default async function ProfessorReportPage({
     const withActivity = blocks.filter((b) => b.report.totalAulas > 0);
     const totalGeral = withActivity.reduce((s, b) => s + b.report.total, 0);
 
+    // Pizza combinada: cada professor separado em Regulares × Particulares
+    // (regulares = todas as aulas em grupo; particulares = aulas privadas).
+    const combined = withActivity.map((b) => {
+      const particulares = b.report.particulars.length;
+      const regulares = b.report.totalAulas - particulares;
+      return { name: b.name, regulares, particulares, valor: b.report.total };
+    });
+    const combinedSlices = combined.flatMap((c) => {
+      const out: { label: string; value: number }[] = [];
+      if (c.regulares > 0) out.push({ label: `${c.name} · Regulares`, value: c.regulares });
+      if (c.particulares > 0) out.push({ label: `${c.name} · Particulares`, value: c.particulares });
+      return out;
+    });
+
     return (
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-6 print:max-w-none print:px-0 print:py-0">
         {ActionBar}
@@ -111,27 +125,23 @@ export default async function ProfessorReportPage({
               {brl(totalGeral)}
             </span>
           </div>
-          {/* v1.2-AC: pizza combinada — todos os professores juntos (fatia por
-              professor, tamanho = nº de aulas). Pedido do Anderson. */}
-          {withActivity.length > 0 ? (
+          {/* v1.2-AE: pizza combinada — cada professor separado em Regulares ×
+              Particulares (pedido do Anderson). */}
+          {combinedSlices.length > 0 ? (
             <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-primary/20 pt-3">
-              <Pie
-                slices={withActivity.map((b) => ({ label: b.name, value: b.report.totalAulas }))}
-                size={128}
-              />
+              <Pie slices={combinedSlices} size={128} />
               <ul className="min-w-0 flex-1 space-y-0.5 text-sm">
-                {withActivity.map((b, i) => (
-                  <li key={b.name} className="flex items-center justify-between gap-2">
+                {combinedSlices.map((s, i) => (
+                  <li key={s.label} className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full"
                         style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
                       />
-                      <span className="truncate">{b.name}</span>
-                      <span className="text-xs text-muted-foreground">{b.report.totalAulas} aulas</span>
+                      <span className="truncate">{s.label}</span>
                     </span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {brl(b.report.total)}
+                      {s.value} aula{s.value === 1 ? "" : "s"}
                     </span>
                   </li>
                 ))}
