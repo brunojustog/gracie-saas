@@ -191,7 +191,7 @@ export default async function ProfessoresFechamentoPage({
               Minhas aulas
             </Link>
             <ProfessorFilter professors={professors} current={professorId ?? null} />
-            <ExpPeriodFilter current={selector} from={sp.from} to={sp.to} />
+            <ExpPeriodFilter current={selector} from={sp.from} to={sp.to} basePath="/professores" />
             <Link
               href={relatorioTodosHref}
               className="inline-flex h-9 items-center gap-1 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"

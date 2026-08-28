@@ -31,10 +31,13 @@ export function ExpPeriodFilter({
   current,
   from,
   to,
+  basePath = "/quadro",
 }: {
   current: PeriodPreset | "custom";
   from?: string;
   to?: string;
+  /** Rota de destino do filtro. Default /quadro; /professores passa a sua. */
+  basePath?: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -54,7 +57,7 @@ export function ExpPeriodFilter({
     if (value === "this_month") next.delete("period");
     else next.set("period", value);
     setShowCustom(false);
-    startTransition(() => router.replace(`/quadro?${next.toString()}`));
+    startTransition(() => router.replace(`${basePath}?${next.toString()}`));
   };
 
   const applyCustom = () => {
@@ -63,7 +66,7 @@ export function ExpPeriodFilter({
     next.delete("period");
     next.set("from", fromInput);
     next.set("to", toInput);
-    startTransition(() => router.replace(`/quadro?${next.toString()}`));
+    startTransition(() => router.replace(`${basePath}?${next.toString()}`));
   };
 
   return (

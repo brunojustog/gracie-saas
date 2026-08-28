@@ -35,13 +35,13 @@ export function ReportBlock({
   showName?: boolean;
 }) {
   return (
-    <div className="space-y-5 break-inside-avoid">
+    <div className="space-y-5">
       {showName ? (
         <h2 className="border-b pb-1 text-lg font-bold">{professorName}</h2>
       ) : null}
 
       {/* Total + pizza */}
-      <section className="rounded-xl border bg-card p-4">
+      <section className="break-inside-avoid rounded-xl border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium text-muted-foreground">
@@ -75,7 +75,7 @@ export function ReportBlock({
       </section>
 
       {/* Aulas por tipo */}
-      <section>
+      <section className="break-inside-avoid">
         <h3 className="mb-2 text-sm font-semibold">Aulas por tipo</h3>
         {report.categories.length === 0 ? (
           <p className="rounded-lg border bg-card p-4 text-center text-sm text-muted-foreground">
@@ -151,7 +151,7 @@ export function ReportBlock({
       </section>
 
       {/* Calendário das aulas */}
-      <section className="rounded-xl border bg-card p-4">
+      <section className="break-inside-avoid rounded-xl border bg-card p-4">
         <h3 className="mb-2 text-sm font-semibold">
           Calendário das aulas ({calendar.totalCount})
         </h3>
