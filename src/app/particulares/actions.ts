@@ -64,6 +64,12 @@ export async function getPrivateFormOptions() {
 // Criar pacote — marca o lead com a tag "Particular". NÃO cria matrícula.
 // ──────────────────────────────────────────────────────────────────────────
 
+const recurringFields = {
+  recurring: z.boolean().optional(),
+  recurringDay: z.number().int().min(1).max(31).nullable().optional(),
+  recurringClasses: z.number().int().min(1).max(500).nullable().optional(),
+};
+
 const createSchema = z.object({
   leadId: z.string().min(1),
   modalityId: z.string().min(1).nullable().optional(),
@@ -74,6 +80,7 @@ const createSchema = z.object({
   endDate: z.string().date().nullable().optional(),
   soldById: z.string().min(1).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  ...recurringFields,
 });
 
 export async function createPrivatePackage(input: unknown): Promise<Result> {
@@ -104,6 +111,9 @@ export async function createPrivatePackage(input: unknown): Promise<Result> {
         startDate: parseLocalDate(parsed.data.startDate)!,
         endDate: parseLocalDate(parsed.data.endDate),
         soldById: parsed.data.soldById ?? null,
+        recurring: parsed.data.recurring ?? false,
+        recurringDay: parsed.data.recurring ? parsed.data.recurringDay ?? null : null,
+        recurringClasses: parsed.data.recurring ? parsed.data.recurringClasses ?? null : null,
       },
     });
 
@@ -176,6 +186,7 @@ const updateSchema = z.object({
   endDate: z.string().date().nullable().optional(),
   soldById: z.string().min(1).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  ...recurringFields,
 });
 
 export async function updatePrivatePackage(input: unknown): Promise<Result> {
@@ -201,6 +212,9 @@ export async function updatePrivatePackage(input: unknown): Promise<Result> {
       endDate: parseLocalDate(parsed.data.endDate),
       soldById: parsed.data.soldById ?? null,
       notes: parsed.data.notes ?? null,
+      recurring: parsed.data.recurring ?? false,
+      recurringDay: parsed.data.recurring ? parsed.data.recurringDay ?? null : null,
+      recurringClasses: parsed.data.recurring ? parsed.data.recurringClasses ?? null : null,
       status,
     },
   });

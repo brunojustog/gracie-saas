@@ -113,6 +113,16 @@ export function PackagesTable({
       endDate: r.endDate ? toISODate(r.endDate) : null,
       soldById: r.soldById,
       notes: r.notes,
+      recurring: r.recurring,
+      recurringDay: r.recurringDay,
+      recurringClasses: r.recurringClasses,
+      renewals: r.renewals.map((rn) => ({
+        id: rn.id,
+        paidAt: rn.paidAt,
+        classesAdded: rn.classesAdded,
+        value: rn.value != null ? Number(rn.value) : null,
+        note: rn.note,
+      })),
     });
 
   return (
@@ -209,16 +219,6 @@ export function PackagesTable({
                             id: r.id,
                             leadName: r.lead.name,
                             totalClasses: r.totalClasses,
-                            recurring: r.recurring,
-                            recurringDay: r.recurringDay,
-                            recurringClasses: r.recurringClasses,
-                            renewals: r.renewals.map((rn) => ({
-                              id: rn.id,
-                              paidAt: rn.paidAt,
-                              classesAdded: rn.classesAdded,
-                              value: rn.value != null ? Number(rn.value) : null,
-                              note: rn.note,
-                            })),
                             sessions: r.sessions.map((s) => ({
                               id: s.id,
                               scheduledDate: s.scheduledDate,
@@ -274,7 +274,6 @@ export function PackagesTable({
       <SessionsModal
         target={sessionsTarget}
         professors={options.professors}
-        hideFinancials={hideFinancials}
         onClose={() => setSessionsTarget(null)}
       />
       <CancelDialog target={cancelTarget} onClose={() => setCancelTarget(null)} />

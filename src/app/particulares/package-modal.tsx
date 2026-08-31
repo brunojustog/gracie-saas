@@ -1,7 +1,9 @@
 "use client";
 
 import type { PaymentMethod } from "@prisma/client";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { format } from "date-fns";
+import { Check, ChevronsUpDown, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -35,7 +37,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import { createPrivatePackage, updatePrivatePackage } from "./actions";
+import {
+  createPrivatePackage,
+  deleteRenewal,
+  registerRenewal,
+  updatePrivatePackage,
+} from "./actions";
 
 export type FormOptions = {
   modalities: Array<{ id: string; name: string }>;
@@ -43,6 +50,14 @@ export type FormOptions = {
   sellers: Array<{ id: string; name: string }>;
   // v1.1-BZ: professores ativos pro select de "quem deu a aula".
   professors: Array<{ id: string; name: string }>;
+};
+
+export type RenewalRow = {
+  id: string;
+  paidAt: Date | string;
+  classesAdded: number;
+  value: number | string | null;
+  note: string | null;
 };
 
 export type EditPackage = {
@@ -56,6 +71,11 @@ export type EditPackage = {
   endDate: string | null;
   soldById: string | null;
   notes: string | null;
+  // v1.2-AG: recorrência (editável aqui, no "Editar pacote").
+  recurring: boolean;
+  recurringDay: number | null;
+  recurringClasses: number | null;
+  renewals: RenewalRow[];
 };
 
 const NONE = "__none__";
@@ -129,6 +149,76 @@ function Body({
   const [soldById, setSoldById] = useState(editing?.soldById ?? NONE);
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  // Recorrência (v1.2-AG).
+  const [recurring, setRecurring] = useState(editing?.recurring ?? false);
+  const [recDay, setRecDay] = useState(editing?.recurringDay ? String(editing.recurringDay) : "");
+  const [recClasses, setRecClasses] = useState(
+    editing?.recurringClasses ? String(editing.recurringClasses) : "",
+  );
+  const [renewals, setRenewals] = useState<RenewalRow[]>(editing?.renewals ?? []);
+  const [localTotal, setLocalTotal] = useState(editing?.totalClasses ?? 0);
+  const [renewDate, setRenewDate] = useState(todayISO());
+  const [renewClasses, setRenewClasses] = useState(
+    editing?.recurringClasses ? String(editing.recurringClasses) : "",
+  );
+  const [renewValue, setRenewValue] = useState("");
+
+  const nextChargeLabel = (day: number): string => {
+    const now = new Date();
+    let y = now.getFullYear();
+    let m = now.getMonth();
+    if (now.getDate() >= day) {
+      m++;
+      if (m > 11) { m = 0; y++; }
+    }
+    return new Date(y, m, Math.min(day, 28)).toLocaleDateString("pt-BR");
+  };
+
+  const doRegisterRenewal = () => {
+    if (!editing) return;
+    const cls = Number(renewClasses);
+    if (!renewDate) return void toast.error("Informe a data do pagamento");
+    if (!cls || cls < 1) return void toast.error("Informe quantas aulas entraram");
+    startTransition(async () => {
+      const r = await registerRenewal({
+        packageId: editing.id,
+        paidAt: renewDate,
+        classesAdded: cls,
+        value: renewValue ? Number(renewValue) : null,
+      });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success(`+${cls} aulas adicionadas ao saldo`);
+      // Reflete na hora, sem reabrir o modal.
+      setRenewals((prev) => [
+        { id: `tmp-${Date.now()}`, paidAt: renewDate, classesAdded: cls, value: renewValue ? Number(renewValue) : null, note: null },
+        ...prev,
+      ]);
+      setLocalTotal((t) => t + cls);
+      setTotalClasses((t) => String(Number(t) + cls));
+      setRenewValue("");
+      router.refresh();
+      onSaved?.();
+    });
+  };
+
+  const removeRenewal = (id: string) => {
+    if (!editing) return;
+    startTransition(async () => {
+      const r = await deleteRenewal({ packageId: editing.id, renewalId: id });
+      if (!r.ok) return void toast.error(r.error);
+      const removed = renewals.find((x) => x.id === id);
+      setRenewals((prev) => prev.filter((x) => x.id !== id));
+      if (removed) {
+        setLocalTotal((t) => Math.max(0, t - removed.classesAdded));
+        setTotalClasses((t) => String(Math.max(1, Number(t) - removed.classesAdded)));
+      }
+      toast.success("Cobrança removida");
+      router.refresh();
+      onSaved?.();
+    });
+  };
 
   const sortedLeads = useMemo(
     () => [...options.leads].sort((a, b) => a.name.localeCompare(b.name)),
@@ -161,6 +251,9 @@ function Body({
       endDate: endDate || null,
       soldById: soldById === NONE ? null : soldById,
       notes: notes.trim() || null,
+      recurring,
+      recurringDay: recurring && recDay ? Number(recDay) : null,
+      recurringClasses: recurring && recClasses ? Number(recClasses) : null,
     };
 
     startTransition(async () => {
@@ -362,6 +455,97 @@ function Body({
             disabled={pending}
           />
         </div>
+
+        {/* Recorrência (v1.2-AG): cobrança do cartão a cada ciclo. */}
+        <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-2.5">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={recurring}
+              onChange={(e) => setRecurring(e.target.checked)}
+              disabled={pending}
+            />
+            <RefreshCw className="h-3.5 w-3.5" /> Pacote recorrente (cartão cobrado por ciclo)
+          </label>
+
+          {recurring ? (
+            <>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="w-24 space-y-1">
+                  <span className="text-[11px] text-muted-foreground">Dia da cobrança</span>
+                  <Input type="number" min={1} max={31} value={recDay} onChange={(e) => setRecDay(e.target.value)} disabled={pending} placeholder="23" />
+                </div>
+                <div className="w-28 space-y-1">
+                  <span className="text-[11px] text-muted-foreground">Aulas por ciclo</span>
+                  <Input type="number" min={1} max={500} value={recClasses} onChange={(e) => setRecClasses(e.target.value)} disabled={pending} placeholder="8" />
+                </div>
+                {recDay ? (
+                  <p className="pb-2 text-[11px] text-muted-foreground">
+                    Próxima: <b>{nextChargeLabel(Number(recDay))}</b>
+                  </p>
+                ) : null}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Salve o pacote pra guardar a configuração da recorrência.
+              </p>
+
+              {editing ? (
+                <>
+                  {/* Registrar cobrança — soma as aulas ao saldo na hora. */}
+                  <div className="space-y-1 rounded-md border bg-background p-2">
+                    <span className="text-[11px] font-medium">
+                      Registrar cobrança <span className="text-muted-foreground">(saldo atual: {localTotal} aulas)</span>
+                    </span>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="flex-1 space-y-1">
+                        <span className="text-[11px] text-muted-foreground">Data do pagamento</span>
+                        <Input type="date" value={renewDate} onChange={(e) => setRenewDate(e.target.value)} disabled={pending} />
+                      </div>
+                      <div className="w-16 space-y-1">
+                        <span className="text-[11px] text-muted-foreground">Aulas</span>
+                        <Input type="number" min={1} value={renewClasses} onChange={(e) => setRenewClasses(e.target.value)} disabled={pending} placeholder="8" />
+                      </div>
+                      {hideFinancials ? null : (
+                        <div className="w-24 space-y-1">
+                          <span className="text-[11px] text-muted-foreground">Valor (opc.)</span>
+                          <Input type="number" min={0} step="0.01" value={renewValue} onChange={(e) => setRenewValue(e.target.value)} disabled={pending} placeholder="R$" />
+                        </div>
+                      )}
+                      <Button type="button" size="sm" onClick={doRegisterRenewal} disabled={pending}>
+                        <Plus className="mr-1 h-4 w-4" /> Registrar
+                      </Button>
+                    </div>
+                  </div>
+
+                  {renewals.length > 0 ? (
+                    <ul className="space-y-1">
+                      {renewals.map((rn) => (
+                        <li key={rn.id} className="flex items-center gap-2 rounded border bg-background px-2 py-1 text-xs">
+                          <span className="tabular-nums">{format(new Date(rn.paidAt), "dd/MM/yyyy")}</span>
+                          <span className="font-medium text-emerald-700 dark:text-emerald-300">+{rn.classesAdded} aulas</span>
+                          {!hideFinancials && rn.value != null ? (
+                            <span className="text-muted-foreground">
+                              {Number(rn.value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                            </span>
+                          ) : null}
+                          <button type="button" onClick={() => removeRenewal(rn.id)} disabled={pending} className="ml-auto text-muted-foreground hover:text-red-600" aria-label="Remover cobrança" title="Remover (desfaz as aulas somadas)">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">Nenhuma cobrança registrada ainda.</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Crie o pacote primeiro; depois registre as cobranças aqui.
+                </p>
+              )}
+            </>
+          ) : null}
+      </div>
       </div>
 
       <DialogFooter>
