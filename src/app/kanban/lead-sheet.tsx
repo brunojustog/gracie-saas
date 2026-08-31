@@ -1638,6 +1638,7 @@ const NOTE_ICON: Record<LeadNoteKind, typeof CheckCheck> = {
   PRIVATE_PACKAGE_CREATED: Ticket,
   PRIVATE_PACKAGE_COMPLETED: CheckCheck,
   PRIVATE_PACKAGE_CANCELED: XCircle,
+  PRIVATE_PACKAGE_RENEWED: Ticket,
 };
 
 const NOTE_TONE: Record<LeadNoteKind, string> = {
@@ -1665,6 +1666,7 @@ const NOTE_TONE: Record<LeadNoteKind, string> = {
   PRIVATE_PACKAGE_CREATED: "text-indigo-600 dark:text-indigo-400",
   PRIVATE_PACKAGE_COMPLETED: "text-emerald-600 dark:text-emerald-400",
   PRIVATE_PACKAGE_CANCELED: "text-red-600 dark:text-red-400",
+  PRIVATE_PACKAGE_RENEWED: "text-emerald-600 dark:text-emerald-400",
 };
 
 function HistoryTab({ leadId }: { leadId: string }) {

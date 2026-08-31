@@ -2,7 +2,7 @@
 
 import type { PaymentMethod, PrivatePackageStatus } from "@prisma/client";
 import { format } from "date-fns";
-import { CalendarDays, PencilLine, XCircle } from "lucide-react";
+import { CalendarDays, PencilLine, RefreshCw, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -43,6 +43,16 @@ type Row = {
   soldById: string | null;
   notes: string | null;
   completedCount: number;
+  recurring: boolean;
+  recurringDay: number | null;
+  recurringClasses: number | null;
+  renewals: {
+    id: string;
+    paidAt: Date | string;
+    classesAdded: number;
+    value: number | string | { toString(): string } | null;
+    note: string | null;
+  }[];
   lead: {
     id: string;
     name: string;
@@ -135,6 +145,14 @@ export function PackagesTable({
                         .filter(Boolean)
                         .join(" · ")}
                     </div>
+                    {r.recurring ? (
+                      <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                        <RefreshCw className="h-2.5 w-2.5" />
+                        recorrente
+                        {r.recurringDay ? ` · dia ${r.recurringDay}` : ""}
+                        {r.renewals[0] ? ` · últ. ${format(new Date(r.renewals[0].paidAt), "dd/MM")}` : ""}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2">
                     {r.modality ? (
@@ -191,6 +209,16 @@ export function PackagesTable({
                             id: r.id,
                             leadName: r.lead.name,
                             totalClasses: r.totalClasses,
+                            recurring: r.recurring,
+                            recurringDay: r.recurringDay,
+                            recurringClasses: r.recurringClasses,
+                            renewals: r.renewals.map((rn) => ({
+                              id: rn.id,
+                              paidAt: rn.paidAt,
+                              classesAdded: rn.classesAdded,
+                              value: rn.value != null ? Number(rn.value) : null,
+                              note: rn.note,
+                            })),
                             sessions: r.sessions.map((s) => ({
                               id: s.id,
                               scheduledDate: s.scheduledDate,
@@ -246,6 +274,7 @@ export function PackagesTable({
       <SessionsModal
         target={sessionsTarget}
         professors={options.professors}
+        hideFinancials={hideFinancials}
         onClose={() => setSessionsTarget(null)}
       />
       <CancelDialog target={cancelTarget} onClose={() => setCancelTarget(null)} />

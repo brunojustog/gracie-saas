@@ -314,6 +314,139 @@ export async function saveSession(
   return { ok: true };
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Recorrência (v1.2-AF): configuração + registro de cobranças/renovações
+// ──────────────────────────────────────────────────────────────────────────
+
+const recurrenceSchema = z.object({
+  packageId: z.string().min(1),
+  recurring: z.boolean(),
+  recurringDay: z.number().int().min(1).max(31).nullable().optional(),
+  recurringClasses: z.number().int().min(1).max(500).nullable().optional(),
+});
+
+export async function setRecurrence(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = recurrenceSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { membership } = await requireTenantUser();
+  const pkg = await findPackageInScope(membership, parsed.data.packageId);
+  if (!pkg) return { ok: false, error: "pacote não encontrado ou sem permissão" };
+
+  await prisma.privatePackage.update({
+    where: { id: pkg.id },
+    data: {
+      recurring: parsed.data.recurring,
+      recurringDay: parsed.data.recurring ? parsed.data.recurringDay ?? null : null,
+      recurringClasses: parsed.data.recurring ? parsed.data.recurringClasses ?? null : null,
+    },
+  });
+  revalidatePath("/particulares");
+  return { ok: true };
+}
+
+const renewalSchema = z.object({
+  packageId: z.string().min(1),
+  paidAt: z.string().date(),
+  classesAdded: z.number().int().min(1).max(500),
+  value: z.number().nonnegative().max(1_000_000).nullable().optional(),
+  note: z.string().max(500).nullable().optional(),
+});
+
+/**
+ * Registra uma cobrança da recorrência: guarda a DATA do pagamento e SOMA as
+ * aulas ao saldo do pacote (aumenta totalClasses). Reabre o pacote se estava
+ * concluído (agora tem aulas novas a fazer).
+ */
+export async function registerRenewal(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = renewalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const pkg = await findPackageInScope(membership, parsed.data.packageId);
+  if (!pkg) return { ok: false, error: "pacote não encontrado ou sem permissão" };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.privatePackageRenewal.create({
+      data: {
+        packageId: pkg.id,
+        paidAt: parseLocalDate(parsed.data.paidAt)!,
+        classesAdded: parsed.data.classesAdded,
+        value: parsed.data.value ?? null,
+        note: parsed.data.note ?? null,
+      },
+    });
+    const current = await tx.privatePackage.findUnique({
+      where: { id: pkg.id },
+      select: { totalClasses: true, status: true },
+    });
+    const newTotal = (current?.totalClasses ?? 0) + parsed.data.classesAdded;
+    const completed = countCompleted(pkg.sessions);
+    await tx.privatePackage.update({
+      where: { id: pkg.id },
+      data: {
+        totalClasses: newTotal,
+        status: deriveStatus(pkg.status, completed, newTotal),
+      },
+    });
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: pkg.leadId,
+        authorId: user.id,
+        kind: "PRIVATE_PACKAGE_RENEWED",
+        body: `Recorrência cobrada: +${parsed.data.classesAdded} aulas (pago em ${parsed.data.paidAt})`,
+        metadata: { packageId: pkg.id, classesAdded: parsed.data.classesAdded },
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/particulares");
+  revalidatePath("/quadro");
+  return { ok: true };
+}
+
+export async function deleteRenewal(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = z
+    .object({ packageId: z.string().min(1), renewalId: z.string().min(1) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { membership } = await requireTenantUser();
+  const pkg = await findPackageInScope(membership, parsed.data.packageId);
+  if (!pkg) return { ok: false, error: "pacote não encontrado ou sem permissão" };
+
+  await prisma.$transaction(async (tx) => {
+    const ren = await tx.privatePackageRenewal.findFirst({
+      where: { id: parsed.data.renewalId, packageId: pkg.id },
+      select: { id: true, classesAdded: true },
+    });
+    if (!ren) return;
+    await tx.privatePackageRenewal.delete({ where: { id: ren.id } });
+    // Desfaz as aulas somadas, sem descer abaixo das já concluídas.
+    const cur = await tx.privatePackage.findUnique({
+      where: { id: pkg.id },
+      select: { totalClasses: true, status: true },
+    });
+    const completed = countCompleted(pkg.sessions);
+    const newTotal = Math.max(completed, 1, (cur?.totalClasses ?? 0) - ren.classesAdded);
+    await tx.privatePackage.update({
+      where: { id: pkg.id },
+      data: { totalClasses: newTotal, status: deriveStatus(pkg.status, completed, newTotal) },
+    });
+  });
+
+  revalidatePath("/particulares");
+  return { ok: true };
+}
+
 export async function deleteSession(
   input: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {

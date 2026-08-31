@@ -553,6 +553,8 @@ enum LeadNoteKind {
   PRIVATE_PACKAGE_CREATED
   PRIVATE_PACKAGE_COMPLETED
   PRIVATE_PACKAGE_CANCELED
+  // v1.2-AF: recorrência cobrada (novas aulas adicionadas ao pacote).
+  PRIVATE_PACKAGE_RENEWED
 }
 
 /**
@@ -811,17 +813,44 @@ model PrivatePackage {
   soldById      String?              // vendedora que fechou (User)
   notes         String?              @db.Text
 
+  // v1.2-AF: recorrência (cartão cobrado a cada ciclo). recurringDay = dia do
+  // mês da cobrança; recurringClasses = aulas que entram por ciclo. As
+  // cobranças ficam em PrivatePackageRenewal (data + aulas somadas ao saldo).
+  recurring        Boolean @default(false)
+  recurringDay     Int?
+  recurringClasses Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lead     Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  modality Modality?        @relation(fields: [modalityId], references: [id])
-  soldBy   User?            @relation("PrivatePackageSeller", fields: [soldById], references: [id])
+  tenant   Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead     Lead                    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  modality Modality?               @relation(fields: [modalityId], references: [id])
+  soldBy   User?                   @relation("PrivatePackageSeller", fields: [soldById], references: [id])
   sessions PrivateSession[]
+  renewals PrivatePackageRenewal[]
 
   @@index([tenantId, status])
   @@index([leadId])
+}
+
+/**
+ * v1.2-AF: cada cobrança da recorrência de um pacote particular. Registra a
+ * DATA do pagamento e quantas aulas entraram — ao registrar, as aulas são
+ * somadas ao totalClasses do pacote (o Anderson sabe quando/quantas adicionar).
+ */
+model PrivatePackageRenewal {
+  id           String   @id @default(cuid())
+  packageId    String
+  paidAt       DateTime @db.Date
+  classesAdded Int
+  value        Decimal? @db.Decimal(10, 2)
+  note         String?
+  createdAt    DateTime @default(now())
+
+  package PrivatePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@index([packageId, paidAt])
 }
 
 /**

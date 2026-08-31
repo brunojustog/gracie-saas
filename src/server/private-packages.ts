@@ -93,6 +93,13 @@ export async function getPrivatePackagesForList(
       endDate: true,
       soldById: true,
       notes: true,
+      recurring: true,
+      recurringDay: true,
+      recurringClasses: true,
+      renewals: {
+        select: { id: true, paidAt: true, classesAdded: true, value: true, note: true },
+        orderBy: { paidAt: "desc" },
+      },
       lead: {
         select: {
           id: true,
@@ -125,6 +132,7 @@ export async function getPrivatePackagesForList(
     ...r,
     // SELLER não vê valor (mesma política das matrículas).
     value: isSeller ? null : r.value,
+    renewals: r.renewals.map((rn) => ({ ...rn, value: isSeller ? null : rn.value })),
     completedCount: countCompleted(r.sessions),
   }));
 }
