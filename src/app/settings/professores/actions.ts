@@ -41,6 +41,8 @@ const updateSchema = z.object({
   userId: z.string().min(1).nullable().optional(),
   // v1.1-CH: hora-aula (base da bonificação por conversão). Preta 70, marrom 60.
   hourlyRate: z.number().nonnegative().max(100000).optional(),
+  // v1.2-AI: gestor (dono) — fora do total a repassar dos professores.
+  isOwner: z.boolean().optional(),
 });
 
 export async function updateProfessor(input: unknown): Promise<UpdateResult> {
@@ -84,6 +86,7 @@ export async function updateProfessor(input: unknown): Promise<UpdateResult> {
         // undefined = não mexe; null = desvincula; string = vincula.
         ...(userId !== undefined ? { userId } : {}),
         ...(parsed.data.hourlyRate !== undefined ? { hourlyRate: parsed.data.hourlyRate } : {}),
+        ...(parsed.data.isOwner !== undefined ? { isOwner: parsed.data.isOwner } : {}),
       },
     });
     if (inactivating) {

@@ -26,6 +26,7 @@ type Professor = {
   userId: string | null;
   hourlyRate: number;
   activeSlots: number;
+  isOwner: boolean;
 };
 type Member = { userId: string; label: string; email: string };
 
@@ -154,6 +155,7 @@ function ProfessorFormBody({
   const [email, setEmail] = useState(professor?.email ?? "");
   const [userId, setUserId] = useState(professor?.userId ?? NO_LINK);
   const [hourlyRate, setHourlyRate] = useState(String(professor?.hourlyRate ?? 70));
+  const [isOwner, setIsOwner] = useState(professor?.isOwner ?? false);
   const [pending, startTransition] = useTransition();
 
   const handleSave = () => {
@@ -170,6 +172,7 @@ function ProfessorFormBody({
             email: email.trim() || null,
             userId: userId === NO_LINK ? null : userId,
             hourlyRate: Number(hourlyRate.replace(",", ".")) || 0,
+            isOwner,
           })
         : await createProfessor({ name: name.trim() });
       if (!result.ok) {
@@ -258,6 +261,16 @@ function ProfessorFormBody({
                 </p>
               </div>
               <Switch id="prof-active" checked={active} onCheckedChange={setActive} />
+            </div>
+            <div className="flex items-center justify-between rounded border p-3">
+              <div>
+                <Label htmlFor="prof-owner">É o gestor (dono)</Label>
+                <p className="text-xs text-muted-foreground">
+                  As aulas dele NÃO entram no total a repassar dos professores —
+                  aparecem numa seção exclusiva na tela e no relatório.
+                </p>
+              </div>
+              <Switch id="prof-owner" checked={isOwner} onCheckedChange={setIsOwner} />
             </div>
             {professor && professor.active && !active && professor.activeSlots > 0 ? (
               <p className="rounded border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">

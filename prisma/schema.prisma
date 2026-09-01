@@ -894,6 +894,10 @@ model Professor {
   // v1.1-CH: hora-aula do professor (base da bonificação por conversão de
   // experimental). Preta R$70, marrom R$60 (ex.: Angélica). Bônus = 1,5×.
   hourlyRate Decimal @default(70) @db.Decimal(10, 2)
+  // v1.2-AI: gestor (dono). Recebimento é combinado à parte — NÃO entra no
+  // "total geral a repassar" dos professores nem soma junto; aparece numa
+  // seção exclusiva na tela e no relatório.
+  isOwner   Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

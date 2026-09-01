@@ -78,60 +78,49 @@ export default async function ProfessorReportPage({
     const professors = await prisma.professor.findMany({
       where: { tenantId: tenant.id, active: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, isOwner: true },
     });
     const blocks = await Promise.all(
       professors.map(async (p) => ({
         name: p.name,
+        isOwner: p.isOwner,
         report: await getProfessorReport(tenant.id, p.id, period.from, period.to),
         calendar: await getProfessorCalendar(tenant.id, p.id, period.from, period.to),
       })),
     );
     const withActivity = blocks.filter((b) => b.report.totalAulas > 0);
-    const totalGeral = withActivity.reduce((s, b) => s + b.report.total, 0);
+    // v1.2-AI: o gestor (isOwner) fica numa seção à parte, fora do total geral.
+    const profBlocks = withActivity.filter((b) => !b.isOwner);
+    const ownerBlocks = withActivity.filter((b) => b.isOwner);
 
-    // Pizza combinada: cada professor separado em Regulares × Particulares
-    // (regulares = todas as aulas em grupo; particulares = aulas privadas).
-    const combined = withActivity.map((b) => {
-      const particulares = b.report.particulars.length;
-      const regulares = b.report.totalAulas - particulares;
-      return { name: b.name, regulares, particulares, valor: b.report.total };
-    });
-    const combinedSlices = combined.flatMap((c) => {
-      const out: { label: string; value: number }[] = [];
-      if (c.regulares > 0) out.push({ label: `${c.name} · Regulares`, value: c.regulares });
-      if (c.particulares > 0) out.push({ label: `${c.name} · Particulares`, value: c.particulares });
-      return out;
-    });
+    type Block = (typeof withActivity)[number];
+    const totalOf = (bs: Block[]) => bs.reduce((s, b) => s + b.report.total, 0);
+    const combinedSlicesOf = (bs: Block[]) =>
+      bs.flatMap((b) => {
+        const particulares = b.report.particulars.length;
+        const regulares = b.report.totalAulas - particulares;
+        const out: { label: string; value: number }[] = [];
+        if (regulares > 0) out.push({ label: `${b.name} · Regulares`, value: regulares });
+        if (particulares > 0) out.push({ label: `${b.name} · Particulares`, value: particulares });
+        return out;
+      });
 
-    return (
-      <main className="mx-auto max-w-3xl space-y-6 px-4 py-6 print:max-w-none print:px-0 print:py-0">
-        {ActionBar}
-        <header className="border-b pb-3">
-          <h1 className="text-xl font-bold tracking-tight">
-            Relatório geral — todos os professores
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {tenant.name} · {periodLabel}
-          </p>
-        </header>
-
+    // Card resumo (total + pizza Regulares×Particulares) de um grupo.
+    const summaryCard = (bs: Block[], totalLabel: string) => {
+      const slices = combinedSlicesOf(bs);
+      return (
         <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-sm font-medium">
-              Total geral a pagar ({withActivity.length} professor{withActivity.length === 1 ? "" : "es"})
-            </span>
+            <span className="text-sm font-medium">{totalLabel}</span>
             <span className="text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-              {brl(totalGeral)}
+              {brl(totalOf(bs))}
             </span>
           </div>
-          {/* v1.2-AE: pizza combinada — cada professor separado em Regulares ×
-              Particulares (pedido do Anderson). */}
-          {combinedSlices.length > 0 ? (
+          {slices.length > 0 ? (
             <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-primary/20 pt-3">
-              <Pie slices={combinedSlices} size={128} />
+              <Pie slices={slices} size={128} />
               <ul className="min-w-0 flex-1 space-y-0.5 text-sm">
-                {combinedSlices.map((s, i) => (
+                {slices.map((s, i) => (
                   <li key={s.label} className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span
@@ -149,24 +138,62 @@ export default async function ProfessorReportPage({
             </div>
           ) : null}
         </section>
+      );
+    };
+
+    const blockList = (bs: Block[]) =>
+      bs.map((b, i) => (
+        <div key={b.name} className={i > 0 ? "border-t pt-6 print:break-before-page" : ""}>
+          <ReportBlock
+            professorName={b.name}
+            report={b.report}
+            calendar={b.calendar}
+            from={period.from}
+            to={period.to}
+            showName
+          />
+        </div>
+      ));
+
+    return (
+      <main className="mx-auto max-w-3xl space-y-6 px-4 py-6 print:max-w-none print:px-0 print:py-0">
+        {ActionBar}
+        <header className="border-b pb-3">
+          <h1 className="text-xl font-bold tracking-tight">
+            Relatório geral — professores
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {tenant.name} · {periodLabel}
+          </p>
+        </header>
 
         {withActivity.length === 0 ? (
           <p className="rounded-lg border bg-card p-10 text-center text-sm text-muted-foreground">
             Nenhuma aula confirmada no período.
           </p>
         ) : (
-          withActivity.map((b, i) => (
-            <div key={b.name} className={i > 0 ? "border-t pt-6 print:break-before-page" : ""}>
-              <ReportBlock
-                professorName={b.name}
-                report={b.report}
-                calendar={b.calendar}
-                from={period.from}
-                to={period.to}
-                showName
-              />
-            </div>
-          ))
+          <>
+            {/* Professores (sem o gestor) */}
+            {summaryCard(
+              profBlocks,
+              `Total geral a pagar — ${profBlocks.length} professor${profBlocks.length === 1 ? "" : "es"} (sem o gestor)`,
+            )}
+            {blockList(profBlocks)}
+
+            {/* Gestor à parte */}
+            {ownerBlocks.length > 0 ? (
+              <div className="print:break-before-page">
+                <h2 className="mb-3 border-b pb-1 text-lg font-bold">
+                  Gestor · recebimento à parte
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    (não entra no total acima)
+                  </span>
+                </h2>
+                {summaryCard(ownerBlocks, "Total do gestor (Anderson)")}
+                <div className="mt-6">{blockList(ownerBlocks)}</div>
+              </div>
+            ) : null}
+          </>
         )}
       </main>
     );

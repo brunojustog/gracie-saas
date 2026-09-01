@@ -376,7 +376,7 @@ export async function getProfessorClosing(
     prisma.professor.findMany({
       where: { tenantId, ...(professorId ? { id: professorId } : {}) },
       orderBy: [{ active: "desc" }, { name: "asc" }],
-      select: { id: true, name: true, active: true },
+      select: { id: true, name: true, active: true, isOwner: true },
     }),
     getConversionMap(tenantId, from, to),
   ]);
@@ -385,6 +385,7 @@ export async function getProfessorClosing(
       professorId: p.id,
       professorName: p.name,
       active: p.active,
+      isOwner: p.isOwner,
       ...(await getProfessorEarnings(
         tenantId,
         p.id,
@@ -398,8 +399,12 @@ export async function getProfessorClosing(
   const withActivity = rows.filter(
     (r) => r.regularCount + r.auxCount + r.particularCount > 0,
   );
-  const totalGeral = withActivity.reduce((s, r) => s + r.total, 0);
-  return { rows: withActivity, totalGeral };
+  // v1.2-AI: o gestor (isOwner) fica separado e NÃO entra no total a repassar.
+  const ownerRows = withActivity.filter((r) => r.isOwner);
+  const profRows = withActivity.filter((r) => !r.isOwner);
+  const totalGeral = profRows.reduce((s, r) => s + r.total, 0);
+  const ownerTotal = ownerRows.reduce((s, r) => s + r.total, 0);
+  return { rows: profRows, ownerRows, totalGeral, ownerTotal };
 }
 
 /**

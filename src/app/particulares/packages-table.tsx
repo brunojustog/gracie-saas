@@ -2,7 +2,7 @@
 
 import type { PaymentMethod, PrivatePackageStatus } from "@prisma/client";
 import { format } from "date-fns";
-import { CalendarDays, PencilLine, RefreshCw, XCircle } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, PencilLine, RefreshCw, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -146,6 +146,13 @@ export function PackagesTable({
             {rows.map((r) => {
               const value = r.value != null ? Number(r.value) : null;
               const pct = Math.min(100, Math.round((r.completedCount / r.totalClasses) * 100));
+              // v1.2-AJ: ciclos da recorrência. Cada cobrança = um ciclo próprio
+              // (não soma numa barra só). cycles = [ciclo original, +renovações].
+              const sumRenewals = r.renewals.reduce((s, rn) => s + rn.classesAdded, 0);
+              const cycles =
+                r.recurring && r.renewals.length > 0
+                  ? [Math.max(1, r.totalClasses - sumRenewals), ...[...r.renewals].reverse().map((rn) => rn.classesAdded)]
+                  : null;
               return (
                 <tr key={r.id} className="border-b last:border-0">
                   <td className="px-3 py-2">
@@ -179,17 +186,18 @@ export function PackagesTable({
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full bg-emerald-500"
-                          style={{ width: `${pct}%` }}
-                        />
+                    {cycles && cycles.length > 1 ? (
+                      <CycleProgress cycles={cycles} completed={r.completedCount} />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs tabular-nums">
+                          {r.completedCount}/{r.totalClasses}
+                        </span>
                       </div>
-                      <span className="text-xs tabular-nums">
-                        {r.completedCount}/{r.totalClasses}
-                      </span>
-                    </div>
+                    )}
                   </td>
                   {hideFinancials ? null : (
                     <td className="px-3 py-2 text-right font-mono text-xs">
@@ -319,5 +327,60 @@ function CancelDialog({ target, onClose }: { target: Row | null; onClose: () => 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Barra de progresso por CICLO da recorrência (v1.2-AJ). Cada cobrança é um
+ * ciclo próprio (ex.: 5/8 → seta → 0/8), navegável com as setas. Começa no
+ * ciclo atual (o primeiro que ainda não fechou).
+ */
+function CycleProgress({ cycles, completed }: { cycles: number[]; completed: number }) {
+  // Distribui as aulas concluídas nos ciclos, em ordem.
+  const fills: number[] = [];
+  let rem = completed;
+  for (const size of cycles) {
+    const f = Math.max(0, Math.min(rem, size));
+    fills.push(f);
+    rem -= f;
+  }
+  const currentIdx = (() => {
+    for (let i = 0; i < cycles.length; i++) if (fills[i] < cycles[i]) return i;
+    return cycles.length - 1;
+  })();
+  const [idx, setIdx] = useState(currentIdx);
+  const i = Math.min(idx, cycles.length - 1);
+  const size = cycles[i];
+  const done = fills[i];
+  const pct = size ? Math.min(100, Math.round((done / size) * 100)) : 0;
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        className="text-muted-foreground disabled:opacity-30"
+        onClick={() => setIdx((v) => Math.max(0, v - 1))}
+        disabled={i === 0}
+        aria-label="Ciclo anterior"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+        <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs tabular-nums">{done}/{size}</span>
+      <button
+        type="button"
+        className="text-muted-foreground disabled:opacity-30"
+        onClick={() => setIdx((v) => Math.min(cycles.length - 1, v + 1))}
+        disabled={i === cycles.length - 1}
+        aria-label="Próximo ciclo"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+      <span className="text-[10px] text-muted-foreground">
+        ciclo {i + 1}/{cycles.length}
+      </span>
+    </div>
   );
 }

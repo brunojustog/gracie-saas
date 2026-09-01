@@ -95,7 +95,7 @@ export default async function ProfessoresFechamentoPage({
   const payoutNext = format(addMonths(payoutStart, 1), "yyyy-MM");
 
   const [
-    { rows, totalGeral },
+    { rows, ownerRows, totalGeral, ownerTotal },
     projection,
     taught,
     professors,
@@ -155,6 +155,44 @@ export default async function ProfessoresFechamentoPage({
     ? projection.byProfessor.filter((p) => p.professorId === professorId)
     : projection.byProfessor;
 
+  // Card de professor (reutilizado nos professores e na seção do gestor).
+  const profCard = (r: (typeof rows)[number]) => (
+    <Link
+      key={r.professorId}
+      href={professorHref(r.professorId)}
+      className={`block rounded-xl border bg-card p-4 transition-colors hover:border-primary hover:bg-accent/40 ${
+        r.professorId === professorId ? "border-primary ring-1 ring-primary/40" : ""
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className="font-semibold">{r.professorName}</span>
+        <span className="text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
+          {brl(r.total)}
+        </span>
+      </div>
+      <div className="flex items-center gap-3">
+        <Pie slices={r.byModality.map((m) => ({ label: m.label, value: m.count }))} size={104} />
+        <ul className="min-w-0 flex-1 space-y-0.5 text-xs">
+          {r.byModality.map((m, i) => (
+            <li key={m.label} className="flex items-center justify-between gap-2">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+                />
+                <span className="truncate">{m.label}</span>
+                <span className="text-muted-foreground">{m.count}×</span>
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {brl(m.valor)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Link>
+  );
+
   return (
     <>
       <TopNav
@@ -202,58 +240,46 @@ export default async function ProfessoresFechamentoPage({
         </div>
 
         {/* Cartões por professor: pizza por modalidade + valores */}
-        {rows.length === 0 ? (
+        {rows.length === 0 && ownerRows.length === 0 ? (
           <div className="rounded-lg border bg-card p-10 text-center text-sm text-muted-foreground">
             Nenhuma aula confirmada no período.
           </div>
         ) : (
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {rows.map((r) => (
-              <Link
-                key={r.professorId}
-                href={professorHref(r.professorId)}
-                className={`block rounded-xl border bg-card p-4 transition-colors hover:border-primary hover:bg-accent/40 ${
-                  r.professorId === professorId ? "border-primary ring-1 ring-primary/40" : ""
-                }`}
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="font-semibold">{r.professorName}</span>
-                  <span className="text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
-                    {brl(r.total)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Pie slices={r.byModality.map((m) => ({ label: m.label, value: m.count }))} size={104} />
-                  <ul className="min-w-0 flex-1 space-y-0.5 text-xs">
-                    {r.byModality.map((m, i) => (
-                      <li key={m.label} className="flex items-center justify-between gap-2">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-                          />
-                          <span className="truncate">{m.label}</span>
-                          <span className="text-muted-foreground">{m.count}×</span>
-                        </span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">
-                          {brl(m.valor)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </Link>
-            ))}
+            {rows.map((r) => profCard(r))}
           </section>
         )}
 
         {rows.length > 0 ? (
           <div className="flex items-center justify-end gap-2 text-sm">
-            <span className="text-muted-foreground">Total geral a repassar no período:</span>
+            <span className="text-muted-foreground">
+              Total geral a repassar no período{" "}
+              <span className="text-[11px]">(sem as aulas do gestor)</span>:
+            </span>
             <span className="font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
               {brl(totalGeral)}
             </span>
           </div>
+        ) : null}
+
+        {/* v1.2-AI: seção exclusiva do gestor — recebimento à parte, não soma. */}
+        {ownerRows.length > 0 ? (
+          <section className="space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">
+                Gestor · recebimento à parte
+                <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                  (não entra no total a repassar acima)
+                </span>
+              </h2>
+              <span className="text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
+                {brl(ownerTotal)}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {ownerRows.map((r) => profCard(r))}
+            </div>
+          </section>
         ) : null}
 
         {/* v1.1-CI: calendário do professor selecionado (aulas dadas por dia). */}

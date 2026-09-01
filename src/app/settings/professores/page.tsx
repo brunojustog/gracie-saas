@@ -10,7 +10,7 @@ export default async function ProfessoresPage() {
     prisma.professor.findMany({
       where: { tenantId: tenant.id },
       orderBy: [{ active: "desc" }, { name: "asc" }],
-      select: { id: true, name: true, active: true, email: true, userId: true, hourlyRate: true },
+      select: { id: true, name: true, active: true, email: true, userId: true, hourlyRate: true, isOwner: true },
     }),
     // Usuários do tenant (pra vincular o login do professor). Admin/professor.
     prisma.tenantUser.findMany({
