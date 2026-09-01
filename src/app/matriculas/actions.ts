@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { findEnrollmentInScope } from "@/server/enrollments";
 import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
+import { roleAtLeast } from "@/server/rbac";
 import { requireTenantUser } from "@/server/tenant";
 
 type ActionResult =
@@ -598,6 +599,80 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
 
   revalidatePath("/matriculas");
   revalidatePath("/kanban");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+/**
+ * v1.2-AH: remove a matrícula SEM contar como cancelamento — apaga o registro
+ * (não marca CANCELED) e volta o lead pra "Negociação". Pra casos de matrícula
+ * feita cedo demais e o aluno recuou (não entra nas métricas de churn).
+ * Restrito a ADMIN/MANAGER.
+ */
+export async function removeEnrollment(input: unknown): Promise<ActionResult> {
+  const parsed = z
+    .object({ enrollmentId: z.string().min(1) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  if (!roleAtLeast(membership.role, "MANAGER")) {
+    return { ok: false, error: "sem permissão (só gestor/admin)" };
+  }
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+
+  await prisma.$transaction(async (tx) => {
+    // Volta o lead pra "Negociação" (se existir esse estágio no tenant).
+    const negStage = await tx.stage.findFirst({
+      where: {
+        tenantId: tenant.id,
+        active: true,
+        isWon: false,
+        isLost: false,
+        name: { contains: "negocia", mode: "insensitive" },
+      },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+    const lead = await tx.lead.findUnique({
+      where: { id: enrollment.leadId },
+      select: { stageId: true },
+    });
+    if (negStage && lead && lead.stageId !== negStage.id) {
+      await tx.lead.update({
+        where: { id: enrollment.leadId },
+        data: { stageId: negStage.id, lastInteractionAt: new Date() },
+      });
+      await tx.stageHistory.create({
+        data: {
+          leadId: enrollment.leadId,
+          fromStageId: lead.stageId,
+          toStageId: negStage.id,
+          changedById: user.id,
+          notes: "Matrícula removida (sem cancelamento) → voltou pra negociação",
+        },
+      });
+    }
+
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "MANUAL",
+        body: "Matrícula removida (sem cancelamento) — lead voltou para negociação.",
+        metadata: { enrollmentId: enrollment.id, action: "enrollment_removed" },
+      },
+      tx,
+    );
+
+    // Apaga a matrícula (cascade remove PaymentRecords). NÃO é cancelamento.
+    await tx.enrollment.delete({ where: { id: enrollment.id } });
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/kanban");
+  revalidatePath("/quadro");
   return { ok: true, enrollmentId: enrollment.id };
 }
 

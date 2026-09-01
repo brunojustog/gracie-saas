@@ -70,6 +70,7 @@ import { getClassesForLead } from "./../aulas/actions";
 import {
   cancelEnrollment,
   reactivateEnrollment,
+  removeEnrollment,
   suspendEnrollment,
 } from "./../matriculas/actions";
 import { EnrollmentModal } from "./../matriculas/enrollment-modal";
@@ -1075,6 +1076,26 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
     JUDICIAL: "judicial",
   };
 
+  const handleRemove = () => {
+    if (
+      !window.confirm(
+        "Remover a matrícula SEM contar como cancelamento?\n\n" +
+          "O aluno sai da contagem de ativos e volta pra Negociação. " +
+          "Não entra nas métricas de cancelamento. Esta ação apaga a matrícula.",
+      )
+    )
+      return;
+    startTransition(async () => {
+      const result = await removeEnrollment({ enrollmentId: e.id });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Matrícula removida — lead voltou pra negociação");
+      router.refresh();
+    });
+  };
+
   const handleReactivate = () => {
     startTransition(async () => {
       const result = await reactivateEnrollment({ enrollmentId: e.id });
@@ -1180,6 +1201,19 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
                 >
                   Cancelar matrícula
                 </Button>
+                {/* v1.2-AH: remover sem contar como cancelamento (gestor/admin). */}
+                {value !== null ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground"
+                    onClick={handleRemove}
+                    disabled={pending}
+                    title="Apaga a matrícula e volta o lead pra Negociação, sem entrar como cancelamento"
+                  >
+                    Remover (sem cancelar)
+                  </Button>
+                ) : null}
               </>
             )}
           </div>
