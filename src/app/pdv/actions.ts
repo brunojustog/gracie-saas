@@ -171,7 +171,7 @@ export async function upsertProduct(input: unknown) {
   const parsed = upsertProductSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "input inválido" };
 
-  const { tenant } = await requireRole("MANAGER");
+  const { tenant } = await requireRole("SELLER");
 
   if (parsed.data.id) {
     const existing = await findProductInTenant(tenant.id, parsed.data.id);
@@ -228,7 +228,7 @@ export async function importProducts(input: unknown) {
   const parsed = importSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "planilha inválida" };
 
-  const { tenant } = await requireRole("MANAGER");
+  const { tenant } = await requireRole("SELLER");
 
   // Nomes já existentes (evita duplicar numa reimportação).
   const existing = await prisma.product.findMany({
@@ -282,7 +282,7 @@ export async function importProducts(input: unknown) {
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB
 
 export async function uploadProductImage(formData: FormData) {
-  const { tenant } = await requireRole("MANAGER");
+  const { tenant } = await requireRole("SELLER");
   const productId = String(formData.get("productId") ?? "");
   const file = formData.get("image");
 
@@ -308,7 +308,7 @@ export async function uploadProductImage(formData: FormData) {
 }
 
 export async function removeProductImage(input: { productId: string }) {
-  const { tenant } = await requireRole("MANAGER");
+  const { tenant } = await requireRole("SELLER");
   const product = await findProductInTenant(tenant.id, input.productId);
   if (!product) return { ok: false as const, error: "produto não encontrado" };
   await prisma.product.update({
@@ -335,7 +335,7 @@ export async function upsertVariant(input: unknown) {
   const parsed = upsertVariantSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "input inválido" };
 
-  const { tenant } = await requireRole("MANAGER");
+  const { tenant } = await requireRole("SELLER");
 
   const product = await findProductInTenant(tenant.id, parsed.data.productId);
   if (!product) return { ok: false as const, error: "produto não encontrado" };
@@ -388,7 +388,7 @@ export async function getSalesForLeadAction(leadId: string) {
 }
 
 export async function deleteVariant(input: { variantId: string }) {
-  const { tenant } = await requireRole("MANAGER");
+  const { tenant } = await requireRole("SELLER");
 
   const variant = await prisma.productVariant.findFirst({
     where: {

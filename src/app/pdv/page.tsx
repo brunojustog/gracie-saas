@@ -55,13 +55,11 @@ export default async function PdvPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-lg font-semibold tracking-tight">Lojinha · PDV</h1>
           <div className="flex items-center gap-2">
-            {membership.role !== "SELLER" ? (
-              <Link href="/pdv/produtos">
-                <Button variant="outline" size="sm">
-                  Produtos
-                </Button>
-              </Link>
-            ) : null}
+            <Link href="/pdv/produtos">
+              <Button variant="outline" size="sm">
+                Produtos
+              </Button>
+            </Link>
             <Link href="/pdv/historico">
               <Button variant="outline" size="sm">
                 Histórico

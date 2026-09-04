@@ -8,7 +8,7 @@ import { requireRole } from "@/server/tenant";
 import { ProductsManager } from "./products-manager";
 
 export default async function PdvProductsPage() {
-  const { tenant, user, membership } = await requireRole("MANAGER");
+  const { tenant, user, membership } = await requireRole("SELLER");
   const products = await getProductsForTenant(tenant.id);
 
   return (
