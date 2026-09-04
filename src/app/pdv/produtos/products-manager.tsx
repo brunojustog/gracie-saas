@@ -1,7 +1,8 @@
 "use client";
 
 import type { ProductCategory } from "@prisma/client";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import {
   deleteVariant,
+  importProducts,
   upsertProduct,
   upsertVariant,
 } from "../actions";
@@ -59,10 +61,14 @@ export function ProductsManager({ products }: { products: ProductListItem[] }) {
     productId: string;
     variant?: Variant;
   } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+          <Upload className="mr-1 h-4 w-4" /> Importar CSV
+        </Button>
         <Button
           size="sm"
           onClick={() => setProductModal({ open: true })}
@@ -109,7 +115,152 @@ export function ProductsManager({ products }: { products: ProductListItem[] }) {
           onClose={() => setVariantModal(null)}
         />
       ) : null}
+
+      {importOpen ? <ImportModal onClose={() => setImportOpen(false)} /> : null}
     </div>
+  );
+}
+
+// ── CSV: parser simples que respeita aspas ────────────────────────────────
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let field = "";
+  let row: string[] = [];
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); field = "";
+      if (row.some((x) => x.trim() !== "")) rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); if (row.some((x) => x.trim() !== "")) rows.push(row); }
+  return rows;
+}
+
+const norm = (s: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .split("")
+    .filter((ch) => {
+      const c = ch.codePointAt(0) ?? 0;
+      return c < 0x0300 || c > 0x036f; // remove acentos combinantes
+    })
+    .join("");
+
+const parsePriceBR = (s: string): number => {
+  const t = s.trim().replace(/\./g, "").replace(",", ".");
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
+type ImportRow = { name: string; category?: string; price: number; sku?: string; stock?: number | null };
+
+function ImportModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [fileName, setFileName] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setFileName(file.name);
+    const text = await file.text();
+    const parsed = parseCsv(text);
+    if (parsed.length < 2) {
+      toast.error("CSV vazio ou sem linhas");
+      return;
+    }
+    const header = parsed[0].map(norm);
+    const idx = (names: string[]) => header.findIndex((h) => names.includes(h));
+    const iName = idx(["nome", "descricao", "produto"]);
+    const iCat = idx(["categoria", "categoria "]);
+    const iPrice = idx(["preco", "valor", "preco de venda"]);
+    const iSku = idx(["sku", "codigo", "cod"]);
+    const iStock = idx(["estoque", "saldo", "quantidade"]);
+    if (iName < 0 || iPrice < 0) {
+      toast.error("O CSV precisa ter ao menos as colunas 'nome' e 'preco'");
+      return;
+    }
+    const out: ImportRow[] = [];
+    for (let i = 1; i < parsed.length; i++) {
+      const r = parsed[i];
+      const name = (r[iName] ?? "").trim();
+      if (!name) continue;
+      const stockRaw = iStock >= 0 ? (r[iStock] ?? "").trim() : "";
+      const stockNum = stockRaw ? Math.max(0, Math.trunc(Number(stockRaw.replace(",", ".")))) : null;
+      out.push({
+        name,
+        category: iCat >= 0 ? (r[iCat] ?? "").trim().toUpperCase() : undefined,
+        price: parsePriceBR(r[iPrice] ?? "0"),
+        sku: iSku >= 0 ? (r[iSku] ?? "").trim() || undefined : undefined,
+        stock: Number.isFinite(stockNum as number) ? stockNum : null,
+      });
+    }
+    setRows(out);
+  };
+
+  const doImport = () => {
+    if (rows.length === 0) return void toast.error("Selecione um CSV primeiro");
+    startTransition(async () => {
+      const r = await importProducts({ rows });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success(`Importados: ${r.created} · já existiam: ${r.skipped}`);
+      router.refresh();
+      onClose();
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Importar produtos (CSV)</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Colunas aceitas: <b>nome</b>, <b>preco</b> (obrigatórias) e
+            opcionais <b>categoria</b>, <b>sku</b>, <b>estoque</b>. Cada linha
+            vira um produto (variante “Padrão”). Produtos com nome já existente
+            são ignorados.
+          </p>
+          <Input type="file" accept=".csv,text/csv" onChange={onFile} disabled={pending} />
+          {fileName ? (
+            <div className="rounded border bg-muted/40 p-2 text-xs">
+              <div className="font-medium">{fileName}</div>
+              <div className="text-muted-foreground">
+                {rows.length} produto{rows.length === 1 ? "" : "s"} detectado{rows.length === 1 ? "" : "s"}
+              </div>
+              {rows.slice(0, 4).map((r, i) => (
+                <div key={i} className="mt-0.5 truncate text-muted-foreground">
+                  • {r.name} — {fmtBRL(r.price)}
+                </div>
+              ))}
+              {rows.length > 4 ? <div className="text-muted-foreground">…</div> : null}
+            </div>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={pending}>Cancelar</Button>
+          <Button onClick={doImport} disabled={pending || rows.length === 0}>
+            {pending ? "Importando…" : `Importar ${rows.length || ""}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

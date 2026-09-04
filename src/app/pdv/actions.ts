@@ -206,6 +206,75 @@ export async function upsertProduct(input: unknown) {
   return { ok: true as const, productId: created.id };
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Importação em massa (planilha CSV) — cria produto + variant "Padrão"
+// ──────────────────────────────────────────────────────────────────────────
+
+const CATEGORIES = [
+  "BEBIDA", "SUPLEMENTO", "KIMONO", "FAIXA", "CAMISETA",
+  "RASHGUARD", "BERMUDA_SHORT", "ACESSORIO", "OUTRO",
+] as const;
+
+const importRowSchema = z.object({
+  name: z.string().min(1).max(120),
+  category: z.string().optional(),
+  price: z.number().nonnegative().max(1_000_000).default(0),
+  sku: z.string().max(60).optional().nullable(),
+  stock: z.number().int().min(0).max(1_000_000).optional().nullable(),
+});
+const importSchema = z.object({ rows: z.array(importRowSchema).min(1).max(2000) });
+
+export async function importProducts(input: unknown) {
+  const parsed = importSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "planilha inválida" };
+
+  const { tenant } = await requireRole("MANAGER");
+
+  // Nomes já existentes (evita duplicar numa reimportação).
+  const existing = await prisma.product.findMany({
+    where: { tenantId: tenant.id },
+    select: { name: true },
+  });
+  const have = new Set(existing.map((p) => p.name.trim().toLowerCase()));
+
+  let created = 0;
+  let skipped = 0;
+  for (const r of parsed.data.rows) {
+    const key = r.name.trim().toLowerCase();
+    if (have.has(key)) {
+      skipped++;
+      continue;
+    }
+    have.add(key);
+    const category = (CATEGORIES as readonly string[]).includes(r.category ?? "")
+      ? (r.category as (typeof CATEGORIES)[number])
+      : "OUTRO";
+    await prisma.product.create({
+      data: {
+        tenantId: tenant.id,
+        name: r.name.trim(),
+        category,
+        active: true,
+        variants: {
+          create: [
+            {
+              label: "Padrão",
+              sku: r.sku?.trim() || null,
+              price: r.price,
+              stock: r.stock ?? null,
+            },
+          ],
+        },
+      },
+    });
+    created++;
+  }
+
+  revalidatePath("/pdv/produtos");
+  revalidatePath("/pdv");
+  return { ok: true as const, created, skipped };
+}
+
 const upsertVariantSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1),

@@ -10,6 +10,7 @@ import {
   Menu,
   Settings,
   ShoppingBag,
+  Store,
   Ticket,
   UserPlus,
   X,
@@ -38,6 +39,8 @@ const LINKS: NavLink[] = [
   { href: "/matriculas", label: "Matrículas", icon: GraduationCap },
   { href: "/particulares", label: "Particulares", icon: Ticket },
   { href: "/avulsas", label: "Aulas avulsas", icon: ShoppingBag },
+  // v1.2-AK: lojinha/PDV religada no menu (vendas de produtos pelas atendentes).
+  { href: "/pdv", label: "Lojinha", icon: Store },
   { href: "/quadro", label: "Quadro do Vitor", icon: BarChart3, adminOnly: true },
   { href: "/professores", label: "Professores", icon: Dumbbell, adminOnly: true },
   { href: "/settings", label: "Config", icon: Settings, exact: true },
