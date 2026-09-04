@@ -434,6 +434,14 @@ function ProductCard({
         disabled={out || single.price <= 0}
         className="flex flex-col items-start gap-1 rounded-md border bg-card p-3 text-left transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
       >
+        {product.hasImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/pdv/product/${product.id}/image`}
+            alt=""
+            className="mb-1 h-24 w-full rounded object-cover"
+          />
+        ) : null}
         <div className="line-clamp-2 text-sm font-medium">{product.name}</div>
         <div className="flex w-full items-center justify-between text-xs">
           <span className="text-muted-foreground">
@@ -459,6 +467,14 @@ function ProductCard({
 
   return (
     <div className="rounded-md border bg-card p-3">
+      {product.hasImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/pdv/product/${product.id}/image`}
+          alt=""
+          className="mb-1 h-24 w-full rounded object-cover"
+        />
+      ) : null}
       <div className="line-clamp-2 text-sm font-medium">{product.name}</div>
       <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
         <span>a partir de {fmtBRL(minPrice)}</span>

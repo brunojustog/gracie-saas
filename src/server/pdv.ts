@@ -30,6 +30,7 @@ export type ProductListItem = {
   category: ProductCategory;
   description: string | null;
   active: boolean;
+  hasImage: boolean;
   variants: Array<{
     id: string;
     label: string;
@@ -57,6 +58,7 @@ export async function getProductsForTenant(
       category: true,
       description: true,
       active: true,
+      imageMime: true,
       variants: {
         where: opts.onlyActive ? { active: true } : {},
         orderBy: { label: "asc" },
@@ -72,8 +74,9 @@ export async function getProductsForTenant(
     },
   });
 
-  return rows.map((r) => ({
+  return rows.map(({ imageMime, ...r }) => ({
     ...r,
+    hasImage: imageMime != null,
     variants: r.variants.map((v) => ({
       ...v,
       price: Number(v.price),

@@ -1334,6 +1334,10 @@ model Product {
   category    ProductCategory @default(OUTRO)
   description String?
   active      Boolean         @default(true)
+  // v1.2-AM: foto do produto (bytes no Postgres, servida por rota, como as
+  // fotos dos alunos). Upload com limite de tamanho.
+  imageData   Bytes?
+  imageMime   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -1,9 +1,9 @@
 "use client";
 
 import type { ProductCategory } from "@prisma/client";
-import { Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { Camera, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   deleteVariant,
   importProducts,
+  removeProductImage,
+  uploadProductImage,
   upsertProduct,
   upsertVariant,
 } from "../actions";
@@ -283,6 +285,7 @@ function ProductRow({
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex items-center justify-between gap-3 border-b p-3">
+        <ProductPhoto productId={product.id} hasImage={product.hasImage} name={product.name} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="font-medium">{product.name}</span>
@@ -664,5 +667,119 @@ function VariantModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Foto do produto (v1.2-AM): thumbnail + upload com downscale no client ──
+async function downscaleImage(file: File, maxDim = 900, quality = 0.85): Promise<Blob> {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale);
+    const h = Math.round(bmp.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bmp, 0, 0, w, h);
+    const blob: Blob | null = await new Promise((res) =>
+      canvas.toBlob(res, "image/jpeg", quality),
+    );
+    return blob ?? file;
+  } catch {
+    return file;
+  }
+}
+
+function ProductPhoto({
+  productId,
+  hasImage,
+  name,
+}: {
+  productId: string;
+  hasImage: boolean;
+  name: string;
+}) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pending, startTransition] = useTransition();
+  const [ver, setVer] = useState(0);
+
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecione uma imagem");
+      return;
+    }
+    startTransition(async () => {
+      const blob = await downscaleImage(file);
+      if (blob.size > 4 * 1024 * 1024) {
+        toast.error("Imagem grande demais (máx. 4 MB)");
+        return;
+      }
+      const fd = new FormData();
+      fd.set("productId", productId);
+      fd.set("image", new File([blob], "produto.jpg", { type: blob.type || "image/jpeg" }));
+      const r = await uploadProductImage(fd);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Foto salva");
+      setVer((v) => v + 1);
+      router.refresh();
+    });
+  };
+
+  const remove = () =>
+    startTransition(async () => {
+      const r = await removeProductImage({ productId });
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Foto removida");
+      router.refresh();
+    });
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={pending}
+        className="grid h-12 w-12 place-items-center overflow-hidden rounded-md border bg-muted text-muted-foreground hover:bg-accent"
+        title={hasImage ? "Trocar foto" : "Adicionar foto"}
+        aria-label="Foto do produto"
+      >
+        {hasImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/pdv/product/${productId}/image?v=${ver}`}
+            alt={name}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <Camera className="h-4 w-4" />
+        )}
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
+      {hasImage ? (
+        <button
+          type="button"
+          onClick={remove}
+          disabled={pending}
+          className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-destructive text-white"
+          title="Remover foto"
+          aria-label="Remover foto"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      ) : null}
+    </div>
   );
 }

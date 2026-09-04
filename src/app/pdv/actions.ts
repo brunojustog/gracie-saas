@@ -275,6 +275,51 @@ export async function importProducts(input: unknown) {
   return { ok: true as const, created, skipped };
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Foto do produto (v1.2-AM) — bytes no Postgres, com limite de tamanho
+// ──────────────────────────────────────────────────────────────────────────
+
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB
+
+export async function uploadProductImage(formData: FormData) {
+  const { tenant } = await requireRole("MANAGER");
+  const productId = String(formData.get("productId") ?? "");
+  const file = formData.get("image");
+
+  const product = await findProductInTenant(tenant.id, productId);
+  if (!product) return { ok: false as const, error: "produto não encontrado" };
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false as const, error: "selecione uma imagem" };
+  }
+  if (!file.type.startsWith("image/")) {
+    return { ok: false as const, error: "o arquivo precisa ser uma imagem" };
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return { ok: false as const, error: "imagem grande demais (máx. 4 MB)" };
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  await prisma.product.update({
+    where: { id: product.id },
+    data: { imageData: bytes, imageMime: file.type },
+  });
+  revalidatePath("/pdv/produtos");
+  revalidatePath("/pdv");
+  return { ok: true as const };
+}
+
+export async function removeProductImage(input: { productId: string }) {
+  const { tenant } = await requireRole("MANAGER");
+  const product = await findProductInTenant(tenant.id, input.productId);
+  if (!product) return { ok: false as const, error: "produto não encontrado" };
+  await prisma.product.update({
+    where: { id: product.id },
+    data: { imageData: null, imageMime: null },
+  });
+  revalidatePath("/pdv/produtos");
+  revalidatePath("/pdv");
+  return { ok: true as const };
+}
+
 const upsertVariantSchema = z.object({
   id: z.string().optional(),
   productId: z.string().min(1),
