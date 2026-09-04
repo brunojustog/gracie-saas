@@ -1,13 +1,22 @@
 "use client";
 
 import type { ProductCategory, SalePaymentMethod } from "@prisma/client";
-import { Minus, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Minus, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -16,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 import { createSale } from "./actions";
 import type { ProductListItem } from "@/server/pdv";
@@ -71,8 +81,14 @@ export function PdvClient({
   const [paymentMethod, setPaymentMethod] =
     useState<SalePaymentMethod>("PIX");
   const [customerLeadId, setCustomerLeadId] = useState<string>(NO_CUSTOMER);
+  const [customerOpen, setCustomerOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
+
+  const selectedCustomer =
+    customerLeadId === NO_CUSTOMER
+      ? null
+      : leads.find((l) => l.id === customerLeadId) ?? null;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -302,19 +318,66 @@ export function PdvClient({
 
           <div className="space-y-1">
             <Label htmlFor="customer">Aluno (opcional)</Label>
-            <Select value={customerLeadId} onValueChange={setCustomerLeadId}>
-              <SelectTrigger id="customer" className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_CUSTOMER}>Venda avulsa</SelectItem>
-                {leads.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="customer"
+                  variant="outline"
+                  role="combobox"
+                  className="h-9 w-full justify-between font-normal"
+                >
+                  <span className={cn("truncate", !selectedCustomer && "text-muted-foreground")}>
+                    {selectedCustomer ? selectedCustomer.name : "Venda avulsa · buscar aluno…"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command
+                  filter={(v, s) => (v.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}
+                >
+                  <CommandInput placeholder="Digite o nome do aluno…" />
+                  <CommandList>
+                    <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="Venda avulsa sem aluno"
+                        onSelect={() => {
+                          setCustomerLeadId(NO_CUSTOMER);
+                          setCustomerOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            customerLeadId === NO_CUSTOMER ? "opacity-100" : "opacity-0",
+                          )}
+                        />
+                        Venda avulsa (sem aluno)
+                      </CommandItem>
+                      {leads.map((l) => (
+                        <CommandItem
+                          key={l.id}
+                          value={l.name}
+                          onSelect={() => {
+                            setCustomerLeadId(l.id);
+                            setCustomerOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              customerLeadId === l.id ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          <span className="flex-1 truncate">{l.name}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-1">
