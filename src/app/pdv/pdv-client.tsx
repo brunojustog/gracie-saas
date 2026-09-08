@@ -439,7 +439,7 @@ function ProductCard({
           <img
             src={`/api/pdv/product/${product.id}/image`}
             alt=""
-            className="mb-1 h-24 w-full rounded object-cover"
+            className="mb-1 h-24 w-full rounded bg-muted object-contain"
           />
         ) : null}
         <div className="line-clamp-2 text-sm font-medium">{product.name}</div>

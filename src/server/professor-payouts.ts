@@ -83,7 +83,7 @@ export async function getMonthPayouts(
 
   let payouts = await prisma.professorPayout.findMany({
     where: { tenantId, competencia },
-    include: { professor: { select: { name: true } } },
+    include: { professor: { select: { name: true, isOwner: true } } },
   });
 
   if (payouts.length === 0) {
@@ -105,7 +105,7 @@ export async function getMonthPayouts(
       });
       payouts = await prisma.professorPayout.findMany({
         where: { tenantId, competencia },
-        include: { professor: { select: { name: true } } },
+        include: { professor: { select: { name: true, isOwner: true } } },
       });
     }
   }
@@ -118,6 +118,8 @@ export async function getMonthPayouts(
   const invByProf = new Map(invoices.map((i) => [i.professorId, i]));
 
   return payouts
+    // v1.2-AO: gestor (isOwner) fora do fechamento mensal dos professores.
+    .filter((p) => !p.professor.isOwner)
     .map((p) => toRow(p, invByProf.get(p.professorId)))
     .sort((a, b) => b.total - a.total);
 }
@@ -138,7 +140,7 @@ export async function getProfessorPayouts(
     where: { tenantId, professorId },
     orderBy: { competencia: "desc" },
     take: meses,
-    include: { professor: { select: { name: true } } },
+    include: { professor: { select: { name: true, isOwner: true } } },
   });
   const invoices = await prisma.professorInvoice.findMany({
     where: { tenantId, professorId },
