@@ -41,8 +41,12 @@ export default async function GradePage() {
       dow: DOW[d.dayOfWeek] ?? "",
       classes: d.classes.map((c) => ({
         startTime: c.startTime,
+        endTime: c.endTime,
+        local: c.local,
         label: c.label,
         professorName: c.professorName,
+        professorId: c.professorId,
+        professorHasPhoto: c.professorHasPhoto,
         nivel: nivelLabel(c.label),
         elegivel: canAttend(profile, c.label),
       })),

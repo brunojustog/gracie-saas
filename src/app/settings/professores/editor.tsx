@@ -1,7 +1,8 @@
 "use client";
 
-import { Plus } from "lucide-react";
-import { useState, useTransition } from "react";
+import { Camera, Plus, X } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
-import { createProfessor, updateProfessor } from "./actions";
+import {
+  createProfessor,
+  removeProfessorPhoto,
+  updateProfessor,
+  uploadProfessorPhoto,
+} from "./actions";
 
 type Professor = {
   id: string;
@@ -27,6 +33,7 @@ type Professor = {
   hourlyRate: number;
   activeSlots: number;
   isOwner: boolean;
+  hasPhoto: boolean;
 };
 type Member = { userId: string; label: string; email: string };
 
@@ -210,6 +217,10 @@ function ProfessorFormBody({
         {professor ? (
           <>
             <div className="space-y-1">
+              <Label>Foto (aparece no card da aula do aluno)</Label>
+              <ProfessorPhoto professorId={professor.id} hasPhoto={professor.hasPhoto} name={professor.name} />
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="prof-email">E-mail (pro convite)</Label>
               <Input
                 id="prof-email"
@@ -292,5 +303,93 @@ function ProfessorFormBody({
         </Button>
       </DialogFooter>
     </>
+  );
+}
+
+// v1.2-AS: foto do professor — thumbnail + upload com downscale no client.
+async function downscaleImg(file: File, maxDim = 800, quality = 0.85): Promise<Blob> {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale);
+    const h = Math.round(bmp.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bmp, 0, 0, w, h);
+    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
+    return blob ?? file;
+  } catch {
+    return file;
+  }
+}
+
+function ProfessorPhoto({
+  professorId,
+  hasPhoto,
+  name,
+}: {
+  professorId: string;
+  hasPhoto: boolean;
+  name: string;
+}) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pending, startTransition] = useTransition();
+  const [ver, setVer] = useState(0);
+
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return void toast.error("Selecione uma imagem");
+    startTransition(async () => {
+      const blob = await downscaleImg(file);
+      if (blob.size > 4 * 1024 * 1024) return void toast.error("Imagem grande demais (máx. 4 MB)");
+      const fd = new FormData();
+      fd.set("professorId", professorId);
+      fd.set("photo", new File([blob], "prof.jpg", { type: blob.type || "image/jpeg" }));
+      const r = await uploadProfessorPhoto(fd);
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Foto salva");
+      setVer((v) => v + 1);
+      router.refresh();
+    });
+  };
+
+  const remove = () =>
+    startTransition(async () => {
+      const r = await removeProfessorPhoto({ professorId });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Foto removida");
+      router.refresh();
+    });
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={pending}
+        className="grid h-16 w-16 place-items-center overflow-hidden rounded-lg border bg-muted text-muted-foreground hover:bg-accent"
+        title={hasPhoto ? "Trocar foto" : "Adicionar foto"}
+      >
+        {hasPhoto ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`/api/professor/${professorId}/photo?v=${ver}`} alt={name} className="h-full w-full object-cover" />
+        ) : (
+          <Camera className="h-5 w-5" />
+        )}
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
+      {hasPhoto ? (
+        <Button type="button" size="sm" variant="ghost" className="text-muted-foreground" onClick={remove} disabled={pending}>
+          <X className="mr-1 h-3.5 w-3.5" /> Remover
+        </Button>
+      ) : null}
+    </div>
   );
 }

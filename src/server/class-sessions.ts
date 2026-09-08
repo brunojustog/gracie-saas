@@ -170,9 +170,18 @@ export async function getActiveAlunos(tenantId: string) {
     .sort((a, b) => a.nome.localeCompare(b.nome));
 }
 
+export type WeekDayClass = {
+  startTime: string;
+  endTime: string | null;
+  local: string | null;
+  label: string;
+  professorName: string | null;
+  professorId: string | null;
+  professorHasPhoto: boolean;
+};
 export type WeekDay = {
   dayOfWeek: number; // ISO 1=Seg..7=Dom
-  classes: { startTime: string; label: string; professorName: string | null }[];
+  classes: WeekDayClass[];
 };
 
 /** Cronograma da semana (a partir da grade) pra exibir na tela do aluno. */
@@ -183,8 +192,11 @@ export async function getWeekSchedule(tenantId: string): Promise<WeekDay[]> {
     select: {
       dayOfWeek: true,
       startTime: true,
+      endTime: true,
+      local: true,
       label: true,
-      professor: { select: { name: true } },
+      professorId: true,
+      professor: { select: { name: true, photoMime: true } },
     },
   });
 
@@ -193,8 +205,12 @@ export async function getWeekSchedule(tenantId: string): Promise<WeekDay[]> {
     const arr = byDay.get(s.dayOfWeek) ?? [];
     arr.push({
       startTime: s.startTime,
+      endTime: s.endTime,
+      local: s.local,
       label: s.label,
       professorName: s.professor?.name ?? null,
+      professorId: s.professorId,
+      professorHasPhoto: s.professor?.photoMime != null,
     });
     byDay.set(s.dayOfWeek, arr);
   }

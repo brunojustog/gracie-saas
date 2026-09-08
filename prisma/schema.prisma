@@ -908,6 +908,9 @@ model Professor {
   // "total geral a repassar" dos professores nem soma junto; aparece numa
   // seção exclusiva na tela e no relatório.
   isOwner   Boolean @default(false)
+  // v1.2-AS: foto do professor (bytes no Postgres), exibida no card da aula.
+  photoData Bytes?
+  photoMime String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -989,6 +992,9 @@ model ClassGridSlot {
   professorId String
   dayOfWeek   Int
   startTime   String
+  // v1.2-AS: fim da aula (HH:mm) + tatame/andar — exibidos no app do aluno.
+  endTime     String?
+  local       String?
   label       String
   isKids      Boolean  @default(false)
   value       Decimal  @default(70) @db.Decimal(10, 2)

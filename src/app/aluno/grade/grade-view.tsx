@@ -6,8 +6,12 @@ import type { ReactNode } from "react";
 
 type GradeClass = {
   startTime: string;
+  endTime: string | null;
+  local: string | null;
   label: string;
   professorName: string | null;
+  professorId: string | null;
+  professorHasPhoto: boolean;
   nivel: string;
   elegivel: boolean;
 };
@@ -42,10 +46,21 @@ export function GradeView({
               <div className="gb-sec-h"><h2>{d.dow}</h2></div>
               {d.classes.map((c, i) => (
                 <div key={i} className={`gb-class${!c.elegivel ? " locked" : ""}`}>
-                  <div className="ico"><Dumbbell size={18} color="var(--red)" /></div>
+                  {c.professorHasPhoto && c.professorId ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="gb-prof-pic" src={`/api/professor/${c.professorId}/photo`} alt="" />
+                  ) : (
+                    <div className="ico"><Dumbbell size={18} color="var(--red)" /></div>
+                  )}
                   <div className="mid">
-                    <div className="time">{c.startTime} · {c.nivel}</div>
-                    <div className="ttl"><span className="prog">{c.label}</span></div>
+                    <div className="time">
+                      {c.startTime}{c.endTime ? ` até ${c.endTime}` : ""}
+                      {c.local ? <span className="gb-local"> · {c.local}</span> : null}
+                    </div>
+                    <div className="ttl">
+                      <span className="prog">{c.label}</span>
+                      <span className="gb-nivel">{c.nivel}</span>
+                    </div>
                     {c.professorName ? <div className="prof">{c.professorName}</div> : null}
                   </div>
                   {c.elegivel ? (

@@ -25,6 +25,8 @@ type Slot = {
   professorName: string;
   dayOfWeek: number;
   startTime: string;
+  endTime: string | null;
+  local: string | null;
   label: string;
   isKids: boolean;
   value: number;
@@ -178,6 +180,8 @@ function SlotBody({
   const [professorId, setProfessorId] = useState(slot?.professorId ?? professors[0]?.id ?? "");
   const [dayOfWeek, setDayOfWeek] = useState(day);
   const [startTime, setStartTime] = useState(slot?.startTime ?? "19:00");
+  const [endTime, setEndTime] = useState(slot?.endTime ?? "");
+  const [local, setLocal] = useState(slot?.local ?? "");
   const [label, setLabel] = useState(slot?.label ?? "");
   const [isKids, setIsKids] = useState(slot?.isKids ?? false);
   const [value, setValue] = useState(String(slot?.value ?? 70));
@@ -190,7 +194,7 @@ function SlotBody({
     const val = Number(value.replace(",", "."));
     if (!Number.isFinite(val) || val < 0) return toast.error("Valor inválido");
     startTransition(async () => {
-      const base = { professorId, dayOfWeek, startTime, label: label.trim(), isKids, value: val };
+      const base = { professorId, dayOfWeek, startTime, endTime: endTime || null, local: local.trim() || null, label: label.trim(), isKids, value: val };
       const r = slot
         ? await updateGridSlot({ ...base, id: slot.id, active })
         : await createGridSlot(base);
@@ -242,8 +246,16 @@ function SlotBody({
             </select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="g-time">Hora</Label>
+            <Label htmlFor="g-time">Início</Label>
             <Input id="g-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={pending} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="g-end">Fim (opcional)</Label>
+            <Input id="g-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} disabled={pending} />
+          </div>
+          <div className="space-y-1 col-span-2">
+            <Label htmlFor="g-local">Tatame / andar (opcional)</Label>
+            <Input id="g-local" value={local} onChange={(e) => setLocal(e.target.value)} placeholder="ex: 1º andar, Tatame Rolls…" disabled={pending} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="g-label">Modalidade</Label>

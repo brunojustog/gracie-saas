@@ -125,6 +125,10 @@
 .gb-class .ttl { display: flex; align-items: center; gap: 7px; margin-top: 1px; }
 .gb-class .ttl .prog { font-size: 15px; font-weight: 700; }
 .gb-class .prof { font-size: 12px; color: var(--muted); margin-top: 1px; }
+/* v1.2-AS: foto do professor no card da aula + local/nível (estilo Alliance). */
+.gb-prof-pic { width: 40px; height: 40px; border-radius: 11px; object-fit: cover; flex: none; }
+.gb-class .time .gb-local { color: var(--muted-2); }
+.gb-nivel { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-2); background: var(--surface-3); padding: 1px 6px; border-radius: 6px; }
 .gb-tag { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; }
 .gb-tag.kids { background: rgba(168,85,247,.18); color: #c99bf5; }
 .gb-chev { color: var(--muted-2); flex: none; }

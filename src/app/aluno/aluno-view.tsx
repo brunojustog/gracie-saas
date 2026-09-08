@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Bell,
   CalendarDays,
   Camera,
   Home,
@@ -90,7 +89,6 @@ export function AlunoView({
   }, []);
 
   const changeDate = (v: string) => router.push(`/aluno?date=${v}`);
-  const soon = () => toast.info("Em breve 🥋");
 
   const beltBg = beltStyle(belt).background;
   const initials = alunoName.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
@@ -106,7 +104,6 @@ export function AlunoView({
             <div className="n">GRACIE BARRA<small>{tenantName.toUpperCase()}</small></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="gb-icon-btn" onClick={soon} aria-label="Notificações"><Bell size={17} /></button>
             {signOutSlot}
           </div>
         </div>

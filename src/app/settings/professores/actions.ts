@@ -15,6 +15,45 @@ const createSchema = z.object({
   name: z.string().min(1).max(120),
 });
 
+// v1.2-AS: foto do professor (exibida no card da aula do aluno).
+export async function uploadProfessorPhoto(formData: FormData): Promise<Result> {
+  const { tenant } = await requireRole("ADMIN");
+  const id = String(formData.get("professorId") ?? "");
+  const file = formData.get("photo");
+
+  const prof = await prisma.professor.findFirst({
+    where: { id, tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!prof) return { ok: false, error: "professor não encontrado" };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "selecione uma imagem" };
+  if (!file.type.startsWith("image/")) return { ok: false, error: "o arquivo precisa ser uma imagem" };
+  if (file.size > 4 * 1024 * 1024) return { ok: false, error: "imagem grande demais (máx. 4 MB)" };
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  await prisma.professor.update({
+    where: { id: prof.id },
+    data: { photoData: bytes, photoMime: file.type },
+  });
+  revalidatePath("/settings/professores");
+  return { ok: true };
+}
+
+export async function removeProfessorPhoto(input: { professorId: string }): Promise<Result> {
+  const { tenant } = await requireRole("ADMIN");
+  const prof = await prisma.professor.findFirst({
+    where: { id: input.professorId, tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!prof) return { ok: false, error: "professor não encontrado" };
+  await prisma.professor.update({
+    where: { id: prof.id },
+    data: { photoData: null, photoMime: null },
+  });
+  revalidatePath("/settings/professores");
+  return { ok: true };
+}
+
 export async function createProfessor(input: unknown): Promise<Result> {
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
