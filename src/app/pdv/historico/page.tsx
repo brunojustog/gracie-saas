@@ -16,6 +16,7 @@ type SearchParams = Promise<{
   to?: string;
   seller?: string;
   payment?: SalePaymentMethod;
+  customer?: string;
 }>;
 
 const PAYMENT_LABEL: Record<SalePaymentMethod, string> = {
@@ -54,6 +55,7 @@ export default async function HistoricoPage({
     to,
     sellerUserId: sp.seller,
     paymentMethod: sp.payment,
+    customerSearch: sp.customer,
   };
 
   const [sales, sellers] = await Promise.all([
@@ -114,6 +116,7 @@ export default async function HistoricoPage({
           to: sp.to,
           seller: sp.seller,
           payment: sp.payment,
+          customer: sp.customer,
         }}
         canFilterSeller={membership.role !== "SELLER"}
       />

@@ -30,6 +30,7 @@ export function HistoricoToolbar({
     to?: string;
     seller?: string;
     payment?: SalePaymentMethod;
+    customer?: string;
   };
   canFilterSeller: boolean;
 }) {
@@ -106,6 +107,22 @@ export function HistoricoToolbar({
           </Select>
         </div>
       ) : null}
+
+      <div className="space-y-1">
+        <Label htmlFor="customer" className="text-xs">Aluno</Label>
+        <Input
+          id="customer"
+          type="search"
+          placeholder="Buscar aluno…"
+          defaultValue={initial.customer ?? ""}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") updateParam("customer", (e.target as HTMLInputElement).value);
+          }}
+          onBlur={(e) => updateParam("customer", e.target.value)}
+          disabled={pending}
+          className="h-9 w-[180px]"
+        />
+      </div>
 
       <div className="space-y-1">
         <Label className="text-xs">Pagamento</Label>

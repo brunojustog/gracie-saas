@@ -110,6 +110,8 @@ export type SaleListFilters = {
   sellerUserId?: string;
   paymentMethod?: SalePaymentMethod;
   customerLeadId?: string;
+  /** v1.2-AQ: busca por nome do aluno vinculado à venda. */
+  customerSearch?: string;
 };
 
 export function buildSaleListWhere(
@@ -125,6 +127,11 @@ export function buildSaleListWhere(
   }
   if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
   if (filters.customerLeadId) where.customerLeadId = filters.customerLeadId;
+  if (filters.customerSearch?.trim()) {
+    where.customerLead = {
+      name: { contains: filters.customerSearch.trim(), mode: "insensitive" },
+    };
+  }
 
   // sellerUserId só é honrado pra ADMIN/MANAGER. Pra SELLER, scopedSaleWhere
   // sobrescreve abaixo (igual /matriculas).
