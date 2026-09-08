@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Loader2, MapPin, Pencil, Send } from "lucide-react";
+import { Download, KeyRound, Loader2, MapPin, Pencil, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,8 @@ import { AlunoEvents, type AdminEvent } from "./aluno-events";
 import {
   clearAcademyLocation,
   createAlunoAccess,
+  createAlunoLogin,
+  importMatriculados,
   resetAlunoPassword,
   sendAlunoAccess,
   setAcademyLocation,
@@ -74,6 +76,36 @@ export function AlunosEditor({
   const [faixaFilter, setFaixaFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("ativos");
   const [sortBy, setSortBy] = useState<"graduacao" | "nome" | "matricula" | "recentes">("nome");
+
+  // v1.2-AR: criar login de aluno pendente (importado sem login).
+  const [loginId, setLoginId] = useState<string | null>(null);
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+
+  const doImport = () =>
+    startTransition(async () => {
+      const r = await importMatriculados();
+      if (!r.ok) return void toast.error(r.error);
+      toast.success(
+        r.created > 0
+          ? `${r.created} matriculado(s) importado(s) como aluno`
+          : "Nenhum matriculado novo pra importar",
+      );
+      router.refresh();
+    });
+
+  const createLogin = (alunoId: string) =>
+    startTransition(async () => {
+      const r = await createAlunoLogin({
+        alunoId,
+        email: loginForm.email.trim(),
+        password: loginForm.password,
+      });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Login criado — aluno verificado");
+      setLoginId(null);
+      setLoginForm({ email: "", password: "" });
+      router.refresh();
+    });
 
   // Edição inline
   const [editId, setEditId] = useState<string | null>(null);
@@ -400,7 +432,16 @@ export function AlunosEditor({
               ({filtered.length})
             </span>
           </h2>
+          <Button size="sm" variant="outline" disabled={pending} onClick={doImport}>
+            <Download className="mr-1 h-4 w-4" /> Importar matriculados
+          </Button>
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          <span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle" />
+          verificado (com login) ·
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-amber-400 align-middle" />
+          pendente (sem login) — crie o login com o e-mail confirmado.
+        </p>
 
         <div className="grid gap-2 sm:grid-cols-4">
           <Input placeholder="Buscar nome/matrícula…" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 sm:col-span-2" />
@@ -437,7 +478,11 @@ export function AlunosEditor({
                   className="min-w-0 flex-1 text-left"
                   onClick={() => (editId === a.id ? setEditId(null) : openEdit(a))}
                 >
-                  <div className="font-medium">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <span
+                      className={`inline-block h-2 w-2 shrink-0 rounded-full ${a.email ? "bg-emerald-500" : "bg-amber-400"}`}
+                      title={a.email ? "Verificado (com login)" : "Pendente (sem login)"}
+                    />
                     {a.nome}
                     {a.matricula ? <span className="ml-1 text-[10px] text-muted-foreground">#{a.matricula}</span> : null}
                     {!a.active ? <span className="ml-1 rounded bg-muted px-1 text-[10px] text-muted-foreground">inativo</span> : null}
@@ -452,10 +497,46 @@ export function AlunosEditor({
                     <Send className="h-4 w-4" />
                   </Button>
                 ) : null}
+                {!a.email ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => {
+                      setLoginId(loginId === a.id ? null : a.id);
+                      setLoginForm({ email: "", password: "" });
+                    }}
+                    title="Criar login (e-mail + senha)"
+                  >
+                    <KeyRound className="mr-1 h-4 w-4" /> Criar login
+                  </Button>
+                ) : null}
                 <Button size="sm" variant={editId === a.id ? "secondary" : "outline"} disabled={pending} onClick={() => (editId === a.id ? setEditId(null) : openEdit(a))}>
                   <Pencil className="mr-1 h-4 w-4" /> Editar
                 </Button>
               </div>
+
+              {loginId === a.id ? (
+                <div className="mt-2 grid gap-2 rounded-lg border bg-muted/30 p-2.5 sm:grid-cols-[1fr_1fr_auto]">
+                  <Input
+                    type="email"
+                    placeholder="e-mail (login)"
+                    value={loginForm.email}
+                    onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))}
+                    disabled={pending}
+                  />
+                  <Input
+                    type="text"
+                    placeholder="senha (mín. 6)"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm((p) => ({ ...p, password: e.target.value }))}
+                    disabled={pending}
+                  />
+                  <Button size="sm" disabled={pending || !loginForm.email || loginForm.password.length < 6} onClick={() => createLogin(a.id)}>
+                    Criar login
+                  </Button>
+                </div>
+              ) : null}
 
               {editId === a.id ? (
                 <div className="mt-3 space-y-2 border-t pt-3">

@@ -171,6 +171,87 @@ const updateSchema = z.object({
 });
 
 /** v1.2-E: edita a ficha do aluno (dados, faixa/grau, matrícula, login). */
+/**
+ * v1.2-AR (reunião 08/09): importa todos os matriculados (leads com Enrollment)
+ * pro cadastro do app, criando um Aluno SEM login (pendente). O login (e-mail)
+ * é criado depois, quando a atendente confirma o e-mail — aí vira "verificado".
+ */
+export async function importMatriculados(): Promise<
+  { ok: true; created: number } | { ok: false; error: string }
+> {
+  const { tenant } = await requireRole("ADMIN");
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: { tenantId: tenant.id, lead: { deletedAt: null } },
+    select: { leadId: true },
+  });
+  const leadIds = [...new Set(enrollments.map((e) => e.leadId))];
+  if (leadIds.length === 0) return { ok: true, created: 0 };
+
+  const already = await prisma.aluno.findMany({
+    where: { tenantId: tenant.id, leadId: { in: leadIds } },
+    select: { leadId: true },
+  });
+  const have = new Set(already.map((a) => a.leadId));
+  const toCreate = leadIds.filter((id) => !have.has(id));
+  if (toCreate.length === 0) return { ok: true, created: 0 };
+
+  await prisma.aluno.createMany({
+    data: toCreate.map((leadId) => ({ tenantId: tenant.id, leadId, active: true })),
+    skipDuplicates: true,
+  });
+  revalidatePath("/settings/alunos");
+  return { ok: true, created: toCreate.length };
+}
+
+/**
+ * v1.2-AR: cria o login (e-mail + senha) de um Aluno JÁ existente e sem login
+ * (importado/pendente). Vira "verificado" (verde). Diferente de createAlunoAccess,
+ * que cria lead+aluno do zero.
+ */
+export async function createAlunoLogin(input: unknown): Promise<Result> {
+  const parsed = z
+    .object({
+      alunoId: z.string().min(1),
+      email: z.string().email("e-mail inválido"),
+      password: z.string().min(6, "senha mínima de 6 caracteres"),
+    })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
+  }
+  const { tenant } = await requireRole("ADMIN");
+  const d = parsed.data;
+
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: d.alunoId, tenantId: tenant.id },
+    select: { id: true, leadId: true, userId: true, lead: { select: { name: true } } },
+  });
+  if (!aluno) return { ok: false, error: "aluno não encontrado" };
+  if (aluno.userId) return { ok: false, error: "aluno já tem login" };
+
+  const clash = await prisma.user.findUnique({
+    where: { email: d.email },
+    select: { id: true },
+  });
+  if (clash) return { ok: false, error: "esse e-mail já está em uso" };
+
+  const passwordHash = await bcrypt.hash(d.password, 10);
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: { email: d.email, name: aluno.lead.name, passwordHash },
+    });
+    await tx.tenantUser.create({
+      data: { tenantId: tenant.id, userId: user.id, role: "ALUNO", active: true },
+    });
+    await tx.aluno.update({ where: { id: aluno.id }, data: { userId: user.id } });
+    await tx.lead.update({ where: { id: aluno.leadId }, data: { email: d.email } });
+  });
+
+  revalidatePath("/settings/alunos");
+  return { ok: true };
+}
+
 export async function updateAluno(input: unknown): Promise<Result> {
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) {
