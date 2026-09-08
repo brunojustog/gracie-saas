@@ -11,6 +11,8 @@ const schema = z.object({
   wuzapiUrl: z.string().url().nullable().or(z.literal("").transform(() => null)),
   wuzapiToken: z.string().max(500).nullable().or(z.literal("").transform(() => null)),
   followUpEnabled: z.boolean(),
+  // v1.2-AP: telefone que recebe o aviso de cancelar recorrência (Gisele).
+  cancelNotifyPhone: z.string().max(30).nullable().or(z.literal("").transform(() => null)),
 });
 
 export async function updateWuzapiConfig(
@@ -26,6 +28,7 @@ export async function updateWuzapiConfig(
       wuzapiUrl: parsed.data.wuzapiUrl ?? null,
       wuzapiToken: parsed.data.wuzapiToken ?? null,
       followUpEnabled: parsed.data.followUpEnabled,
+      cancelNotifyPhone: parsed.data.cancelNotifyPhone ?? null,
     },
   });
 

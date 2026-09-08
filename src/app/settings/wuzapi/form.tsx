@@ -15,6 +15,7 @@ type Initial = {
   wuzapiUrl: string;
   wuzapiToken: string;
   followUpEnabled: boolean;
+  cancelNotifyPhone: string;
 };
 
 type TestState =
@@ -27,6 +28,7 @@ export function WuzapiForm({ initial }: { initial: Initial }) {
   const [wuzapiUrl, setWuzapiUrl] = useState(initial.wuzapiUrl);
   const [wuzapiToken, setWuzapiToken] = useState(initial.wuzapiToken);
   const [followUpEnabled, setFollowUpEnabled] = useState(initial.followUpEnabled);
+  const [cancelNotifyPhone, setCancelNotifyPhone] = useState(initial.cancelNotifyPhone);
   const [test, setTest] = useState<TestState>({ kind: "idle" });
   const [pending, startTransition] = useTransition();
 
@@ -36,6 +38,7 @@ export function WuzapiForm({ initial }: { initial: Initial }) {
         wuzapiUrl: wuzapiUrl || null,
         wuzapiToken: wuzapiToken || null,
         followUpEnabled,
+        cancelNotifyPhone: cancelNotifyPhone || null,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -143,6 +146,21 @@ export function WuzapiForm({ initial }: { initial: Initial }) {
             disabled={pending}
           />
         </div>
+      </div>
+
+      <div className="space-y-2 rounded-lg border bg-card p-4">
+        <h3 className="text-sm font-semibold">Aviso de cancelamento (Gisele)</h3>
+        <p className="text-[11px] text-muted-foreground">
+          Número que recebe o WhatsApp de “cancelar recorrência” quando a
+          atendente confirma o pagamento da taxa de saída. Com DDI+DDD, só
+          números — ex.: 5511999999999.
+        </p>
+        <Input
+          value={cancelNotifyPhone}
+          onChange={(e) => setCancelNotifyPhone(e.target.value)}
+          placeholder="5511999999999"
+          disabled={pending}
+        />
       </div>
 
       <Button onClick={handleSave} disabled={pending} className="w-full">

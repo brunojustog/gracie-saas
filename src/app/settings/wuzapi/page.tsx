@@ -12,6 +12,7 @@ export default async function WuzapiPage() {
       wuzapiUrl: true,
       wuzapiToken: true,
       followUpEnabled: true,
+      cancelNotifyPhone: true,
     },
   });
 
@@ -21,6 +22,7 @@ export default async function WuzapiPage() {
         wuzapiUrl: data?.wuzapiUrl ?? "",
         wuzapiToken: data?.wuzapiToken ?? "",
         followUpEnabled: data?.followUpEnabled ?? false,
+        cancelNotifyPhone: data?.cancelNotifyPhone ?? "",
       }}
     />
   );

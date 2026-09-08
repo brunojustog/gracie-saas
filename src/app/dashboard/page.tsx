@@ -11,8 +11,10 @@ import {
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getDashboardData } from "@/server/analytics";
+import { getPendingCancellations } from "@/server/enrollments";
 import { getDueOverview, type DueRow } from "@/server/payments";
 
+import { CancelationsAlert } from "./cancelations-alert";
 import { CollectionNotesButton } from "./collection-notes";
 import { getPdvKpis } from "@/server/pdv";
 import { requireTenantUser } from "@/server/tenant";
@@ -111,6 +113,9 @@ export default async function DashboardPage({
       }));
   const tagOptions = tagsRaw.map((r) => r.tag).filter(Boolean);
 
+  // v1.2-AP: solicitações de cancelamento pendentes (alerta no topo).
+  const pendingCancellations = await getPendingCancellations(tenant.id);
+
   return (
     <>
       <TopNav
@@ -150,6 +155,9 @@ export default async function DashboardPage({
             tags: filters.tags ?? [],
           }}
         />
+
+        {/* v1.2-AP: alerta de solicitações de cancelamento pendentes — no topo. */}
+        <CancelationsAlert rows={pendingCancellations} />
 
         {/* 1) KPIs operacionais — o que pulsa diariamente */}
         <KPICards data={data} isSeller={data.isSeller} />

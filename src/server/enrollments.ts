@@ -235,3 +235,54 @@ export async function getEnrollmentStatusCounts(membership: TenantUser) {
 export type EnrollmentRow = Awaited<
   ReturnType<typeof getEnrollmentsForList>
 >[number];
+
+/**
+ * v1.2-AP: solicitações de cancelamento pendentes (status CANCEL_REQUESTED) —
+ * pro alerta no topo do dashboard. Mostra em que etapa está cada uma.
+ */
+export type PendingCancellation = {
+  enrollmentId: string;
+  leadId: string;
+  alunoNome: string;
+  plano: string;
+  vencimento: Date | null;
+  solicitadoEm: Date | null;
+  taxaPagaEm: Date | null;
+  recorrenciaCanceladaEm: Date | null;
+  vendedora: string | null;
+};
+
+export async function getPendingCancellations(
+  tenantId: string,
+): Promise<PendingCancellation[]> {
+  const rows = await prisma.enrollment.findMany({
+    where: { tenantId, status: "CANCEL_REQUESTED" },
+    orderBy: { cancelRequestedAt: "asc" },
+    select: {
+      id: true,
+      leadId: true,
+      nextDueDate: true,
+      cancelRequestedAt: true,
+      exitFeePaidAt: true,
+      recurrenceCanceledAt: true,
+      plan: { select: { name: true } },
+      lead: {
+        select: {
+          name: true,
+          assignedSeller: { select: { name: true, email: true } },
+        },
+      },
+    },
+  });
+  return rows.map((r) => ({
+    enrollmentId: r.id,
+    leadId: r.leadId,
+    alunoNome: r.lead.name,
+    plano: r.plan.name,
+    vencimento: r.nextDueDate,
+    solicitadoEm: r.cancelRequestedAt,
+    taxaPagaEm: r.exitFeePaidAt,
+    recorrenciaCanceladaEm: r.recurrenceCanceledAt,
+    vendedora: r.lead.assignedSeller?.name ?? r.lead.assignedSeller?.email ?? null,
+  }));
+}

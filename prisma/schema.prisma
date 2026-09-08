@@ -149,6 +149,9 @@ model Tenant {
   wuzapiUrl             String?
   wuzapiToken           String?
   followUpEnabled       Boolean  @default(false)
+  // v1.2-AP: telefone que recebe o aviso de "cancelar recorrência" (Gisele).
+  // Disparado quando a atendente confirma o pagamento da taxa de saída.
+  cancelNotifyPhone     String?
 
   // ManyChat (chatbot Instagram/WhatsApp/Facebook). v1.1-AA: integração só
   // INCOMING (webhook). ManyChat não tem assinatura HMAC nativa — usamos
@@ -684,6 +687,13 @@ model Enrollment {
   enrolledAt    DateTime         @default(now())
   canceledAt    DateTime? // quando o cancelamento foi EFETUADO (pagou a taxa)
   cancelRequestedAt DateTime? // v1.1-BN: quando SOLICITOU o cancelamento
+  // v1.2-AP: fluxo de cancelamento em 3 etapas (reunião 08/09).
+  //   1) solicitação (cancelRequestedAt) — já sai de ativos
+  //   2) exitFeePaidAt = confirmação do pagamento da taxa → dispara WhatsApp p/ Gisele
+  //   3) recurrenceCanceledAt = Gisele confirmou o cancelamento da recorrência no banco
+  //   4) canceledAt = efetivado
+  exitFeePaidAt        DateTime?
+  recurrenceCanceledAt DateTime?
   monthlyValue  Decimal          @db.Decimal(10, 2)
   paymentMethod PaymentMethod
   observations  String?          @db.Text

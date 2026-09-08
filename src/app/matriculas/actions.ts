@@ -10,6 +10,7 @@ import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
 import { roleAtLeast } from "@/server/rbac";
 import { requireTenantUser } from "@/server/tenant";
+import { sendText } from "@/server/wuzapi";
 
 type ActionResult =
   | { ok: true; enrollmentId: string }
@@ -599,6 +600,98 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
 
   revalidatePath("/matriculas");
   revalidatePath("/kanban");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Fluxo de cancelamento em 3 etapas (v1.2-AP, reunião 08/09)
+//   1) solicitar (CANCEL_REQUESTED) — já feito no cancelEnrollment mode=requested
+//   2) confirmar pagamento da taxa → dispara WhatsApp pra Gisele
+//   3) Gisele confirma cancelamento da recorrência
+//   4) efetivar (CANCELED) — cancelEnrollment mode=direct
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Passo 2: atendente confirma que o aluno pagou a taxa de saída. Avisa a Gisele. */
+export async function confirmExitFeePaid(input: unknown): Promise<ActionResult> {
+  const parsed = z.object({ enrollmentId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+
+  const full = await prisma.enrollment.findUnique({
+    where: { id: enrollment.id },
+    select: {
+      exitFeePaidAt: true,
+      lead: { select: { name: true } },
+      plan: { select: { name: true } },
+    },
+  });
+  if (full?.exitFeePaidAt) return { ok: false, error: "taxa já confirmada" };
+
+  await prisma.enrollment.update({
+    where: { id: enrollment.id },
+    data: { exitFeePaidAt: new Date() },
+  });
+  await appendLeadNote({
+    tenantId: tenant.id,
+    leadId: enrollment.leadId,
+    authorId: user.id,
+    kind: "MANUAL",
+    body: "Taxa de saída paga — aviso enviado à Gisele para cancelar a recorrência.",
+    metadata: { enrollmentId: enrollment.id, step: "exit_fee_paid" },
+  });
+
+  // Dispara WhatsApp pra Gisele (número configurável no tenant).
+  const t = await prisma.tenant.findUnique({
+    where: { id: tenant.id },
+    select: { cancelNotifyPhone: true, wuzapiUrl: true, wuzapiToken: true, name: true },
+  });
+  if (t?.cancelNotifyPhone && t.wuzapiUrl && t.wuzapiToken) {
+    const body =
+      `⚠️ *Cancelar recorrência* — ${t.name}\n\n` +
+      `Aluno: *${full?.lead.name ?? "—"}*\n` +
+      `Plano: ${full?.plan.name ?? "—"}\n` +
+      `A taxa de saída foi paga. Favor cancelar a cobrança recorrente no banco ` +
+      `e avisar a recepção quando concluir.`;
+    // Não bloqueia a ação se o WhatsApp falhar.
+    await sendText(
+      { url: t.wuzapiUrl, token: t.wuzapiToken },
+      { phone: t.cancelNotifyPhone, body },
+    ).catch(() => {});
+  }
+
+  revalidatePath("/matriculas");
+  revalidatePath("/dashboard");
+  revalidatePath("/kanban");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+/** Passo 3: a Gisele confirmou o cancelamento da recorrência no banco. */
+export async function confirmRecurrenceCanceled(input: unknown): Promise<ActionResult> {
+  const parsed = z.object({ enrollmentId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+
+  await prisma.enrollment.update({
+    where: { id: enrollment.id },
+    data: { recurrenceCanceledAt: new Date() },
+  });
+  await appendLeadNote({
+    tenantId: tenant.id,
+    leadId: enrollment.leadId,
+    authorId: user.id,
+    kind: "MANUAL",
+    body: "Recorrência cancelada no banco (confirmado pela Gisele).",
+    metadata: { enrollmentId: enrollment.id, step: "recurrence_canceled" },
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/dashboard");
   return { ok: true, enrollmentId: enrollment.id };
 }
 
