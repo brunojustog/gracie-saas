@@ -63,6 +63,7 @@ export default async function ProfessorPage({
     <div>
       <ProfessorView
         professorName={professor.name}
+        isOwner={professor.isOwner}
         dateISO={format(selected, "yyyy-MM-dd")}
         dateLabel={format(selected, "EEEE, dd 'de' MMMM", { locale: ptBR })}
         day={day}

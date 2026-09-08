@@ -68,7 +68,9 @@ export type GradListRow = {
 /** Lista de alunos pro professor graduar (com presenças + sugestão). */
 export async function getGraduationList(tenantId: string): Promise<GradListRow[]> {
   const alunos = await prisma.aluno.findMany({
-    where: { tenantId, active: true },
+    // v1.2-AU: só alunos ativos E com login (verificados/verdes) — evita o
+    // flood dos matriculados importados sem login na tela de graduação.
+    where: { tenantId, active: true, userId: { not: null } },
     select: {
       id: true,
       matricula: true,

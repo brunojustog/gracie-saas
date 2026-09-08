@@ -98,8 +98,10 @@ export function ProfessorView({
   payouts,
   calendar,
   gradPanel,
+  isOwner = false,
 }: {
   professorName: string;
+  isOwner?: boolean;
   dateISO: string;
   dateLabel: string;
   day: Day;
@@ -239,13 +241,16 @@ export function ProfessorView({
         )}
       </section>
 
-      {/* v1.2-P: recebimentos dos meses fechados (Pago/Recebido + NF) */}
-      <section className="space-y-1.5">
-        <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-          Meus recebimentos
-        </h3>
-        <PayoutList payouts={payouts} />
-      </section>
+      {/* v1.2-P: recebimentos dos meses fechados (Pago/Recebido + NF).
+          v1.2-AU: escondido pro gestor (recebimento à parte). */}
+      {!isOwner ? (
+        <section className="space-y-1.5">
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground">
+            Meus recebimentos
+          </h3>
+          <PayoutList payouts={payouts} />
+        </section>
+      ) : null}
 
       {/* Seletor de dia */}
       <div className="flex items-center justify-between gap-2">

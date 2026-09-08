@@ -131,7 +131,7 @@ export async function requireTenantUser(): Promise<TenantSession> {
  * vinculado ao usuário logado (pode ser null pra um admin sem vínculo).
  */
 export async function requireProfessor(): Promise<
-  TenantSession & { professor: { id: string; name: string } | null }
+  TenantSession & { professor: { id: string; name: string; isOwner: boolean } | null }
 > {
   const session = await resolveTenantSession();
   const { membership, tenant, user } = session;
@@ -141,7 +141,7 @@ export async function requireProfessor(): Promise<
 
   const professor = await prisma.professor.findFirst({
     where: { tenantId: tenant.id, userId: user.id },
-    select: { id: true, name: true },
+    select: { id: true, name: true, isOwner: true },
   });
   return { ...session, professor };
 }

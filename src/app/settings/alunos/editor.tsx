@@ -75,6 +75,8 @@ export function AlunosEditor({
   const [q, setQ] = useState("");
   const [faixaFilter, setFaixaFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("ativos");
+  // v1.2-AU: filtro por verificação (com login = verde, sem login = amarelo).
+  const [verifFilter, setVerifFilter] = useState<"todos" | "verificados" | "pendentes">("todos");
   const [sortBy, setSortBy] = useState<"graduacao" | "nome" | "matricula" | "recentes">("nome");
 
   // v1.2-AR: criar login de aluno pendente (importado sem login).
@@ -124,6 +126,9 @@ export function AlunosEditor({
     if (statusFilter !== "todos") {
       rows = rows.filter((a) => (statusFilter === "ativos" ? a.active : !a.active));
     }
+    if (verifFilter !== "todos") {
+      rows = rows.filter((a) => (verifFilter === "verificados" ? a.email != null : a.email == null));
+    }
     if (faixaFilter) {
       rows = rows.filter((a) => (a.belt ?? "").toLowerCase() === faixaFilter.toLowerCase());
     }
@@ -152,7 +157,7 @@ export function AlunosEditor({
       }
     });
     return rows;
-  }, [alunos, statusFilter, faixaFilter, q, sortBy]);
+  }, [alunos, statusFilter, verifFilter, faixaFilter, q, sortBy]);
 
   const notifyWa = (wa?: { sent: boolean; error?: string }) => {
     if (!wa) return;
@@ -448,6 +453,11 @@ export function AlunosEditor({
           <select value={faixaFilter} onChange={(e) => setFaixaFilter(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm">
             <option value="">Todas as faixas</option>
             {BELTS.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select value={verifFilter} onChange={(e) => setVerifFilter(e.target.value as typeof verifFilter)} className="h-9 rounded-md border bg-background px-2 text-sm">
+            <option value="todos">Todos (verde+amarelo)</option>
+            <option value="verificados">Verificados (verde)</option>
+            <option value="pendentes">Pendentes (amarelo)</option>
           </select>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="h-9 rounded-md border bg-background px-2 text-sm">
             <option value="ativos">Ativos</option>

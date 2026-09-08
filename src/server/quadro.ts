@@ -67,17 +67,18 @@ export type GrowthEnrollment = {
 };
 
 /**
- * v1.1-BN: data em que a matrícula deixou (ou deixará) a base de vigentes.
- * Pra CANCEL_REQUESTED vale a data da SOLICITAÇÃO (já paramos de cobrar);
- * pros demais, a data do cancelamento efetivo.
+ * Data em que a matrícula deixou (ou deixará) a base de vigentes.
+ * v1.2-AU (reunião 08/09): SEMPRE a data da SOLICITAÇÃO quando existe — o aluno
+ * já sai de ativos e conta como cancelamento no ato da solicitação. Efetivar
+ * depois (pagar a taxa / cancelar recorrência) NÃO reconta. Cancelamento direto
+ * (sem solicitação prévia) usa a data do cancelamento efetivo.
  */
 export function leftAt(e: {
   status: string;
   canceledAt: Date | null;
   cancelRequestedAt: Date | null;
 }): Date | null {
-  if (e.status === "CANCEL_REQUESTED") return e.cancelRequestedAt ?? e.canceledAt;
-  return e.canceledAt;
+  return e.cancelRequestedAt ?? e.canceledAt;
 }
 
 export function isActiveAt(e: GrowthEnrollment, date: Date): boolean {
@@ -432,8 +433,8 @@ export async function getQuadroData(
     JUDICIAL: "Judicial",
   };
   const canceledNames: Name[] = canceledEnrollments.map((e) => {
-    // Data de referência: solicitação (se solicitado) ou cancelamento efetivo.
-    const when = e.status === "CANCEL_REQUESTED" ? e.cancelRequestedAt : e.canceledAt;
+    // Data de referência = quando saiu da base (solicitação, se houve). v1.2-AU.
+    const when = leftAt(e);
     return {
       id: e.id,
       name: e.lead.name,
@@ -1046,9 +1047,12 @@ export async function getRangeResumo(
       where: {
         tenantId,
         ...live,
+        // v1.2-AU: conta o cancelamento UMA vez, na data da SOLICITAÇÃO (quando
+        // houve). Efetivar depois (pagar taxa / cancelar recorrência) não
+        // reconta. Cancelamento direto (sem solicitação) conta na efetivação.
         OR: [
-          { status: { in: ["CANCELED", "JUDICIAL"] }, canceledAt: { gte: from, lte: to } },
-          { status: "CANCEL_REQUESTED", cancelRequestedAt: { gte: from, lte: to } },
+          { status: { in: ["CANCEL_REQUESTED", "CANCELED", "JUDICIAL"] }, cancelRequestedAt: { gte: from, lte: to } },
+          { status: { in: ["CANCELED", "JUDICIAL"] }, cancelRequestedAt: null, canceledAt: { gte: from, lte: to } },
         ],
       },
       select: {
@@ -1117,7 +1121,7 @@ export async function getRangeResumo(
         href: kanbanHref(e.lead.name),
       })),
       cancelamentos: cancelRows.map((e) => {
-        const when = e.status === "CANCEL_REQUESTED" ? e.cancelRequestedAt : e.canceledAt;
+        const when = leftAt(e);
         return {
           id: e.id,
           name: e.lead.name,
