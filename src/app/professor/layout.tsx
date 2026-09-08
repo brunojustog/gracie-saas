@@ -1,20 +1,58 @@
 /**
- * v1.2-O: o app do professor (aulas, chamada, graduação) usa o tema ESCURO da
- * marca — o professor usa no celular, como app. O escopo `.dark` faz os
- * componentes shadcn (Button, cards, inputs) virarem escuros + vermelho GB,
- * sem reescrever as telas. A gestão/admin segue no tema claro.
+ * v1.2-O/AT: casca do app do professor. Tema ESCURO da marca (.dark → shadcn
+ * vermelho GB) + topbar com logo e nav inferior, pra ficar com cara de
+ * aplicativo no celular, consistente com o app do aluno. A gestão/admin segue
+ * no tema claro (console).
  */
-import { AppSplash } from "@/components/app-splash";
+import Link from "next/link";
 
-export default function ProfessorLayout({
+import { AppSplash } from "@/components/app-splash";
+import { Button } from "@/components/ui/button";
+import { signOut } from "@/server/auth";
+import { getCurrentTenant } from "@/server/tenant";
+
+import { ProfessorNav } from "./professor-nav";
+
+export default async function ProfessorLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const tenant = await getCurrentTenant();
+
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="dark min-h-screen bg-background pb-16 text-foreground">
       <AppSplash />
+
+      {/* Topbar do app — logo + tenant + sair */}
+      <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-4 py-2.5">
+          <Link href="/professor" className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icon-192.png" alt="" className="h-8 w-8 rounded-lg" />
+            <div className="leading-tight">
+              <div className="text-sm font-bold tracking-tight">GRACIE BARRA</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {tenant?.name ?? "Professor"} · Professor
+              </div>
+            </div>
+          </Link>
+          <form
+            action={async () => {
+              "use server";
+              await signOut({ redirectTo: "/login" });
+            }}
+          >
+            <Button type="submit" variant="outline" size="sm" className="h-8">
+              Sair
+            </Button>
+          </form>
+        </div>
+      </header>
+
       {children}
+
+      <ProfessorNav />
     </div>
   );
 }

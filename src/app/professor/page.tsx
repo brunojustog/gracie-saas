@@ -1,9 +1,6 @@
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
-import { signOut } from "@/server/auth";
 import {
   getProfessorCalendar,
   getProfessorDay,
@@ -28,19 +25,6 @@ export default async function ProfessorPage({
   const { tenant, user, professor } = await requireProfessor();
   const sp = await searchParams;
 
-  const SignOut = (
-    <form
-      action={async () => {
-        "use server";
-        await signOut({ redirectTo: "/login" });
-      }}
-    >
-      <Button type="submit" variant="outline" size="sm" className="h-8">
-        Sair
-      </Button>
-    </form>
-  );
-
   if (!professor) {
     return (
       <main className="mx-auto max-w-lg px-4 py-16 text-center">
@@ -49,7 +33,6 @@ export default async function ProfessorPage({
           Seu usuário ({user.email}) ainda não está vinculado a um professor.
           Peça pro Anderson vincular em Config → Professores.
         </p>
-        <div className="mt-4">{SignOut}</div>
       </main>
     );
   }
@@ -77,33 +60,7 @@ export default async function ProfessorPage({
   const gradPanel = await getProfessorGraduationPanel(tenant.id, professor.id);
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <div>
-            <div className="text-sm font-semibold">{professor.name}</div>
-            <div className="text-xs text-muted-foreground">
-              {tenant.name} · minhas aulas
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/professor/chamada"
-              className="inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent"
-            >
-              Chamada
-            </Link>
-            <Link
-              href="/professor/graduar"
-              className="inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent"
-            >
-              Graduar
-            </Link>
-            {SignOut}
-          </div>
-        </div>
-      </header>
-
+    <div>
       <ProfessorView
         professorName={professor.name}
         dateISO={format(selected, "yyyy-MM-dd")}
