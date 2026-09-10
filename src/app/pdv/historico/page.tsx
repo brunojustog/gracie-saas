@@ -75,6 +75,19 @@ export default async function HistoricoPage({
 
   const total = sales.reduce((s, r) => s + r.total, 0);
 
+  // v1.2-BA: resumo por forma de pagamento pro relatorio diario (o que o Junior
+  // precisa). Os itens por venda ja aparecem na tabela abaixo.
+  const byPayment = sales.reduce<Record<string, { count: number; total: number }>>(
+    (acc, s) => {
+      const k = s.paymentMethod;
+      acc[k] = acc[k] ?? { count: 0, total: 0 };
+      acc[k].count += 1;
+      acc[k].total += s.total;
+      return acc;
+    },
+    {},
+  );
+
   return (
     <main className="mx-auto max-w-[1400px] space-y-4 px-4 py-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -120,6 +133,29 @@ export default async function HistoricoPage({
         }}
         canFilterSeller={membership.role !== "SELLER"}
       />
+
+      {sales.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          <div className="rounded-lg border bg-card px-3 py-2">
+            <div className="text-[11px] uppercase text-muted-foreground">Total do período</div>
+            <div className="text-lg font-bold">{fmtBRL(total)}</div>
+            <div className="text-[11px] text-muted-foreground">{sales.length} venda{sales.length === 1 ? "" : "s"}</div>
+          </div>
+          {Object.entries(byPayment)
+            .sort((a, b) => b[1].total - a[1].total)
+            .map(([method, agg]) => (
+              <div key={method} className="rounded-lg border bg-card px-3 py-2">
+                <div className="text-[11px] uppercase text-muted-foreground">
+                  {PAYMENT_LABEL[method as SalePaymentMethod]}
+                </div>
+                <div className="text-lg font-bold">{fmtBRL(agg.total)}</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {agg.count} venda{agg.count === 1 ? "" : "s"}
+                </div>
+              </div>
+            ))}
+        </div>
+      ) : null}
 
       {sales.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
