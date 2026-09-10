@@ -158,6 +158,8 @@ export async function getEnrollmentsForList(
           belt: true,
           beltDegree: true,
           assignedSeller: { select: { id: true, name: true, email: true } },
+          // v1.2-AY: link do nome pra ficha do aluno (só existe se o lead virou aluno).
+          aluno: { select: { id: true } },
         },
       },
       modality: { select: { id: true, name: true, color: true } },

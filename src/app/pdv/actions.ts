@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { findLeadInScope } from "@/server/leads";
 import { findProductInTenant, getSalesForLead } from "@/server/pdv";
+import { roleAtLeast } from "@/server/rbac";
 import { requireRole, requireTenantUser } from "@/server/tenant";
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -335,7 +336,10 @@ export async function upsertVariant(input: unknown) {
   const parsed = upsertVariantSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "input inválido" };
 
-  const { tenant } = await requireRole("SELLER");
+  const { tenant, membership } = await requireRole("SELLER");
+  // v1.2-AY: só ADM/gestor (MANAGER+) pode DAR BAIXA no estoque. Vendedora
+  // (SELLER) só aumenta — evita "sumir" com produto na mão. Pedido do Anderson.
+  const canDecreaseStock = roleAtLeast(membership.role, "MANAGER");
 
   const product = await findProductInTenant(tenant.id, parsed.data.productId);
   if (!product) return { ok: false as const, error: "produto não encontrado" };
@@ -344,9 +348,21 @@ export async function upsertVariant(input: unknown) {
     // Garante que a variant pertence ao product do tenant
     const existing = await prisma.productVariant.findFirst({
       where: { id: parsed.data.id, productId: product.id },
-      select: { id: true },
+      select: { id: true, stock: true },
     });
     if (!existing) return { ok: false as const, error: "variante não encontrada" };
+
+    if (
+      !canDecreaseStock &&
+      existing.stock !== null &&
+      parsed.data.stock != null &&
+      parsed.data.stock < existing.stock
+    ) {
+      return {
+        ok: false as const,
+        error: "só o gestor pode dar baixa no estoque — você pode apenas aumentar",
+      };
+    }
 
     await prisma.productVariant.update({
       where: { id: existing.id },

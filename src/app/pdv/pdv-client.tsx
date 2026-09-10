@@ -2,7 +2,7 @@
 
 import type { ProductCategory, SalePaymentMethod } from "@prisma/client";
 import { Check, ChevronsUpDown, Minus, Plus, Search, Trash2 } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { type ReactNode, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -71,9 +71,13 @@ const fmtBRL = (n: number) =>
 export function PdvClient({
   products,
   leads,
+  sellerName,
+  signOutSlot,
 }: {
   products: ProductListItem[];
   leads: Lead[];
+  sellerName: string;
+  signOutSlot: ReactNode;
 }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<ProductCategory | "all">("all");
@@ -397,6 +401,16 @@ export function PdvClient({
           <span className="text-lg font-bold">{fmtBRL(total)}</span>
         </div>
 
+        {/* v1.2-AY: confirmação de vendedora — a venda fica no nome de quem está
+            logado. Se não for essa pessoa, "Não sou eu" faz logout pra relogar. */}
+        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-900/60 dark:bg-amber-950/40">
+          <span className="min-w-0">
+            <span className="text-muted-foreground">Vendendo como </span>
+            <span className="font-semibold">{sellerName}</span>
+          </span>
+          {signOutSlot}
+        </div>
+
         <Button
           onClick={handleSubmit}
           disabled={cart.length === 0 || pending}
@@ -439,7 +453,7 @@ function ProductCard({
           <img
             src={`/api/pdv/product/${product.id}/image`}
             alt=""
-            className="mb-1 h-24 w-full rounded bg-muted object-contain"
+            className="mb-1 aspect-square w-full rounded bg-muted object-cover"
           />
         ) : null}
         <div className="line-clamp-2 text-sm font-medium">{product.name}</div>
@@ -472,7 +486,7 @@ function ProductCard({
         <img
           src={`/api/pdv/product/${product.id}/image`}
           alt=""
-          className="mb-1 h-24 w-full rounded object-cover"
+          className="mb-1 aspect-square w-full rounded bg-muted object-cover"
         />
       ) : null}
       <div className="line-clamp-2 text-sm font-medium">{product.name}</div>

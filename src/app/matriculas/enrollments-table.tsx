@@ -13,6 +13,7 @@ import {
   Snowflake,
   XCircle,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -86,6 +87,7 @@ type Row = {
     belt: string | null;
     beltDegree: number | null;
     assignedSeller: { id: string; name: string | null; email: string } | null;
+    aluno: { id: string } | null;
   };
   modality: { id: string; name: string; color: string | null };
   plan: { id: string; name: string };
@@ -220,7 +222,19 @@ export function EnrollmentsTable({
                 r.monthlyValue !== null ? Number(r.monthlyValue) : null;
               return (
                 <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.lead.name}</TableCell>
+                  <TableCell className="font-medium">
+                    {r.lead.aluno && !hideFinancials ? (
+                      <Link
+                        href={`/settings/alunos/${r.lead.aluno.id}`}
+                        className="hover:underline"
+                        title="Abrir ficha do aluno"
+                      >
+                        {r.lead.name}
+                      </Link>
+                    ) : (
+                      r.lead.name
+                    )}
+                  </TableCell>
                   <TableCell>
                     <span className="flex items-center gap-1.5">
                       <span

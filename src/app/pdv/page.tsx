@@ -68,7 +68,28 @@ export default async function PdvPage() {
           </div>
         </div>
 
-        <PdvClient products={usable} leads={leads} />
+        <PdvClient
+          products={usable}
+          leads={leads}
+          sellerName={user.name ?? user.email}
+          signOutSlot={
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/login" });
+              }}
+            >
+              <Button
+                type="submit"
+                variant="outline"
+                size="sm"
+                className="h-7 shrink-0 text-xs"
+              >
+                Não sou eu
+              </Button>
+            </form>
+          }
+        />
       </main>
     </>
   );
