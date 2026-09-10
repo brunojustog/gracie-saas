@@ -7,6 +7,7 @@
 import Link from "next/link";
 
 import { AppSplash } from "@/components/app-splash";
+import { MoneyToggle } from "@/components/money-toggle";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/server/auth";
 import { getCurrentTenant } from "@/server/tenant";
@@ -37,16 +38,19 @@ export default async function ProfessorLayout({
               </div>
             </div>
           </Link>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
-            }}
-          >
-            <Button type="submit" variant="outline" size="sm" className="h-8">
-              Sair
-            </Button>
-          </form>
+          <div className="flex items-center gap-2">
+            <MoneyToggle />
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/login" });
+              }}
+            >
+              <Button type="submit" variant="outline" size="sm" className="h-8">
+                Sair
+              </Button>
+            </form>
+          </div>
         </div>
       </header>
 

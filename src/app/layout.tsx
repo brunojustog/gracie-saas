@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Barlow, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 
+import { MoneyProvider } from "@/components/money-provider";
 import { getCurrentTenant } from "@/server/tenant";
 
 import "./globals.css";
@@ -49,7 +50,14 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full">
+        {/* v1.2-BC: modo discrição — sempre começa oculto (sem flash de valores). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: 'document.documentElement.dataset.hideMoney="1"',
+          }}
+        />
         {children}
+        <MoneyProvider />
         <Toaster richColors position="top-right" />
         <ServiceWorkerRegister />
       </body>

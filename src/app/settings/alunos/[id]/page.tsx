@@ -4,6 +4,7 @@ import { ChevronLeft, User } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { Money } from "@/components/money";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAlunoFicha } from "@/server/aluno";
 import { requireRole } from "@/server/tenant";
@@ -216,7 +217,7 @@ export default async function AlunoFichaPage({
               </p>
             ) : (
               <dl className="text-sm">
-                <Field label="Valor" value={brl(f.enrollment.monthlyValue)} />
+                <Field label="Valor" value={<Money value={f.enrollment.monthlyValue} />} />
                 <Field label="Plano" value={f.enrollment.planName ?? "—"} />
                 <Field
                   label="Situação"
@@ -251,7 +252,7 @@ export default async function AlunoFichaPage({
                         {p.confirmedBy ? ` · ${p.confirmedBy}` : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 font-medium">{brl(p.amount)}</span>
+                    <span className="shrink-0 font-medium"><Money value={p.amount} /></span>
                   </li>
                 ))}
               </ul>
@@ -262,7 +263,7 @@ export default async function AlunoFichaPage({
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold">Compras na lojinha</h3>
               {f.sales.length > 0 ? (
-                <span className="text-xs text-muted-foreground">Total: {brl(f.totalGasto)}</span>
+                <span className="text-xs text-muted-foreground">Total: <Money value={f.totalGasto} /></span>
               ) : null}
             </div>
             {f.sales.length === 0 ? (
@@ -273,7 +274,7 @@ export default async function AlunoFichaPage({
                   <li key={s.id} className="rounded-lg border p-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-medium">{dt(s.paidAt)}</span>
-                      <span className="font-medium">{brl(s.total)}</span>
+                      <span className="font-medium"><Money value={s.total} /></span>
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {s.items.map((i) => `${i.quantity}× ${i.productVariant.product.name}`).join(", ")}

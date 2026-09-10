@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { Money } from "@/components/money";
 import { TopNav } from "@/components/top-nav";
 import { ExpPeriodFilter } from "@/app/quadro/exp-period-filter";
 import { prisma } from "@/lib/prisma";
@@ -167,7 +168,7 @@ export default async function ProfessoresFechamentoPage({
       <div className="mb-2 flex items-center justify-between">
         <span className="font-semibold">{r.professorName}</span>
         <span className="text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
-          {brl(r.total)}
+          <Money value={r.total} />
         </span>
       </div>
       <div className="flex items-center gap-3">
@@ -184,7 +185,7 @@ export default async function ProfessoresFechamentoPage({
                 <span className="text-muted-foreground">{m.count}×</span>
               </span>
               <span className="shrink-0 tabular-nums text-muted-foreground">
-                {brl(m.valor)}
+                <Money value={m.valor} />
               </span>
             </li>
           ))}
@@ -257,7 +258,7 @@ export default async function ProfessoresFechamentoPage({
               <span className="text-[11px]">(sem as aulas do gestor)</span>:
             </span>
             <span className="font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
-              {brl(totalGeral)}
+              <Money value={totalGeral} />
             </span>
           </div>
         ) : null}
@@ -273,7 +274,7 @@ export default async function ProfessoresFechamentoPage({
                 </span>
               </h2>
               <span className="text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
-                {brl(ownerTotal)}
+                <Money value={ownerTotal} />
               </span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -339,7 +340,7 @@ export default async function ProfessoresFechamentoPage({
                 {projection.byModality.map((m) => (
                   <li key={m.label} className="flex items-center justify-between">
                     <span>{m.label} <span className="text-xs text-muted-foreground">{m.count}×</span></span>
-                    <span className="tabular-nums text-muted-foreground">{brl(m.valor)}</span>
+                    <span className="tabular-nums text-muted-foreground"><Money value={m.valor} /></span>
                   </li>
                 ))}
               </ul>
@@ -352,7 +353,7 @@ export default async function ProfessoresFechamentoPage({
                 {projByProf.map((p) => (
                   <li key={p.professorId} className="flex items-center justify-between">
                     <span>{p.professorName} <span className="text-xs text-muted-foreground">{p.count}×</span></span>
-                    <span className="tabular-nums text-muted-foreground">{brl(p.valor)}</span>
+                    <span className="tabular-nums text-muted-foreground"><Money value={p.valor} /></span>
                   </li>
                 ))}
               </ul>
@@ -360,7 +361,7 @@ export default async function ProfessoresFechamentoPage({
           </div>
           <div className="mt-2 border-t border-primary/20 pt-2 text-sm font-semibold">
             Projeção total do mês: {projection.totalCount} aulas ·{" "}
-            <span className="text-emerald-700 dark:text-emerald-300">{brl(projection.totalValor)}</span>
+            <span className="text-emerald-700 dark:text-emerald-300"><Money value={projection.totalValor} /></span>
             <span className="ml-1 text-[11px] font-normal text-muted-foreground">
               (só aulas regulares/kids da grade; particulares e auxílios entram no realizado)
             </span>
@@ -387,7 +388,7 @@ export default async function ProfessoresFechamentoPage({
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{c.professorName}</span>
                     <span className="font-semibold text-emerald-700 tabular-nums dark:text-emerald-300">
-                      {c.count}× · {brl(c.valor)}
+                      {c.count}× · <Money value={c.valor} />
                     </span>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">

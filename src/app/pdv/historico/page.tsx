@@ -4,6 +4,8 @@ import { ptBR } from "date-fns/locale";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { Money } from "@/components/money";
+import { MoneyToggle } from "@/components/money-toggle";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getSalesForList } from "@/server/pdv";
@@ -102,13 +104,14 @@ export default async function HistoricoPage({
             Histórico de vendas
           </h1>
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-            {sales.length} no período · {fmtBRL(total)}
+            {sales.length} no período · <Money value={total} />
           </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">
             {user.email} · {membership.role.toLowerCase()} · {tenant.name}
           </span>
+          <MoneyToggle />
           <form
             action={async () => {
               "use server";
@@ -138,7 +141,7 @@ export default async function HistoricoPage({
         <div className="flex flex-wrap gap-2">
           <div className="rounded-lg border bg-card px-3 py-2">
             <div className="text-[11px] uppercase text-muted-foreground">Total do período</div>
-            <div className="text-lg font-bold">{fmtBRL(total)}</div>
+            <div className="text-lg font-bold"><Money value={total} /></div>
             <div className="text-[11px] text-muted-foreground">{sales.length} venda{sales.length === 1 ? "" : "s"}</div>
           </div>
           {Object.entries(byPayment)
@@ -148,7 +151,7 @@ export default async function HistoricoPage({
                 <div className="text-[11px] uppercase text-muted-foreground">
                   {PAYMENT_LABEL[method as SalePaymentMethod]}
                 </div>
-                <div className="text-lg font-bold">{fmtBRL(agg.total)}</div>
+                <div className="text-lg font-bold"><Money value={agg.total} /></div>
                 <div className="text-[11px] text-muted-foreground">
                   {agg.count} venda{agg.count === 1 ? "" : "s"}
                 </div>
@@ -191,7 +194,7 @@ export default async function HistoricoPage({
                             ? ` (${i.productVariant.label})`
                             : ""}{" "}
                           <span className="text-muted-foreground">
-                            · {fmtBRL(i.subtotal)}
+                            · <Money value={i.subtotal} />
                           </span>
                         </li>
                       ))}
@@ -221,7 +224,7 @@ export default async function HistoricoPage({
                     {PAYMENT_LABEL[s.paymentMethod]}
                   </td>
                   <td className="p-3 text-right font-semibold">
-                    {fmtBRL(s.total)}
+                    <Money value={s.total} />
                   </td>
                 </tr>
               ))}

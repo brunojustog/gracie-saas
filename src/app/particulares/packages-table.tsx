@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -201,9 +202,7 @@ export function PackagesTable({
                   </td>
                   {hideFinancials ? null : (
                     <td className="px-3 py-2 text-right font-mono text-xs">
-                      {value != null
-                        ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-                        : "—"}
+                      <Money value={value} />
                     </td>
                   )}
                   <td className="px-3 py-2 text-muted-foreground">

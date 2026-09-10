@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { Money } from "@/components/money";
 import { prisma } from "@/lib/prisma";
 import {
   type PeriodPreset,
@@ -113,7 +114,7 @@ export default async function ProfessorReportPage({
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-sm font-medium">{totalLabel}</span>
             <span className="text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-              {brl(totalOf(bs))}
+              <Money value={totalOf(bs)} />
             </span>
           </div>
           {slices.length > 0 ? (

@@ -1,6 +1,7 @@
 import type { Gender, PaymentMethod } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
+import { Money } from "@/components/money";
 import { TopNav } from "@/components/top-nav";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
@@ -169,10 +170,7 @@ export default async function MatriculasPage({
           <div className="rounded-lg border bg-card p-4">
             <div className="text-xs uppercase text-muted-foreground">Receita mensal</div>
             <div className="mt-1 text-2xl font-semibold">
-              {monthlyRevenue.toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              })}
+              <Money value={monthlyRevenue} />
             </div>
           </div>
         )}

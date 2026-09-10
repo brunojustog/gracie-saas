@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
+import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 
 import { togglePaid } from "./payout-actions";
@@ -95,14 +96,14 @@ export function AdminPayouts({
               <div className="flex items-center justify-between">
                 <span className="font-medium">{p.professorName}</span>
                 <span className="text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
-                  {brl(p.total)}
+                  <Money value={p.total} />
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
-                {p.regular > 0 ? <span>regulares {brl(p.regular)}</span> : null}
-                {p.aux > 0 ? <span>auxílios {brl(p.aux)}</span> : null}
-                {p.particular > 0 ? <span>particulares {brl(p.particular)}</span> : null}
-                {p.conv > 0 ? <span>conversões {brl(p.conv)}</span> : null}
+                {p.regular > 0 ? <span>regulares <Money value={p.regular} /></span> : null}
+                {p.aux > 0 ? <span>auxílios <Money value={p.aux} /></span> : null}
+                {p.particular > 0 ? <span>particulares <Money value={p.particular} /></span> : null}
+                {p.conv > 0 ? <span>conversões <Money value={p.conv} /></span> : null}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {p.paid ? (
@@ -136,7 +137,7 @@ export function AdminPayouts({
           ))}
           <div className="flex items-center justify-end gap-2 border-t pt-2 text-sm">
             <span className="text-muted-foreground">Total do mês:</span>
-            <span className="font-bold text-emerald-700 tabular-nums dark:text-emerald-300">{brl(totalGeral)}</span>
+            <span className="font-bold text-emerald-700 tabular-nums dark:text-emerald-300"><Money value={totalGeral} /></span>
           </div>
         </div>
       )}

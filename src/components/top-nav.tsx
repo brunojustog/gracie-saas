@@ -20,6 +20,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { MoneyToggle } from "@/components/money-toggle";
 import { cn } from "@/lib/utils";
 
 type NavLink = {
@@ -133,7 +134,10 @@ export function TopNav({
           <Menu className="h-5 w-5" />
         </button>
         {Brand}
-        {signOutSlot}
+        <div className="flex items-center gap-2">
+          <MoneyToggle />
+          {signOutSlot}
+        </div>
       </header>
 
       {/* Sidebar fixa (desktop) */}
@@ -142,7 +146,10 @@ export function TopNav({
         <div className="flex-1 overflow-y-auto p-2">{NavList}</div>
         <div className="border-t p-3">
           <div className="mb-2 truncate text-xs text-muted-foreground">{userEmail}</div>
-          {signOutSlot}
+          <div className="flex items-center gap-2">
+            <MoneyToggle />
+            {signOutSlot}
+          </div>
         </div>
       </aside>
 

@@ -34,6 +34,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -1121,10 +1122,7 @@ function EnrollmentSection({ lead }: { lead: LeadDetails }) {
               {value !== null ? (
                 <>
                   {" · "}
-                  {value.toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  })}
+                  <Money value={value} />
                   /mês
                 </>
               ) : null}
@@ -1601,10 +1599,7 @@ function PurchasesTab({ leadId, leadName }: { leadId: string; leadName: string }
     <div className="space-y-3">
       <div className="rounded border bg-muted/40 p-2 text-xs">
         <span className="font-medium">Total comprado:</span>{" "}
-        {totalLifetime.toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        })}{" "}
+        <Money value={totalLifetime} />{" "}
         em {sales.length} venda{sales.length === 1 ? "" : "s"}
       </div>
       <ol className="space-y-2">
@@ -1618,10 +1613,7 @@ function PurchasesTab({ leadId, leadName }: { leadId: string; leadName: string }
                 · {sale.paymentMethod.toLowerCase().replace("_", " ")}
               </div>
               <span className="text-sm font-semibold">
-                {sale.total.toLocaleString("pt-BR", {
-                  style: "currency",
-                  currency: "BRL",
-                })}
+                <Money value={sale.total} />
               </span>
             </div>
             <ul className="mt-1 space-y-0.5 text-xs">

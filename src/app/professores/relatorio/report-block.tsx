@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+import { Money } from "@/components/money";
 import type { ProfCalEntry, getProfessorReport } from "@/server/professor-classes";
 
 import { ProfessorCalendar } from "../professor-calendar";
@@ -48,7 +49,7 @@ export function ReportBlock({
               Total geral a pagar
             </div>
             <div className="text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-              {brl(report.total)}
+              <Money value={report.total} />
             </div>
             <div className="mt-0.5 text-xs text-muted-foreground">
               {report.totalAulas} aula{report.totalAulas === 1 ? "" : "s"} no período
@@ -95,14 +96,14 @@ export function ReportBlock({
                 <tr key={c.key} className="border-b">
                   <td className="py-1.5">{c.label}</td>
                   <td className="py-1.5 text-right tabular-nums">{c.count}</td>
-                  <td className="py-1.5 text-right tabular-nums">{brl(c.valor)}</td>
+                  <td className="py-1.5 text-right tabular-nums"><Money value={c.valor} /></td>
                 </tr>
               ))}
               <tr className="font-semibold">
                 <td className="py-1.5">Total</td>
                 <td className="py-1.5 text-right tabular-nums">{report.totalAulas}</td>
                 <td className="py-1.5 text-right tabular-nums text-emerald-700 dark:text-emerald-300">
-                  {brl(report.total)}
+                  <Money value={report.total} />
                 </td>
               </tr>
             </tbody>
@@ -123,7 +124,7 @@ export function ReportBlock({
                 {p.dateISO ? (
                   <span className="shrink-0 text-xs text-muted-foreground">{dayFull(p.dateISO)}</span>
                 ) : null}
-                <span className="shrink-0 tabular-nums text-muted-foreground">{brl(p.valor)}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground"><Money value={p.valor} /></span>
               </li>
             ))}
           </ul>

@@ -1,6 +1,7 @@
 import type { PrivatePackageStatus } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
+import { Money } from "@/components/money";
 import { TopNav } from "@/components/top-nav";
 import { signOut } from "@/server/auth";
 import { getPrivatePackagesForList } from "@/server/private-packages";
@@ -84,7 +85,7 @@ export default async function ParticularesPage({
                 Receita (filtro atual)
               </div>
               <div className="mt-1 text-2xl font-semibold">
-                {revenue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                <Money value={revenue} />
               </div>
             </div>
           )}

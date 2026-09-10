@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -206,14 +207,14 @@ export function ProfessorView({
           A receber em {monthLabel}
         </div>
         <div className="mt-0.5 text-3xl font-bold text-emerald-700 tabular-nums dark:text-emerald-300">
-          {brl(earnings.total)}
+          <Money value={earnings.total} />
         </div>
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-          <span>{earnings.regularCount} regulares · {brl(earnings.regularValor)}</span>
-          <span>{earnings.auxCount} auxílios · {brl(earnings.auxValor)}</span>
-          <span>{earnings.particularCount} particulares · {brl(earnings.particularValor)}</span>
+          <span>{earnings.regularCount} regulares · <Money value={earnings.regularValor} /></span>
+          <span>{earnings.auxCount} auxílios · <Money value={earnings.auxValor} /></span>
+          <span>{earnings.particularCount} particulares · <Money value={earnings.particularValor} /></span>
           <span className="text-emerald-700 dark:text-emerald-300">
-            {earnings.convCount} experimentais convertidas · {brl(earnings.convValor)}
+            {earnings.convCount} experimentais convertidas · <Money value={earnings.convValor} />
           </span>
         </div>
       </div>
@@ -309,7 +310,7 @@ export function ProfessorView({
                   <span className="flex-1 font-medium">
                     {g.label}
                     {g.isKids ? <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-800">KIDS</span> : null}
-                    <span className="ml-2 text-[11px] text-muted-foreground">{brl(g.value)}</span>
+                    <span className="ml-2 text-[11px] text-muted-foreground"><Money value={g.value} /></span>
                   </span>
                   {done ? (
                     <Button size="sm" variant="secondary" disabled={pending} onClick={() => run(() => unconfirmClass({ taughtId: g.taught!.id }))}>

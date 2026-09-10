@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { DrillNumber, type DrillItem } from "@/components/drill-number";
+import { Money } from "@/components/money";
 import { TopNav } from "@/components/top-nav";
 import { parseDashboardFilters } from "@/lib/analytics-filters";
 import {
@@ -348,10 +349,7 @@ function DueList({
               </td>
               {hideFinancials ? null : (
                 <td className="px-2 py-1.5 text-right font-mono text-xs">
-                  {(r.monthlyValue ?? 0).toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  })}
+                  <Money value={r.monthlyValue ?? 0} />
                 </td>
               )}
               {overdue ? (
@@ -558,10 +556,7 @@ function SellerRanking({
               {(r.conversion * 100).toFixed(0)}%
             </td>
             <td className="px-2 py-2 text-right font-mono text-xs">
-              {r.revenue.toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              })}
+              <Money value={r.revenue} />
             </td>
           </tr>
         ))}
@@ -587,7 +582,7 @@ function PdvSummary({
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
               Receita
             </div>
-            <div className="mt-0.5 text-xl font-semibold">{fmtBRL(kpis.revenue)}</div>
+            <div className="mt-0.5 text-xl font-semibold"><Money value={kpis.revenue} /></div>
           </div>
         )}
         <div className="rounded border bg-muted/40 p-3">
@@ -616,7 +611,7 @@ function PdvSummary({
                 <td className="px-1 py-1.5 text-right">{r.count}</td>
                 {isSeller ? null : (
                   <td className="px-1 py-1.5 text-right font-mono">
-                    {fmtBRL(r.total)}
+                    <Money value={r.total} />
                   </td>
                 )}
               </tr>
@@ -656,10 +651,7 @@ function PeriodSummary({
         <div className="flex justify-between border-b pb-1">
           <dt className="text-muted-foreground">Receita ativa hoje</dt>
           <dd className="font-mono font-medium">
-            {kpis.monthlyRevenue.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}
+            <Money value={kpis.monthlyRevenue} />
           </dd>
         </div>
       )}

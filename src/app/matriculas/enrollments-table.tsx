@@ -20,6 +20,7 @@ import { useState, useTransition } from "react";
 import { OVERDUE_GRACE_DAYS } from "@/lib/overdue";
 import { toast } from "sonner";
 
+import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -248,10 +249,7 @@ export function EnrollmentsTable({
                   <TableCell>{r.plan.name}</TableCell>
                   {hideFinancials || value === null ? null : (
                     <TableCell className="text-right font-mono">
-                      {value.toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })}
+                      <Money value={value} />
                     </TableCell>
                   )}
                   <TableCell className="text-muted-foreground">

@@ -5,6 +5,7 @@ import { FileText } from "lucide-react";
 import Link from "next/link";
 
 import { DrillNumber, type DrillItem } from "@/components/drill-number";
+import { Money } from "@/components/money";
 import type { PeriodPreset } from "@/lib/period";
 import type { DailySnapshot } from "@/server/daily-report";
 import { EXP_SPLIT_SINCE, type QuadroData, type RangeResumo } from "@/server/quadro";
@@ -508,7 +509,7 @@ export function QuadroBody({
                     }))}
                   />
                   <span className="font-semibold text-emerald-700 tabular-nums dark:text-emerald-300">
-                    {brl(p.totalValor)}
+                    <Money value={p.totalValor} />
                   </span>
                 </span>
               </div>
@@ -516,7 +517,7 @@ export function QuadroBody({
             <p className="pt-1 text-[11px] text-muted-foreground">
               Total no período: <strong>{data.professorReport.totalAulas}</strong>{" "}
               aula{data.professorReport.totalAulas === 1 ? "" : "s"} ·{" "}
-              <strong>{brl(data.professorReport.totalValor)}</strong> a repassar aos
+              <strong><Money value={data.professorReport.totalValor} /></strong> a repassar aos
               professores.
             </p>
           </div>
@@ -957,7 +958,7 @@ function RevenueCard({
     <div className={`rounded border p-3 ${strong ? "bg-primary/5" : "bg-muted/40"}`}>
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`mt-0.5 font-semibold ${strong ? "text-2xl" : "text-xl"}`}>
-        {value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+        <Money value={value} />
       </div>
       {hint ? <div className="text-[11px] text-muted-foreground">{hint}</div> : null}
     </div>

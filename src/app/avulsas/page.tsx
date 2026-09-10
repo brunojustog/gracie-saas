@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Money } from "@/components/money";
 import { TopNav } from "@/components/top-nav";
 import { signOut } from "@/server/auth";
 import { getLooseClassesForList } from "@/server/loose-classes";
@@ -65,7 +66,7 @@ export default async function AvulsasPage({
                 Receita (filtro atual)
               </div>
               <div className="mt-1 text-2xl font-semibold">
-                {total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                <Money value={total} />
               </div>
             </div>
           )}

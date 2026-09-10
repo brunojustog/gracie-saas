@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 
 import { toggleReceived } from "./actions";
@@ -78,14 +79,14 @@ export function PayoutList({ payouts }: { payouts: PayoutItem[] }) {
               )}
             </div>
             <span className="text-sm font-bold text-emerald-600 tabular-nums dark:text-emerald-400">
-              {brl(p.total)}
+              <Money value={p.total} />
             </span>
           </div>
           <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
-            {p.regular > 0 ? <span>regulares {brl(p.regular)}</span> : null}
-            {p.aux > 0 ? <span>auxílios {brl(p.aux)}</span> : null}
-            {p.particular > 0 ? <span>particulares {brl(p.particular)}</span> : null}
-            {p.conv > 0 ? <span>conversões {brl(p.conv)}</span> : null}
+            {p.regular > 0 ? <span>regulares <Money value={p.regular} /></span> : null}
+            {p.aux > 0 ? <span>auxílios <Money value={p.aux} /></span> : null}
+            {p.particular > 0 ? <span>particulares <Money value={p.particular} /></span> : null}
+            {p.conv > 0 ? <span>conversões <Money value={p.conv} /></span> : null}
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">

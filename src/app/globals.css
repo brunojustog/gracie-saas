@@ -147,3 +147,22 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* v1.2-BC: modo discricao — valores financeiros sensiveis (.gb-money) ficam
+   borrados ate clicar. Ligado via data-hide-money="1" no <html>. Precos de
+   catalogo NAO usam .gb-money. */
+[data-hide-money="1"] .gb-money {
+  filter: blur(7px);
+  cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+  transition: filter 0.12s ease;
+}
+[data-hide-money="1"] .gb-money:hover {
+  filter: blur(4px);
+}
+[data-hide-money="1"] .gb-money.gb-reveal {
+  filter: none;
+  user-select: auto;
+  cursor: text;
+}

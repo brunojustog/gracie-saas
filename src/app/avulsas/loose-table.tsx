@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -110,9 +111,7 @@ export function LooseTable({
                   <TableCell>{format(new Date(r.classDate), "dd/MM/yyyy")}</TableCell>
                   {hideFinancials ? null : (
                     <TableCell className="text-right font-mono text-xs">
-                      {value !== null
-                        ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-                        : "—"}
+                      <Money value={value} />
                     </TableCell>
                   )}
                   <TableCell>
