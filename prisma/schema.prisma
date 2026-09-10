@@ -184,6 +184,7 @@ model Tenant {
   messageJobs         MessageJob[]
   products            Product[]
   sales               Sale[]
+  orders              Order[]
   leadNotes           LeadNote[]
   paymentRecords      PaymentRecord[]
   privatePackages     PrivatePackage[]
@@ -1452,4 +1453,43 @@ model SaleItem {
 
   @@index([saleId])
   @@index([productVariantId])
+}
+
+/** v1.2-BB: situação do pagamento de uma encomenda. */
+enum OrderPaymentStatus {
+  TO_PAY // a pagar (paga na entrega)
+  PARTIAL // pagou uma parte / sinal
+  PAID // pago adiantado (integral)
+}
+
+/** v1.2-BB: andamento da encomenda. */
+enum OrderStatus {
+  OPEN // aberta (aguardando chegar/entregar)
+  FULFILLED // entregue ao aluno
+  CANCELED // cancelada
+}
+
+/**
+ * v1.2-BB: encomenda — aluno pediu um item que não tem em estoque. Registro
+ * simples pra Gisele controlar (não mexe em estoque nem gera venda). Vira venda
+ * normal na lojinha quando o item chega e é entregue/pago.
+ */
+model Order {
+  id            String             @id @default(cuid())
+  tenantId      String
+  item          String // descrição do item encomendado
+  customerName  String? // aluno/cliente que pediu (texto livre)
+  size          String? // tamanho
+  orderedAt     DateTime           @default(now())
+  paymentStatus OrderPaymentStatus @default(TO_PAY)
+  amount        Decimal?           @db.Decimal(10, 2) // valor combinado
+  notes         String?            @db.Text // o que foi combinado
+  status        OrderStatus        @default(OPEN)
+  createdById   String? // quem registrou (sem relação forte)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, orderedAt])
 }

@@ -60,6 +60,11 @@ export default async function PdvPage() {
                 Produtos
               </Button>
             </Link>
+            <Link href="/pdv/encomendas">
+              <Button variant="outline" size="sm">
+                Encomendas
+              </Button>
+            </Link>
             <Link href="/pdv/historico">
               <Button variant="outline" size="sm">
                 Histórico
