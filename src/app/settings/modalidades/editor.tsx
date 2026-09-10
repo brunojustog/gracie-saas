@@ -216,7 +216,7 @@ function ModalityFormBody({
           <div>
             <Label htmlFor="isKids">Turma infantil (kids)</Label>
             <p className="text-xs text-muted-foreground">
-              Separa adultos × kids na contagem de alunos do Quadro do Vitor.
+              Separa adultos × kids na contagem de alunos dos Relatórios.
             </p>
           </div>
           <Switch id="isKids" checked={isKids} onCheckedChange={setIsKids} />

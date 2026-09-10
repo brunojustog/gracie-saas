@@ -18,8 +18,8 @@ export async function getRangeDigest(tenantId: string, from: Date, to: Date) {
   const live = { lead: { deletedAt: null } };
   const [
     matriculas,
-    cancelEfetivados,
-    cancelSolicitados,
+    cancelPorSolicitacao,
+    cancelDireto,
     experimentais,
     compareceram,
     avulsas,
@@ -28,23 +28,25 @@ export async function getRangeDigest(tenantId: string, from: Date, to: Date) {
       prisma.enrollment.count({
         where: { tenantId, ...live, enrolledAt: { gte: from, lte: to } },
       }),
-      // Cancelamentos efetivados/judiciais (pela data do cancelamento).
+      // v1.2-AU: conta o cancelamento UMA vez, na data da SOLICITAÇÃO (quando
+      // houve) — mesma lógica do drill-down. Efetivar depois (pagar taxa /
+      // cancelar recorrência) NÃO reconta. Quem tem solicitação no período:
+      prisma.enrollment.count({
+        where: {
+          tenantId,
+          ...live,
+          status: { in: ["CANCEL_REQUESTED", "CANCELED", "JUDICIAL"] },
+          cancelRequestedAt: { gte: from, lte: to },
+        },
+      }),
+      // Cancelamento DIRETO (sem solicitação prévia) — conta na efetivação.
       prisma.enrollment.count({
         where: {
           tenantId,
           ...live,
           status: { in: ["CANCELED", "JUDICIAL"] },
+          cancelRequestedAt: null,
           canceledAt: { gte: from, lte: to },
-        },
-      }),
-      // v1.1-BN: solicitações de cancelamento (pela data da solicitação) —
-      // já contam como cancelamento do negócio.
-      prisma.enrollment.count({
-        where: {
-          tenantId,
-          ...live,
-          status: "CANCEL_REQUESTED",
-          cancelRequestedAt: { gte: from, lte: to },
         },
       }),
       // v1.1-BQ: experimentais sem leads excluídos — alinha com o Quadro.
@@ -89,7 +91,7 @@ export async function getRangeDigest(tenantId: string, from: Date, to: Date) {
     ]);
   return {
     matriculas,
-    cancelamentos: cancelEfetivados + cancelSolicitados,
+    cancelamentos: cancelPorSolicitacao + cancelDireto,
     experimentais,
     compareceram,
     avulsas,

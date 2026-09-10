@@ -41,7 +41,7 @@ const LINKS: NavLink[] = [
   { href: "/avulsas", label: "Aulas avulsas", icon: ShoppingBag },
   // v1.2-AK: lojinha/PDV religada no menu (vendas de produtos pelas atendentes).
   { href: "/pdv", label: "Lojinha", icon: Store },
-  { href: "/quadro", label: "Quadro do Vitor", icon: BarChart3, adminOnly: true },
+  { href: "/quadro", label: "Relatórios", icon: BarChart3, adminOnly: true },
   { href: "/professores", label: "Professores", icon: Dumbbell, adminOnly: true },
   { href: "/settings", label: "Config", icon: Settings, exact: true },
 ];

@@ -71,7 +71,7 @@ export function QuadroBody({
     <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Quadro do Vitor</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Relatórios</h1>
           <p className="text-xs text-muted-foreground">
             Visão gerencial da academia · atualizado em{" "}
             {format(data.generatedAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
