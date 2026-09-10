@@ -21,6 +21,35 @@ async function currentProfessor(): Promise<
   return { ok: true, tenantId: tenant.id, professorId: professor.id };
 }
 
+// v1.2-AW: o professor sobe a PRÓPRIA foto pelo app (aba Perfil). Aparece no
+// card da aula do aluno.
+export async function uploadMyProfessorPhoto(formData: FormData): Promise<Result> {
+  const ctx = await currentProfessor();
+  if (!ctx.ok) return ctx;
+  const file = formData.get("photo");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "selecione uma imagem" };
+  if (!file.type.startsWith("image/")) return { ok: false, error: "o arquivo precisa ser uma imagem" };
+  if (file.size > 4 * 1024 * 1024) return { ok: false, error: "imagem grande demais (máx. 4 MB)" };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  await prisma.professor.update({
+    where: { id: ctx.professorId },
+    data: { photoData: bytes, photoMime: file.type },
+  });
+  revalidatePath("/professor/perfil");
+  return { ok: true };
+}
+
+export async function removeMyProfessorPhoto(): Promise<Result> {
+  const ctx = await currentProfessor();
+  if (!ctx.ok) return ctx;
+  await prisma.professor.update({
+    where: { id: ctx.professorId },
+    data: { photoData: null, photoMime: null },
+  });
+  revalidatePath("/professor/perfil");
+  return { ok: true };
+}
+
 const confirmSchema = z.object({
   slotId: z.string().min(1),
   date: z.string().date(),

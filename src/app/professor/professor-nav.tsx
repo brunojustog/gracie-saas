@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, CalendarCheck, Home } from "lucide-react";
+import { Award, CalendarCheck, Home, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,6 +12,7 @@ const ITEMS = [
   { href: "/professor", label: "Início", icon: Home, exact: true },
   { href: "/professor/chamada", label: "Chamada", icon: CalendarCheck },
   { href: "/professor/graduar", label: "Graduar", icon: Award },
+  { href: "/professor/perfil", label: "Perfil", icon: User },
 ];
 
 export function ProfessorNav() {
