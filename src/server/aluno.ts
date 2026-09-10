@@ -23,6 +23,8 @@ export async function getAlunoFicha(membership: TenantUser, alunoId: string) {
       matricula: true,
       active: true,
       photoMime: true,
+      kimonoSize: true,
+      beltSize: true,
       lastGraduationAt: true,
       createdAt: true,
       lead: {
@@ -106,6 +108,8 @@ export async function getAlunoFicha(membership: TenantUser, alunoId: string) {
     matricula: aluno.matricula,
     active: aluno.active,
     hasPhoto: aluno.photoMime != null,
+    kimonoSize: aluno.kimonoSize,
+    beltSize: aluno.beltSize,
     createdAt: aluno.createdAt,
     phone: aluno.lead.phone,
     email: aluno.user?.email ?? aluno.lead.email,

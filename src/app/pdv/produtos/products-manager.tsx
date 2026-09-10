@@ -38,6 +38,7 @@ import type { ProductListItem } from "@/server/pdv";
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
   BEBIDA: "Bebidas",
   SUPLEMENTO: "Suplementos",
+  ALIMENTOS: "Alimentos",
   KIMONO: "Kimonos",
   FAIXA: "Faixas",
   CAMISETA: "Camisetas",

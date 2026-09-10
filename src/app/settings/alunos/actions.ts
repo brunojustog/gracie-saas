@@ -316,6 +316,41 @@ export async function updateAluno(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
+/**
+ * v1.2-AZ: tamanhos de kimono e faixa na ficha do aluno (logistica de
+ * graduacao). Editavel direto na ficha.
+ */
+export async function updateAlunoSizes(input: unknown): Promise<Result> {
+  const parsed = z
+    .object({
+      alunoId: z.string().min(1),
+      kimonoSize: z.string().max(20).optional().nullable(),
+      beltSize: z.string().max(20).optional().nullable(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant } = await requireRole("ADMIN");
+  const d = parsed.data;
+
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: d.alunoId, tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!aluno) return { ok: false, error: "aluno não encontrado" };
+
+  await prisma.aluno.update({
+    where: { id: aluno.id },
+    data: {
+      kimonoSize: d.kimonoSize?.trim() || null,
+      beltSize: d.beltSize?.trim() || null,
+    },
+  });
+
+  revalidatePath(`/settings/alunos/${aluno.id}`);
+  revalidatePath("/settings/alunos");
+  return { ok: true };
+}
+
 /** v1.2-E/G: redefine a senha de acesso do aluno (e opcionalmente avisa no zap). */
 export async function resetAlunoPassword(
   input: unknown,

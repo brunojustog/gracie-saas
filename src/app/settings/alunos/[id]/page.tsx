@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAlunoFicha } from "@/server/aluno";
 import { requireRole } from "@/server/tenant";
 
+import { SizesEditor } from "./sizes-editor";
+
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -129,6 +131,18 @@ export default async function AlunoFichaPage({
               <Field label="Telefone" value={f.phone || "—"} />
               <Field label="E-mail / login" value={f.email || "—"} />
             </dl>
+          </section>
+
+          <section className="rounded-xl border bg-card p-4">
+            <h3 className="mb-1 text-sm font-semibold">Vestimenta (graduação)</h3>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Tamanho de kimono e faixa pra facilitar a entrega nas graduações.
+            </p>
+            <SizesEditor
+              alunoId={f.id}
+              kimonoSize={f.kimonoSize}
+              beltSize={f.beltSize}
+            />
           </section>
         </TabsContent>
 

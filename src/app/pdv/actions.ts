@@ -156,6 +156,7 @@ const upsertProductSchema = z.object({
   category: z.enum([
     "BEBIDA",
     "SUPLEMENTO",
+    "ALIMENTOS",
     "KIMONO",
     "FAIXA",
     "CAMISETA",

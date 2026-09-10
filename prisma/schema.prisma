@@ -1072,6 +1072,9 @@ model Aluno {
   // v1.2-I: foto de perfil (avatar). Bytes no Postgres, servida por rota.
   photoData        Bytes?
   photoMime        String?
+  // v1.2-AZ: tamanhos p/ logistica de graduacao (pedido Anderson 10/09).
+  kimonoSize       String?
+  beltSize         String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -1328,6 +1331,7 @@ model WebhookLog {
 enum ProductCategory {
   BEBIDA
   SUPLEMENTO
+  ALIMENTOS
   KIMONO
   FAIXA
   CAMISETA

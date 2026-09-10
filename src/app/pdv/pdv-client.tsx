@@ -47,6 +47,7 @@ const NO_CUSTOMER = "__avulsa__";
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
   BEBIDA: "Bebidas",
   SUPLEMENTO: "Suplementos",
+  ALIMENTOS: "Alimentos",
   KIMONO: "Kimonos",
   FAIXA: "Faixas",
   CAMISETA: "Camisetas",
