@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, KeyRound, Loader2, MapPin, Pencil, Send } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -483,10 +484,10 @@ export function AlunosEditor({
           filtered.map((a) => (
             <div key={a.id} className="rounded-lg border bg-card p-3 text-sm">
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => (editId === a.id ? setEditId(null) : openEdit(a))}
+                <Link
+                  href={`/settings/alunos/${a.id}`}
+                  className="min-w-0 flex-1 text-left hover:underline"
+                  title="Abrir ficha do aluno"
                 >
                   <div className="flex items-center gap-1.5 font-medium">
                     <span
@@ -501,7 +502,7 @@ export function AlunosEditor({
                     {a.email ?? "sem login"}
                     {a.belt ? ` · ${a.belt}${a.beltDegree ? ` ${a.beltDegree}º` : ""}` : ""}
                   </div>
-                </button>
+                </Link>
                 {a.phone ? (
                   <Button size="sm" variant="ghost" disabled={pending} onClick={() => sendAccess(a.id)} title="Enviar acesso por WhatsApp">
                     <Send className="h-4 w-4" />
