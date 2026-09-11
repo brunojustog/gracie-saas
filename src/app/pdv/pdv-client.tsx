@@ -2,7 +2,7 @@
 
 import type { ProductCategory, SalePaymentMethod } from "@prisma/client";
 import { Check, ChevronsUpDown, Minus, Plus, Search, Trash2 } from "lucide-react";
-import { type ReactNode, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,10 @@ import { createSale } from "./actions";
 import type { ProductListItem } from "@/server/pdv";
 
 type Lead = { id: string; name: string };
+type Seller = { id: string; name: string };
+
+/** v1.2-BD: 5% de desconto no PIX (espelha o servidor). */
+const PIX_DISCOUNT_RATE = 0.05;
 
 type CartLine = {
   variantId: string;
@@ -72,13 +76,13 @@ const fmtBRL = (n: number) =>
 export function PdvClient({
   products,
   leads,
-  sellerName,
-  signOutSlot,
+  sellers,
+  defaultSellerId,
 }: {
   products: ProductListItem[];
   leads: Lead[];
-  sellerName: string;
-  signOutSlot: ReactNode;
+  sellers: Seller[];
+  defaultSellerId: string;
 }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<ProductCategory | "all">("all");
@@ -87,6 +91,7 @@ export function PdvClient({
     useState<SalePaymentMethod>("PIX");
   const [customerLeadId, setCustomerLeadId] = useState<string>(NO_CUSTOMER);
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [sellerUserId, setSellerUserId] = useState<string>(defaultSellerId);
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -104,7 +109,10 @@ export function PdvClient({
       );
   }, [products, search, category]);
 
-  const total = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  const gross = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  const discount =
+    paymentMethod === "PIX" ? Math.round(gross * PIX_DISCOUNT_RATE * 100) / 100 : 0;
+  const total = gross - discount;
 
   const addVariant = (product: ProductListItem, variantId: string) => {
     const v = product.variants.find((x) => x.id === variantId);
@@ -168,6 +176,10 @@ export function PdvClient({
       toast.error("Carrinho vazio");
       return;
     }
+    if (!sellerUserId) {
+      toast.error("Selecione a vendedora");
+      return;
+    }
     startTransition(async () => {
       const result = await createSale({
         items: cart.map((l) => ({
@@ -177,6 +189,7 @@ export function PdvClient({
         paymentMethod,
         customerLeadId:
           customerLeadId === NO_CUSTOMER ? null : customerLeadId,
+        sellerUserId,
         notes: notes || undefined,
       });
       if (!result.ok) {
@@ -188,6 +201,7 @@ export function PdvClient({
       setNotes("");
       setCustomerLeadId(NO_CUSTOMER);
       setPaymentMethod("PIX");
+      // mantém a vendedora selecionada pra próximas vendas
     });
   };
 
@@ -302,6 +316,22 @@ export function PdvClient({
         )}
 
         <div className="space-y-2 border-t pt-3">
+          {/* v1.2-BD: vendedora obrigatória — a venda cai em quem foi selecionada. */}
+          <div className="space-y-1">
+            <Label htmlFor="seller">Vendedora</Label>
+            <Select value={sellerUserId} onValueChange={setSellerUserId}>
+              <SelectTrigger id="seller" className="h-9">
+                <SelectValue placeholder="Selecione a vendedora" />
+              </SelectTrigger>
+              <SelectContent>
+                {sellers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1">
             <Label htmlFor="payment">Pagamento</Label>
             <Select
@@ -397,19 +427,23 @@ export function PdvClient({
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t pt-3 text-base">
-          <span className="font-semibold">Total</span>
-          <span className="text-lg font-bold">{fmtBRL(total)}</span>
-        </div>
-
-        {/* v1.2-AY: confirmação de vendedora — a venda fica no nome de quem está
-            logado. Se não for essa pessoa, "Não sou eu" faz logout pra relogar. */}
-        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-900/60 dark:bg-amber-950/40">
-          <span className="min-w-0">
-            <span className="text-muted-foreground">Vendendo como </span>
-            <span className="font-semibold">{sellerName}</span>
-          </span>
-          {signOutSlot}
+        <div className="space-y-1 border-t pt-3">
+          {discount > 0 ? (
+            <>
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Subtotal</span>
+                <span>{fmtBRL(gross)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                <span>Desconto Pix (5%)</span>
+                <span>− {fmtBRL(discount)}</span>
+              </div>
+            </>
+          ) : null}
+          <div className="flex items-center justify-between text-base">
+            <span className="font-semibold">Total</span>
+            <span className="text-lg font-bold">{fmtBRL(total)}</span>
+          </div>
         </div>
 
         <Button

@@ -29,8 +29,13 @@ const createSaleSchema = z.object({
     "OUTRO",
   ]),
   customerLeadId: z.string().optional().nullable(),
+  // v1.2-BD: vendedora escolhida (a venda cai nela, não em quem está logado).
+  sellerUserId: z.string().optional().nullable(),
   notes: z.string().max(2000).optional(),
 });
+
+/** v1.2-BD: desconto padrão de 5% em pagamentos via PIX. */
+const PIX_DISCOUNT_RATE = 0.05;
 
 type SaleResult =
   | { ok: true; saleId: string }
@@ -89,17 +94,42 @@ export async function createSale(input: unknown): Promise<SaleResult> {
       stock: v.stock,
     });
   }
-  const total = lines.reduce((s, l) => s + l.subtotal, 0);
+  const gross = lines.reduce((s, l) => s + l.subtotal, 0);
+  // v1.2-BD: 5% de desconto no PIX (arredondado ao centavo). total = bruto - desc.
+  const discount =
+    parsed.data.paymentMethod === "PIX"
+      ? Math.round(gross * PIX_DISCOUNT_RATE * 100) / 100
+      : 0;
+  const total = gross - discount;
 
-  // 3. Customer lead opcional: valida que pertence ao tenant.
+  // 3. Customer lead opcional: valida que pertence ao tenant + snapshot do nome.
   let customerLeadId: string | null = null;
+  let customerName: string | null = null;
   if (parsed.data.customerLeadId) {
     const lead = await prisma.lead.findFirst({
       where: { id: parsed.data.customerLeadId, tenantId: tenant.id },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!lead) return { ok: false, error: "lead inválido" };
     customerLeadId = lead.id;
+    customerName = lead.name;
+  }
+
+  // 3b. Vendedora: cai na selecionada (valida que é staff ativo do tenant que
+  // vende). Sem seleção, mantém quem está logado. Pedido do Anderson (11/09).
+  let sellerUserId = user.id;
+  if (parsed.data.sellerUserId && parsed.data.sellerUserId !== user.id) {
+    const seller = await prisma.tenantUser.findFirst({
+      where: {
+        tenantId: tenant.id,
+        userId: parsed.data.sellerUserId,
+        active: true,
+        role: { in: ["ADMIN", "MANAGER", "SELLER"] },
+      },
+      select: { userId: true },
+    });
+    if (!seller) return { ok: false, error: "vendedora inválida" };
+    sellerUserId = seller.userId;
   }
 
   // 4. Cria venda + items + decrementa estoque atomicamente.
@@ -107,9 +137,11 @@ export async function createSale(input: unknown): Promise<SaleResult> {
     const created = await tx.sale.create({
       data: {
         tenantId: tenant.id,
-        sellerUserId: user.id,
+        sellerUserId,
         customerLeadId,
+        customerName,
         total,
+        discount,
         paymentMethod: parsed.data.paymentMethod,
         notes: parsed.data.notes ?? null,
         items: {

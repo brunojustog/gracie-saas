@@ -216,12 +216,17 @@ export default async function HistoricoPage({
                       >
                         {s.customerLead.name}
                       </Link>
+                    ) : s.customerName ? (
+                      <span>{s.customerName}</span>
                     ) : (
                       <span className="text-muted-foreground">avulsa</span>
                     )}
                   </td>
                   <td className="p-3 text-xs">
                     {PAYMENT_LABEL[s.paymentMethod]}
+                    {s.discount > 0 ? (
+                      <span className="ml-1 text-emerald-600 dark:text-emerald-400">−5%</span>
+                    ) : null}
                   </td>
                   <td className="p-3 text-right font-semibold">
                     <Money value={s.total} />

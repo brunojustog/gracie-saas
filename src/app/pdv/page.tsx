@@ -12,21 +12,33 @@ import { PdvClient } from "./pdv-client";
 export default async function PdvPage() {
   const { tenant, user, membership } = await requireTenantUser();
 
-  const [products, leads] = await Promise.all([
+  const [products, leads, sellerRows] = await Promise.all([
     getProductsForTenant(tenant.id, { onlyActive: true }),
+    // v1.2-BD: picker de aluno mostra TODOS os alunos cadastrados do tenant
+    // (independente de vendedora) — antes SELLER só via os leads dela e não
+    // achava o aluno pra vincular a venda.
     prisma.lead.findMany({
-      where: {
-        tenantId: tenant.id,
-        deletedAt: null,
-        ...(membership.role === "SELLER"
-          ? { assignedSellerId: membership.userId }
-          : {}),
-      },
+      where: { tenantId: tenant.id, deletedAt: null, aluno: { isNot: null } },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
-      take: 500,
+      take: 1000,
+    }),
+    // v1.2-BD: vendedoras selecionáveis (staff ativo que vende).
+    prisma.tenantUser.findMany({
+      where: {
+        tenantId: tenant.id,
+        active: true,
+        role: { in: ["ADMIN", "MANAGER", "SELLER"] },
+      },
+      orderBy: { user: { name: "asc" } },
+      select: { userId: true, user: { select: { name: true, email: true } } },
     }),
   ]);
+
+  const sellers = sellerRows.map((s) => ({
+    id: s.userId,
+    name: s.user.name ?? s.user.email,
+  }));
 
   // Só mostra produtos que têm pelo menos 1 variant ativa
   const usable = products.filter((p) => p.variants.length > 0 && p.active);
@@ -76,24 +88,8 @@ export default async function PdvPage() {
         <PdvClient
           products={usable}
           leads={leads}
-          sellerName={user.name ?? user.email}
-          signOutSlot={
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/login" });
-              }}
-            >
-              <Button
-                type="submit"
-                variant="outline"
-                size="sm"
-                className="h-7 shrink-0 text-xs"
-              >
-                Não sou eu
-              </Button>
-            </form>
-          }
+          sellers={sellers}
+          defaultSellerId={user.id}
         />
       </main>
     </>

@@ -1421,7 +1421,12 @@ model Sale {
   tenantId       String
   sellerUserId   String
   customerLeadId String?
+  // v1.2-BD: snapshot do nome do aluno/cliente no momento da venda (não perde a
+  // info se o lead mudar/sumir; aparece no histórico e na ficha).
+  customerName   String?
   total          Decimal           @db.Decimal(10, 2)
+  // v1.2-BD: desconto aplicado (ex.: 5% no PIX). total = soma(subtotais) - discount.
+  discount       Decimal           @db.Decimal(10, 2) @default(0)
   paymentMethod  SalePaymentMethod
   paidAt         DateTime          @default(now())
   notes          String?           @db.Text

@@ -153,6 +153,8 @@ export async function getSalesForList(
       id: true,
       paidAt: true,
       total: true,
+      discount: true,
+      customerName: true,
       paymentMethod: true,
       notes: true,
       sellerUser: { select: { id: true, name: true, email: true } },
@@ -178,6 +180,7 @@ export async function getSalesForList(
   return rows.map((r) => ({
     ...r,
     total: Number(r.total),
+    discount: Number(r.discount),
     items: r.items.map((i) => ({
       ...i,
       unitPrice: Number(i.unitPrice),
