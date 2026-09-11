@@ -56,7 +56,17 @@ export default async function AlunoFichaPage({
   const f = await getAlunoFicha(membership, id);
   if (!f) notFound();
 
-  const age = f.birthDate ? differenceInYears(new Date(), f.birthDate) : null;
+  // v1.2-BE: birthDate vem como meia-noite UTC (@db.Date). Converte pro
+  // dia-calendário local antes de formatar/calcular idade, senão o fuso (-03:00)
+  // exibe um dia antes (bug reportado — igual ao que corrigimos no quadro).
+  const birthLocal = f.birthDate
+    ? new Date(
+        f.birthDate.getUTCFullYear(),
+        f.birthDate.getUTCMonth(),
+        f.birthDate.getUTCDate(),
+      )
+    : null;
+  const age = birthLocal ? differenceInYears(new Date(), birthLocal) : null;
 
   return (
     <main className="mx-auto max-w-2xl space-y-5 px-4 py-6">
@@ -118,7 +128,7 @@ export default async function AlunoFichaPage({
               <Field label="Sexo" value={f.gender ? GENDER[f.gender] ?? f.gender : "—"} />
               <Field
                 label="Nascimento"
-                value={f.birthDate ? `${dt(f.birthDate)}${age != null ? ` · ${age} anos` : ""}` : "—"}
+                value={birthLocal ? `${dt(birthLocal)}${age != null ? ` · ${age} anos` : ""}` : "—"}
               />
               <Field label="Matrícula" value={f.matricula ? `#${f.matricula}` : "—"} />
               <Field label="Cadastro no sistema" value={dt(f.createdAt)} />
