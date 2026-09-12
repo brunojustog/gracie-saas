@@ -33,8 +33,8 @@ import type { ProductListItem } from "@/server/pdv";
 type Lead = { id: string; name: string };
 type Seller = { id: string; name: string };
 
-/** v1.2-BD: 5% de desconto no PIX (espelha o servidor). */
-const PIX_DISCOUNT_RATE = 0.05;
+/** v1.2-BF: desconto opcional de 5% (espelha o servidor). */
+const DISCOUNT_RATE = 0.05;
 
 type CartLine = {
   variantId: string;
@@ -92,6 +92,7 @@ export function PdvClient({
   const [customerLeadId, setCustomerLeadId] = useState<string>(NO_CUSTOMER);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [sellerUserId, setSellerUserId] = useState<string>(defaultSellerId);
+  const [discountOn, setDiscountOn] = useState(false);
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -110,8 +111,7 @@ export function PdvClient({
   }, [products, search, category]);
 
   const gross = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
-  const discount =
-    paymentMethod === "PIX" ? Math.round(gross * PIX_DISCOUNT_RATE * 100) / 100 : 0;
+  const discount = discountOn ? Math.round(gross * DISCOUNT_RATE * 100) / 100 : 0;
   const total = gross - discount;
 
   const addVariant = (product: ProductListItem, variantId: string) => {
@@ -190,6 +190,7 @@ export function PdvClient({
         customerLeadId:
           customerLeadId === NO_CUSTOMER ? null : customerLeadId,
         sellerUserId,
+        applyDiscount: discountOn,
         notes: notes || undefined,
       });
       if (!result.ok) {
@@ -201,6 +202,7 @@ export function PdvClient({
       setNotes("");
       setCustomerLeadId(NO_CUSTOMER);
       setPaymentMethod("PIX");
+      setDiscountOn(false);
       // mantém a vendedora selecionada pra próximas vendas
     });
   };
@@ -427,6 +429,17 @@ export function PdvClient({
           </div>
         </div>
 
+        {/* v1.2-BF: desconto de 5% é opção da recepção (não é mais automático). */}
+        <label className="flex cursor-pointer items-center gap-2 border-t pt-3 text-sm">
+          <input
+            type="checkbox"
+            checked={discountOn}
+            onChange={(e) => setDiscountOn(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Aplicar desconto de 5%
+        </label>
+
         <div className="space-y-1 border-t pt-3">
           {discount > 0 ? (
             <>
@@ -435,7 +448,7 @@ export function PdvClient({
                 <span>{fmtBRL(gross)}</span>
               </div>
               <div className="flex items-center justify-between text-sm text-emerald-600 dark:text-emerald-400">
-                <span>Desconto Pix (5%)</span>
+                <span>Desconto (5%)</span>
                 <span>− {fmtBRL(discount)}</span>
               </div>
             </>

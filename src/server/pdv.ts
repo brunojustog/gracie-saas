@@ -112,6 +112,8 @@ export type SaleListFilters = {
   customerLeadId?: string;
   /** v1.2-AQ: busca por nome do aluno vinculado à venda. */
   customerSearch?: string;
+  /** v1.2-BF: mostra vendas de TODAS as vendedoras (histórico da lojinha p/ relatório). */
+  allSellers?: boolean;
 };
 
 export function buildSaleListWhere(
@@ -133,13 +135,22 @@ export function buildSaleListWhere(
     };
   }
 
-  // sellerUserId só é honrado pra ADMIN/MANAGER. Pra SELLER, scopedSaleWhere
-  // sobrescreve abaixo (igual /matriculas).
-  if (filters.sellerUserId && membership.role !== "SELLER") {
+  // v1.2-BF: histórico da lojinha mostra todas as vendas do tenant (recepção
+  // precisa pro relatório do dia). Com allSellers, ignora o escopo por vendedora.
+  const scope: Prisma.SaleWhereInput = filters.allSellers
+    ? { tenantId: membership.tenantId }
+    : scopedSaleWhere(membership);
+
+  // Filtro por vendedora: com allSellers qualquer papel filtra; senão só
+  // ADMIN/MANAGER (SELLER fica preso às próprias vendas pelo scope).
+  if (
+    filters.sellerUserId &&
+    (filters.allSellers || membership.role !== "SELLER")
+  ) {
     where.sellerUserId = filters.sellerUserId;
   }
 
-  return { ...where, ...scopedSaleWhere(membership) };
+  return { ...where, ...scope };
 }
 
 export async function getSalesForList(

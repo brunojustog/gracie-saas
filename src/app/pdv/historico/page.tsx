@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
 import { MoneyToggle } from "@/components/money-toggle";
+
+import { DeleteSaleButton } from "./delete-sale-button";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getSalesForList } from "@/server/pdv";
@@ -58,21 +60,23 @@ export default async function HistoricoPage({
     sellerUserId: sp.seller,
     paymentMethod: sp.payment,
     customerSearch: sp.customer,
+    // v1.2-BF: histórico mostra a loja inteira (recepção precisa pro relatório).
+    allSellers: true,
   };
+
+  const isAdmin = membership.role === "ADMIN";
 
   const [sales, sellers] = await Promise.all([
     getSalesForList(membership, filters),
-    membership.role === "SELLER"
-      ? Promise.resolve([])
-      : prisma.user.findMany({
-          where: {
-            tenants: {
-              some: { tenantId: tenant.id, active: true },
-            },
-          },
-          orderBy: { name: "asc" },
-          select: { id: true, name: true, email: true },
-        }),
+    prisma.user.findMany({
+      where: {
+        tenants: {
+          some: { tenantId: tenant.id, active: true },
+        },
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
+    }),
   ]);
 
   const total = sales.reduce((s, r) => s + r.total, 0);
@@ -134,7 +138,7 @@ export default async function HistoricoPage({
           payment: sp.payment,
           customer: sp.customer,
         }}
-        canFilterSeller={membership.role !== "SELLER"}
+        canFilterSeller
       />
 
       {sales.length > 0 ? (
@@ -175,6 +179,7 @@ export default async function HistoricoPage({
                 <th className="p-3">Aluno</th>
                 <th className="p-3">Pagamento</th>
                 <th className="p-3 text-right">Total</th>
+                {isAdmin ? <th className="p-3 text-right">Ações</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -231,6 +236,14 @@ export default async function HistoricoPage({
                   <td className="p-3 text-right font-semibold">
                     <Money value={s.total} />
                   </td>
+                  {isAdmin ? (
+                    <td className="p-3 text-right">
+                      <DeleteSaleButton
+                        saleId={s.id}
+                        label={`${s.sellerUser.name ?? s.sellerUser.email} · ${format(new Date(s.paidAt), "dd/MM HH:mm", { locale: ptBR })}`}
+                      />
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

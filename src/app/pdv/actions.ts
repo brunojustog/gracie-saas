@@ -31,11 +31,14 @@ const createSaleSchema = z.object({
   customerLeadId: z.string().optional().nullable(),
   // v1.2-BD: vendedora escolhida (a venda cai nela, não em quem está logado).
   sellerUserId: z.string().optional().nullable(),
+  // v1.2-BF: desconto de 5% deixou de ser automático no PIX — agora é uma OPÇÃO
+  // que a recepção marca no fechamento.
+  applyDiscount: z.boolean().optional(),
   notes: z.string().max(2000).optional(),
 });
 
-/** v1.2-BD: desconto padrão de 5% em pagamentos via PIX. */
-const PIX_DISCOUNT_RATE = 0.05;
+/** v1.2-BF: taxa do desconto opcional (5%). */
+const DISCOUNT_RATE = 0.05;
 
 type SaleResult =
   | { ok: true; saleId: string }
@@ -95,11 +98,10 @@ export async function createSale(input: unknown): Promise<SaleResult> {
     });
   }
   const gross = lines.reduce((s, l) => s + l.subtotal, 0);
-  // v1.2-BD: 5% de desconto no PIX (arredondado ao centavo). total = bruto - desc.
-  const discount =
-    parsed.data.paymentMethod === "PIX"
-      ? Math.round(gross * PIX_DISCOUNT_RATE * 100) / 100
-      : 0;
+  // v1.2-BF: desconto de 5% só quando a recepção marca (não é mais automático).
+  const discount = parsed.data.applyDiscount
+    ? Math.round(gross * DISCOUNT_RATE * 100) / 100
+    : 0;
   const total = gross - discount;
 
   // 3. Customer lead opcional: valida que pertence ao tenant + snapshot do nome.
@@ -176,6 +178,49 @@ export async function createSale(input: unknown): Promise<SaleResult> {
     revalidatePath("/admin");
   }
   return { ok: true, saleId: sale.id };
+}
+
+/**
+ * v1.2-BF: excluir uma venda (ADMIN). Devolve o estoque das variantes
+ * controladas e remove a venda + itens (cascade). Usado pra corrigir vendas
+ * erradas/de teste.
+ */
+export async function deleteSale(input: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = z.object({ saleId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant } = await requireRole("ADMIN");
+
+  const sale = await prisma.sale.findFirst({
+    where: { id: parsed.data.saleId, tenantId: tenant.id },
+    select: {
+      id: true,
+      items: { select: { productVariantId: true, quantity: true } },
+    },
+  });
+  if (!sale) return { ok: false, error: "venda não encontrada" };
+
+  await prisma.$transaction(async (tx) => {
+    // Devolve estoque só das variantes que controlam saldo (stock != null).
+    for (const it of sale.items) {
+      const v = await tx.productVariant.findUnique({
+        where: { id: it.productVariantId },
+        select: { stock: true },
+      });
+      if (v && v.stock !== null) {
+        await tx.productVariant.update({
+          where: { id: it.productVariantId },
+          data: { stock: { increment: it.quantity } },
+        });
+      }
+    }
+    await tx.sale.delete({ where: { id: sale.id } });
+  });
+
+  revalidatePath("/pdv");
+  revalidatePath("/pdv/historico");
+  revalidatePath("/pdv/produtos");
+  revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 // ──────────────────────────────────────────────────────────────────────────
