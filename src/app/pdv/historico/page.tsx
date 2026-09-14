@@ -35,9 +35,19 @@ const PAYMENT_LABEL: Record<SalePaymentMethod, string> = {
 const fmtBRL = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-function parseDate(value?: string): Date | undefined {
-  if (!value) return undefined;
-  const d = new Date(value);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// v1.2-BG: fronteiras do dia no fuso do Brasil (America/Sao_Paulo = -03, sem
+// DST). Antes usava meia-noite UTC, então o intervalo pegava parte do dia
+// anterior e o relatório "do dia" saía torto.
+function parseFrom(value?: string): Date | undefined {
+  if (!value || !DATE_RE.test(value)) return undefined;
+  const d = new Date(`${value}T00:00:00.000-03:00`);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+function parseTo(value?: string): Date | undefined {
+  if (!value || !DATE_RE.test(value)) return undefined;
+  const d = new Date(`${value}T23:59:59.999-03:00`);
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
@@ -49,10 +59,8 @@ export default async function HistoricoPage({
   const { tenant, user, membership } = await requireTenantUser();
   const sp = await searchParams;
 
-  const from = parseDate(sp.from);
-  const to = parseDate(sp.to);
-  // Inclui o dia inteiro do "to"
-  if (to) to.setHours(23, 59, 59, 999);
+  const from = parseFrom(sp.from);
+  const to = parseTo(sp.to);
 
   const filters = {
     from,
