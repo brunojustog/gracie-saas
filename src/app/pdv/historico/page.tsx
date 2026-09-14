@@ -8,6 +8,7 @@ import { Money } from "@/components/money";
 import { MoneyToggle } from "@/components/money-toggle";
 
 import { DeleteSaleButton } from "./delete-sale-button";
+import { EditSaleButton } from "./edit-sale-button";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getSalesForList } from "@/server/pdv";
@@ -246,10 +247,24 @@ export default async function HistoricoPage({
                   </td>
                   {isAdmin ? (
                     <td className="p-3 text-right">
-                      <DeleteSaleButton
-                        saleId={s.id}
-                        label={`${s.sellerUser.name ?? s.sellerUser.email} · ${format(new Date(s.paidAt), "dd/MM HH:mm", { locale: ptBR })}`}
-                      />
+                      <div className="flex justify-end gap-1">
+                        <EditSaleButton
+                          saleId={s.id}
+                          paymentMethod={s.paymentMethod}
+                          discountOn={s.discount > 0}
+                          items={s.items.map((i) => ({
+                            id: i.id,
+                            name: i.productVariant.product.name,
+                            label: i.productVariant.label,
+                            quantity: i.quantity,
+                            unitPrice: i.unitPrice,
+                          }))}
+                        />
+                        <DeleteSaleButton
+                          saleId={s.id}
+                          label={`${s.sellerUser.name ?? s.sellerUser.email} · ${format(new Date(s.paidAt), "dd/MM HH:mm", { locale: ptBR })}`}
+                        />
+                      </div>
                     </td>
                   ) : null}
                 </tr>

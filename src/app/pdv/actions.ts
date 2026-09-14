@@ -223,6 +223,75 @@ export async function deleteSale(input: unknown): Promise<{ ok: true } | { ok: f
   return { ok: true };
 }
 
+/**
+ * v1.2-BH: corrigir uma venda (ADMIN) — ajusta preço unitário dos itens, forma
+ * de pagamento e o desconto de 5%. Não mexe em quantidade/estoque (correção de
+ * valor digitado errado). Recalcula subtotal/total no servidor.
+ */
+const updateSaleSchema = z.object({
+  saleId: z.string().min(1),
+  paymentMethod: z.enum([
+    "PIX",
+    "DINHEIRO",
+    "CARTAO_DEBITO",
+    "CARTAO_CREDITO",
+    "CORTESIA",
+    "OUTRO",
+  ]),
+  applyDiscount: z.boolean().optional(),
+  items: z
+    .array(z.object({ id: z.string().min(1), unitPrice: z.number().nonnegative().max(1_000_000) }))
+    .min(1)
+    .max(100),
+});
+
+export async function updateSale(input: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = updateSaleSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant } = await requireRole("ADMIN");
+
+  const sale = await prisma.sale.findFirst({
+    where: { id: parsed.data.saleId, tenantId: tenant.id },
+    select: { id: true, items: { select: { id: true, quantity: true } } },
+  });
+  if (!sale) return { ok: false, error: "venda não encontrada" };
+
+  const qtyById = new Map(sale.items.map((i) => [i.id, i.quantity]));
+  // Todos os itens enviados precisam pertencer à venda.
+  for (const it of parsed.data.items) {
+    if (!qtyById.has(it.id)) return { ok: false, error: "item inválido" };
+  }
+
+  let gross = 0;
+  const updates = parsed.data.items.map((it) => {
+    const qty = qtyById.get(it.id)!;
+    const subtotal = Math.round(it.unitPrice * qty * 100) / 100;
+    gross += subtotal;
+    return { id: it.id, unitPrice: it.unitPrice, subtotal };
+  });
+  const discount = parsed.data.applyDiscount
+    ? Math.round(gross * DISCOUNT_RATE * 100) / 100
+    : 0;
+  const total = gross - discount;
+
+  await prisma.$transaction(async (tx) => {
+    for (const u of updates) {
+      await tx.saleItem.update({
+        where: { id: u.id },
+        data: { unitPrice: u.unitPrice, subtotal: u.subtotal },
+      });
+    }
+    await tx.sale.update({
+      where: { id: sale.id },
+      data: { total, discount, paymentMethod: parsed.data.paymentMethod },
+    });
+  });
+
+  revalidatePath("/pdv/historico");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // CRUD de Produto/Variant (ADMIN/MANAGER)
 // ──────────────────────────────────────────────────────────────────────────
