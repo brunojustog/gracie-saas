@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Substituir o Gestor · GB Anália Franco</title>
+<meta name="description" content="Roadmap priorizado para o gracie-saas substituir o sistema Gestor — uso interno dos sócios.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #FAF7F5;
+    --surface: #FFFFFF;
+    --surface-2: #F3EDEA;
+    --ink: #1B1513;
+    --muted: #6E635F;
+    --hair: #E7DEDA;
+    --accent: #A4172B;
+    --accent-weak: #F6E7E8;
+    --tem: #1F7A54;
+    --tem-bg: #E4F1EA;
+    --parcial: #A9700F;
+    --parcial-bg: #F6ECD8;
+    --nao: #8A7F7B;
+    --nao-bg: #EEE8E5;
+    --shadow: 0 1px 2px rgba(27,21,19,.05), 0 8px 24px -12px rgba(27,21,19,.18);
+    --maxw: 900px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #161110; --surface: #201917; --surface-2: #2A211E;
+      --ink: #F1EAE7; --muted: #A99E99; --hair: #352A27;
+      --accent: #E5697A; --accent-weak: #3A2320;
+      --tem: #5FBF93; --tem-bg: #163024;
+      --parcial: #E0A94E; --parcial-bg: #332416;
+      --nao: #A99E99; --nao-bg: #2A211E;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #161110; --surface: #201917; --surface-2: #2A211E;
+    --ink: #F1EAE7; --muted: #A99E99; --hair: #352A27;
+    --accent: #E5697A; --accent-weak: #3A2320;
+    --tem: #5FBF93; --tem-bg: #163024;
+    --parcial: #E0A94E; --parcial-bg: #332416;
+    --nao: #A99E99; --nao-bg: #2A211E;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  img { max-width: 100%; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Barlow", system-ui, sans-serif;
+    line-height: 1.6;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding-inline: 22px; padding-block: 0; }
+
+  .eyebrow {
+    font-family: "Barlow Condensed", sans-serif;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-weight: 600; font-size: .8rem; color: var(--accent);
+  }
+  h1, h2, h3 { font-family: "Barlow Condensed", sans-serif; text-wrap: balance; line-height: 1.08; margin: 0; }
+  h1 { font-size: clamp(2.5rem, 6vw, 3.7rem); font-weight: 700; letter-spacing: -.01em; }
+  h2 { font-size: clamp(1.5rem, 3.4vw, 2rem); font-weight: 700; }
+  h3 { font-size: 1.15rem; font-weight: 600; letter-spacing: .01em; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  code, .mono { font-family: "IBM Plex Mono", monospace; font-size: .82em; }
+
+  header.hero {
+    border-bottom: 3px solid var(--accent);
+    background: linear-gradient(180deg, var(--accent-weak) 0%, transparent 70%);
+  }
+  .hero-inner { padding-block: 40px 30px; display: flex; flex-direction: column; gap: 16px; }
+  .hero h1 { max-width: 16ch; }
+  .lede { font-size: 1.18rem; color: var(--muted); max-width: 60ch; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: .85rem; color: var(--muted); margin-top: 4px; }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  section { padding-block: 34px; border-top: 1px solid var(--hair); }
+  section:first-of-type { border-top: none; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; }
+  .sec-head .num { font-family: "IBM Plex Mono", monospace; color: var(--accent); font-size: .95rem; font-weight: 500; }
+
+  .summary {
+    background: var(--surface); border: 1px solid var(--hair);
+    border-left: 4px solid var(--accent);
+    border-radius: 4px; padding: 22px 24px; box-shadow: var(--shadow);
+    font-size: 1.05rem;
+  }
+  .summary strong { color: var(--accent); font-weight: 600; }
+
+  .callout {
+    background: var(--parcial-bg); border: 1px solid color-mix(in srgb, var(--parcial) 35%, transparent);
+    border-radius: 4px; padding: 16px 18px; font-size: .95rem;
+  }
+  .callout .tag { font-family:"Barlow Condensed",sans-serif; text-transform:uppercase; letter-spacing:.1em; font-weight:700; color: var(--parcial); font-size:.8rem; }
+
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .col { background: var(--surface); border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
+  .col > .col-h { padding: 11px 14px; font-family:"Barlow Condensed",sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:.06em; font-size:.92rem; display:flex; align-items:center; gap:8px; border-bottom: 1px solid var(--hair); }
+  .col.tem .col-h { color: var(--tem); background: var(--tem-bg); }
+  .col.parcial .col-h { color: var(--parcial); background: var(--parcial-bg); }
+  .col.nao .col-h { color: var(--nao); background: var(--nao-bg); }
+  .col ul { list-style: none; margin: 0; padding: 8px 14px 14px; display: flex; flex-direction: column; gap: 7px; }
+  .col li { font-size: .9rem; padding-left: 15px; position: relative; }
+  .col li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; }
+  .col.tem li::before { background: var(--tem); }
+  .col.parcial li::before { background: var(--parcial); }
+  .col.nao li::before { background: var(--nao); border-radius: 1px; }
+
+  .corr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .corr .c { border: 1px solid var(--hair); border-radius: 6px; padding: 14px 16px; background: var(--surface); }
+  .corr .c .k { font-family:"Barlow Condensed",sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:.06em; font-size:.82rem; margin-bottom:4px; }
+  .corr .up .k { color: var(--tem); }
+  .corr .down .k { color: var(--accent); }
+  .corr small { color: var(--muted); }
+
+  .quad-wrap { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+  .yaxis { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; font-family:"Barlow Condensed",sans-serif; text-transform:uppercase; letter-spacing:.1em; font-size:.75rem; color: var(--muted); }
+  .quad { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .q { border: 1px solid var(--hair); border-radius: 6px; padding: 12px 13px; min-height: 120px; background: var(--surface); }
+  .q h4 { margin:0 0 8px; font-family:"Barlow Condensed",sans-serif; text-transform:uppercase; letter-spacing:.06em; font-size:.82rem; font-weight:700; }
+  .q.hi { background: color-mix(in srgb, var(--tem) 8%, var(--surface)); border-color: color-mix(in srgb, var(--tem) 30%, var(--hair)); }
+  .q.hi h4 { color: var(--tem); }
+  .q.plan h4 { color: var(--parcial); }
+  .q.fill h4 { color: var(--muted); }
+  .q.avoid h4 { color: var(--accent); }
+  .chip { display:inline-block; font-size:.82rem; background: var(--surface-2); border:1px solid var(--hair); border-radius: 20px; padding: 3px 10px; margin: 3px 4px 0 0; }
+  .xaxis { text-align:center; font-family:"Barlow Condensed",sans-serif; text-transform:uppercase; letter-spacing:.1em; font-size:.75rem; color: var(--muted); margin-top:6px; grid-column: 2; }
+
+  .tbl-scroll { overflow-x: auto; border: 1px solid var(--hair); border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; min-width: 520px; }
+  thead th { background: var(--surface-2); text-align: left; font-family:"Barlow Condensed",sans-serif; text-transform:uppercase; letter-spacing:.05em; font-weight:700; font-size:.82rem; color: var(--muted); padding: 10px 14px; white-space: nowrap; }
+  tbody td { padding: 11px 14px; border-top: 1px solid var(--hair); vertical-align: top; }
+  tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
+  td .eff { font-family:"IBM Plex Mono",monospace; font-size:.8rem; white-space:nowrap; }
+  .imp { font-weight:600; font-size:.82rem; white-space:nowrap; }
+  .imp.a { color: var(--tem); } .imp.m { color: var(--parcial); } .imp.b { color: var(--muted); }
+
+  .phase { display:flex; align-items:baseline; gap:12px; margin: 26px 0 14px; flex-wrap: wrap; }
+  .phase .pn { font-family:"Barlow Condensed",sans-serif; font-weight:700; color: var(--accent); font-size:1.05rem; text-transform:uppercase; letter-spacing:.05em; }
+  .phase .pt { font-family:"Barlow Condensed",sans-serif; font-weight:600; font-size:1.25rem; }
+  .phase-note { color: var(--muted); font-size:.9rem; font-style: italic; margin: -6px 0 12px; }
+
+  .flow { display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin: 14px 0 18px; }
+  .flow .step { flex:1 1 150px; background: var(--surface); border:1px solid var(--hair); border-radius:6px; padding: 12px 14px; }
+  .flow .step .n { font-family:"IBM Plex Mono",monospace; color: var(--accent); font-size:.78rem; }
+  .flow .step p { font-size:.9rem; margin-top:3px; }
+  .two { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .panel { background: var(--surface); border:1px solid var(--hair); border-radius:6px; padding: 16px 18px; }
+  .panel h3 { margin-bottom: 8px; }
+  .panel ul { margin: 0; padding-left: 18px; display:flex; flex-direction:column; gap:5px; font-size:.92rem; }
+  .panel li::marker { color: var(--accent); }
+
+  .partner {
+    background: var(--accent-weak); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-radius: 6px; padding: 14px 16px; font-size: .95rem; margin-bottom: 16px;
+  }
+  .partner .tag { font-family:"Barlow Condensed",sans-serif; text-transform:uppercase; letter-spacing:.1em; font-weight:700; color: var(--accent); font-size:.8rem; }
+
+  .est { font-family:"IBM Plex Mono",monospace; font-size:.82rem; color: var(--muted); }
+
+  footer { border-top: 1px solid var(--hair); padding-block: 24px 48px; color: var(--muted); font-size: .82rem; }
+
+  @media (max-width: 720px) {
+    .board { grid-template-columns: 1fr; }
+    .corr, .two { grid-template-columns: 1fr; }
+    .quad { grid-template-columns: 1fr; }
+    .yaxis { display: none; }
+    .quad-wrap { grid-template-columns: 1fr; }
+    .xaxis { grid-column: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap hero-inner">
+    <span class="eyebrow">GB Anália Franco · Simplifica Online · Uso interno (sócios)</span>
+    <h1>Substituir o Gestor</h1>
+    <p class="lede">Onde o gracie-saas já ganha, o que falta pra assumir a academia inteira e em que ordem entregar — comparado ao sistema atual (GBApp "Gestor").</p>
+    <div class="meta">
+      <span><b>Data</b> 15/09/2026</span>
+      <span><b>Base</b> paridade verificada no código-fonte</span>
+      <span><b>Pagamentos</b> Stone (somos partner)</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <div class="summary">
+      Comece pela <strong>cobrança online (Stone)</strong> — é o que dá retorno imediato (acaba com a baixa manual e derruba a inadimplência) e é viável de fechar. Junto, entregue o <strong>console de check-in da recepção</strong> e <strong>CPF/endereço</strong> (rápidos). Depois, mensagens editáveis + campanhas e o começo do financeiro de saídas. Deixe <strong>Bling/fiscal e contratos</strong> pra depois do CPF, e a <strong>catraca</strong> como decisão à parte: sem ela ainda dá pra substituir ~90% do uso, tratando o Gestor só como controle de porta.
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">01</span><h2>Onde estamos hoje</h2></div>
+    <div class="board">
+      <div class="col tem">
+        <div class="col-h">Ganhamos / empatamos</div>
+        <ul>
+          <li>Captação &amp; CRM (ManyChat, Chatwoot, site)</li>
+          <li>Matrícula &amp; mensalidade recorrente</li>
+          <li>Inadimplência com carência + notas de cobrança</li>
+          <li>Check-in por GPS + chamada do professor</li>
+          <li>Aulas particulares e avulsas</li>
+          <li>Lojinha / PDV com estoque e encomendas</li>
+          <li>Graduação (faixa/grau, timeline, sugestão)</li>
+          <li>Dashboards + Quadro do Vitor</li>
+          <li>Apps do aluno e do professor (PWA)</li>
+          <li>Importação (planilha + Chatwoot)</li>
+        </ul>
+      </div>
+      <div class="col parcial">
+        <div class="col-h">Parcial</div>
+        <ul>
+          <li>Financeiro (só receita + repasse de professor)</li>
+          <li>Mensageria (templates fixos no código)</li>
+          <li>Cadastro do aluno (sem CPF / endereço)</li>
+          <li>Permissões (papéis fixos, sem grupos)</li>
+          <li>Console de check-in da recepção</li>
+          <li>Graduação (sem reagendamento / compra de faixa)</li>
+        </ul>
+      </div>
+      <div class="col nao">
+        <div class="col-h">Não temos</div>
+        <ul>
+          <li>Cobrança online / gateway</li>
+          <li>Catraca (acesso físico)</li>
+          <li>Fiscal (Bling / NF do aluno)</li>
+          <li>Contratos + aceite de termos</li>
+          <li>Campanhas / disparo em massa</li>
+          <li>Vídeo-aulas, GBPontos, transferências</li>
+          <li>Multi-idioma · relatório de aniversariantes</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="corr">
+      <div class="c up">
+        <div class="k">O preliminar nos subestimou</div>
+        <small>Já temos, e é forte: <b>check-in por GPS</b>, <b>app do professor</b>, <b>importação</b> e permissões por papel — o comparativo antigo marcava "a confirmar" ou "não tem".</small>
+      </div>
+      <div class="c down">
+        <div class="k">O preliminar nos superestimou</div>
+        <small>A infra citava "Asaas", mas <b>não há gateway no código</b>: hoje o pagamento é dado baixa <b>na mão</b>. É o gap de maior retorno — e agora vamos de <b>Stone</b>.</small>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">02</span><h2>Esforço × impacto</h2></div>
+    <div class="quad-wrap">
+      <div class="yaxis">Impacto →</div>
+      <div class="quad">
+        <div class="q hi">
+          <h4>Alto impacto · baixo esforço — fazer já</h4>
+          <span class="chip">Console de check-in</span>
+          <span class="chip">CPF + endereço</span>
+          <span class="chip">Relatório de ausentes</span>
+        </div>
+        <div class="q plan">
+          <h4>Alto impacto · esforço maior — planejar</h4>
+          <span class="chip">Cobrança online (Stone)</span>
+          <span class="chip">Financeiro de saídas</span>
+          <span class="chip">Fechamento de caixa</span>
+        </div>
+        <div class="q fill">
+          <h4>Baixo impacto · baixo esforço — encaixar</h4>
+          <span class="chip">Templates editáveis</span>
+          <span class="chip">Campanhas / aniversário</span>
+        </div>
+        <div class="q avoid">
+          <h4>Baixo apelo · esforço alto — evitar / decidir</h4>
+          <span class="chip">Catraca</span>
+          <span class="chip">Bling / NF</span>
+          <span class="chip">Vídeo-aulas · GBPontos</span>
+        </div>
+      </div>
+      <div class="xaxis">← menos esforço · mais esforço →</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">03</span><h2>Roadmap em fases</h2></div>
+    <p class="est">Estimativas em dias de dev — grosseiras, servem pra ordenar (cadência atual: incrementos pequenos com deploy contínuo).</p>
+
+    <div class="phase"><span class="pn">Fase 1</span><span class="pt">Operar a mensalidade de ponta a ponta</span></div>
+    <p class="phase-note">Meta: a recepção para de dar baixa na mão e a inadimplência cai.</p>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>Entrega</th><th>Esforço</th><th>Impacto</th><th>Pronto quando…</th></tr></thead>
+        <tbody>
+          <tr><td><b>Cobrança online (Stone) — MVP</b><br><small>PIX/boleto/cartão + baixa automática</small></td><td class="eff">6–9 d</td><td class="imp a">Alto</td><td>aluno paga PIX e o sistema marca pago sozinho + avança o vencimento</td></tr>
+          <tr><td><b>Assinatura recorrente (Stone)</b></td><td class="eff">4–6 d</td><td class="imp a">Alto</td><td>a mensalidade é cobrada todo mês sem ação humana</td></tr>
+          <tr><td><b>Console de check-in da recepção</b></td><td class="eff">2–3 d</td><td class="imp a">Alto</td><td>o balcão busca o aluno e marca presença</td></tr>
+          <tr><td><b>CPF + endereço</b> no cadastro</td><td class="eff">1–2 d</td><td class="imp m">Médio</td><td>base pronta pra contrato e fiscal</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="phase"><span class="pn">Fase 2</span><span class="pt">Menos trabalho manual, comunicação completa</span></div>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>Entrega</th><th>Esforço</th><th>Impacto</th><th>Observação</th></tr></thead>
+        <tbody>
+          <tr><td>Templates / réguas de mensagem editáveis por tela</td><td class="eff">4–6 d</td><td class="imp m">Médio</td><td>hoje os textos são fixos no código</td></tr>
+          <tr><td>Campanhas: aniversário + win-back de ausentes + disparo pontual</td><td class="eff">4–6 d</td><td class="imp m">Médio</td><td>usa a data de nascimento que já temos</td></tr>
+          <tr><td>Relatório de ausentes (churn precoce)</td><td class="eff">2 d</td><td class="imp a">Alto</td><td>quick win comercial</td></tr>
+          <tr><td>Financeiro — contas a pagar (saídas) + fluxo de caixa simples</td><td class="eff">5–8 d</td><td class="imp a">Alto</td><td>começa o financeiro que hoje falta</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="phase"><span class="pn">Fase 3</span><span class="pt">Fiscal e contratos</span></div>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>Entrega</th><th>Esforço</th><th>Impacto</th><th>Observação</th></tr></thead>
+        <tbody>
+          <tr><td>Contratos + aceite de termos (modelo → geração → aceite no app)</td><td class="eff">5–7 d</td><td class="imp m">Médio</td><td>depende de CPF/endereço</td></tr>
+          <tr><td>Fechamento de caixa / conciliação (entradas × saídas)</td><td class="eff">5–8 d</td><td class="imp a">Alto</td><td>evolui a Fase 2</td></tr>
+          <tr><td>Integração fiscal (Bling) — emissão/conciliação de NF</td><td class="eff">8–12 d</td><td class="imp m">Médio</td><td>alto lock-in do concorrente</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="phase"><span class="pn">Fase 4</span><span class="pt">Catraca — decisão estratégica</span></div>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>Entrega</th><th>Esforço</th><th>Impacto (venda)</th><th>Observação</th></tr></thead>
+        <tbody>
+          <tr><td>Integração de catraca (app desktop + driver + logs)</td><td class="eff">muito alto</td><td class="imp b">Baixo</td><td>só se o cliente exigir sistema único — ver seção 05</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">04</span><h2>Foco imediato — cobrança online (Stone)</h2></div>
+
+    <div class="partner">
+      <span class="tag">Por que Stone</span> &nbsp;Somos <b>partner</b> da Stone — condição/taxa melhor e suporte direto. Cobre <b>PIX, boleto e cartão</b>, tem <b>assinatura recorrente</b> e <b>webhooks</b> (que dão a baixa automática), além da <b>maquininha</b> pro balcão. Encaixa no que já temos (matrícula + mensalidade) sem reescrever nada.
+    </div>
+
+    <h3>Como funciona</h3>
+    <div class="flow">
+      <div class="step"><span class="n">01</span><p>Gera a cobrança da mensalidade (avulsa ou assinatura mensal).</p></div>
+      <div class="step"><span class="n">02</span><p>Manda o PIX / link pro aluno pelo WhatsApp (que já temos).</p></div>
+      <div class="step"><span class="n">03</span><p>Aluno paga. A Stone avisa o sistema por <span class="mono">webhook</span>.</p></div>
+      <div class="step"><span class="n">04</span><p>O sistema dá baixa sozinho e avança o próximo vencimento.</p></div>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h3>O que muda por dentro</h3>
+        <ul>
+          <li>Chave da Stone por unidade, guardada em Configurações (secreta — igual ao WhatsApp; ninguém precisa vê-la no dia a dia).</li>
+          <li>Vínculo do aluno com o cliente na Stone (criado na 1ª cobrança).</li>
+          <li>Assinatura recorrente na matrícula.</li>
+          <li>Uma lista de cobranças por aluno (status + link pra pagar), na ficha e no app do aluno.</li>
+          <li>A <b>baixa manual continua</b> existindo (dinheiro no balcão, cortesia).</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Como vamos entregar</h3>
+        <ul>
+          <li>Primeiro em <b>ambiente de teste</b> (sandbox), validando o webhook ponta a ponta.</li>
+          <li>Começar por <b>PIX e boleto</b> (mais simples); <b>cartão recorrente</b> por último.</li>
+          <li>Robustez do webhook: não duplicar baixa, validar a origem, registrar tudo.</li>
+          <li>Pré-requisito: conta Stone da academia + chave de API (o Bruno provê).</li>
+        </ul>
+      </div>
+    </div>
+    <p class="est" style="margin-top:14px;">Estimativa: MVP (cobrança avulsa) ~6–9 dias · assinatura recorrente +4–6 dias. Maior valor já no MVP: acaba a baixa manual e reduz a inadimplência.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">05</span><h2>A decisão da catraca</h2></div>
+    <div class="callout">
+      <span class="tag">Ponto de atenção</span>
+      <p style="margin-top:6px;">A catraca é o <b>maior motivo de o cliente não largar o Gestor</b> — e, ao mesmo tempo, o de <b>menor apelo de venda</b>: ninguém paga mais por causa dela, ela só impede a saída. Tecnicamente é a mais cara (exige um app de computador na recepção falando com o torniquete, fora da nossa stack web).</p>
+      <p style="margin-top:8px;"><b>Recomendação:</b> não colocar no caminho crítico. Entregar as Fases 1–3 (que já cobrem ~90% do uso diário) e tratar a catraca como projeto à parte, só se o cliente exigir "um sistema só na porta". Até lá, o Gestor fica sendo apenas o relógio de ponto da entrada.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">06</span><h2>Nossos diferenciais</h2></div>
+    <div class="two">
+      <div class="panel">
+        <h3>O que fazemos melhor</h3>
+        <ul>
+          <li><b>Captação digital nativa</b>: kanban colado em Instagram/WhatsApp (ManyChat), Chatwoot e site.</li>
+          <li><b>Follow-up automático</b> por WhatsApp, com histórico auditável.</li>
+          <li><b>Check-in por GPS</b> (raio por unidade) — presença sem hardware.</li>
+          <li><b>Quadro do Vitor</b>: painel comercial acionável (vendedora, conversão, churn).</li>
+          <li><b>Dashboards públicos por link</b> (sem login, sem financeiro) pro sócio acompanhar.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Feito sob medida</h3>
+        <ul>
+          <li>Aulas particulares e avulsas com receita própria.</li>
+          <li>Repasse do professor por competência + a NF que ele mesmo sobe no app.</li>
+          <li>Congelamento e cancelamento inteligentes de matrícula.</li>
+          <li>Apps de aluno e professor (PWA) com filtro de aula por perfil.</li>
+          <li>Stack moderna, domínio do cliente, evolução rápida — vs. SaaS multi-país engessado.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  Comparativo do lado gracie-saas verificado no código-fonte (rotas, schema, libs). Lado Gestor conforme mapeamento read-only da interface (banco inferido). Documento interno da Simplifica Online para avaliação dos sócios.
+</footer>
+
+</body>
+</html>
