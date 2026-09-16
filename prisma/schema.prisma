@@ -185,6 +185,7 @@ model Tenant {
   products            Product[]
   sales               Sale[]
   orders              Order[]
+  graduationExams     GraduationExam[]
   leadNotes           LeadNote[]
   paymentRecords      PaymentRecord[]
   privatePackages     PrivatePackage[]
@@ -926,6 +927,7 @@ model Professor {
   classSessions      ClassSession[]
   graduations        Graduation[]
   payouts            ProfessorPayout[]
+  graduationExams    GraduationExam[]
 
   @@index([tenantId, active])
 }
@@ -1085,6 +1087,7 @@ model Aluno {
   checkIns    CheckIn[]
   graduations Graduation[]
   events      TimelineEvent[]
+  graduationExams GraduationExam[]
 
   @@index([tenantId, active])
   @@index([tenantId, matricula])
@@ -1497,4 +1500,41 @@ model Order {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, status, orderedAt])
+}
+
+/** v1.2-BJ: status da prova de graduação. */
+enum GraduationExamStatus {
+  SCHEDULED // agendada
+  DONE // realizada
+  CANCELED // cancelada
+  NO_SHOW // não compareceu
+}
+
+/**
+ * v1.2-BJ: prova de graduação agendada. A recepção agenda num horário FIXO
+ * (seg-sex 8/10/13/16h, sáb 8/11h) dentro da janela de provas; 1 prova por
+ * slot. Professores veem no app. Pedido do Anderson (reunião 16/09).
+ */
+model GraduationExam {
+  id               String               @id @default(cuid())
+  tenantId         String
+  alunoId          String
+  scheduledAt      DateTime // data + hora do slot (UTC)
+  durationMin      Int                  @default(60)
+  targetBelt       String? // faixa que vai testar
+  targetBeltDegree Int?
+  professorId      String? // examinador (opcional; visível a todos)
+  status           GraduationExamStatus @default(SCHEDULED)
+  notes            String?              @db.Text
+  createdById      String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  aluno     Aluno      @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  professor Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, scheduledAt])
+  @@index([tenantId, scheduledAt])
+  @@index([alunoId])
 }

@@ -3,6 +3,7 @@
 import {
   BarChart3,
   Calendar,
+  CalendarClock,
   Dumbbell,
   GraduationCap,
   Kanban,
@@ -38,6 +39,7 @@ const LINKS: NavLink[] = [
   // v1.2-R: atalho fácil pro cadastro de aluno (era enterrado em Config).
   { href: "/settings/alunos", label: "Alunos", icon: UserPlus, adminOnly: true, exact: true },
   { href: "/matriculas", label: "Matrículas", icon: GraduationCap },
+  { href: "/graduacao", label: "Graduação", icon: CalendarClock },
   { href: "/particulares", label: "Particulares", icon: Ticket },
   { href: "/avulsas", label: "Aulas avulsas", icon: ShoppingBag },
   // v1.2-AK: lojinha/PDV religada no menu (vendas de produtos pelas atendentes).
