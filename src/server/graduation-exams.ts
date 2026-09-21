@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 const TZ = "-03:00";
 
 /** Janela de provas (inclusive). Ajustar aqui quando o Anderson pedir. */
-export const EXAM_WINDOW = { start: "2026-11-09", end: "2026-11-21" };
+export const EXAM_WINDOW = { start: "2026-10-26", end: "2026-11-27" };
 
 /** Horários fixos por dia da semana (0=Dom..6=Sáb). */
 const SLOTS_BY_DOW: Record<number, string[]> = {
