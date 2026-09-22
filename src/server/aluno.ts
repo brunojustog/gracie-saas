@@ -36,6 +36,7 @@ export async function getAlunoFicha(membership: TenantUser, alunoId: string) {
           birthDate: true,
           belt: true,
           beltDegree: true,
+          payerName: true,
           enrollment: {
             select: {
               id: true,
@@ -118,6 +119,7 @@ export async function getAlunoFicha(membership: TenantUser, alunoId: string) {
     birthDate: aluno.lead.birthDate,
     belt: aluno.lead.belt,
     beltDegree: aluno.lead.beltDegree,
+    payerName: aluno.lead.payerName,
     nextGrad: nextGraduation(aluno.lead.belt, aluno.lead.beltDegree),
     progress,
     enrollment: enr

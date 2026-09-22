@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAlunoFicha } from "@/server/aluno";
 import { requireRole } from "@/server/tenant";
 
+import { PayerEditor } from "./payer-editor";
 import { SizesEditor } from "./sizes-editor";
 
 const brl = (n: number) =>
@@ -219,6 +220,15 @@ export default async function AlunoFichaPage({
 
         {/* ── FINANCEIRO ───────────────────────────────────────────── */}
         <TabsContent value="financeiro" className="space-y-4">
+          <section className="rounded-xl border bg-card p-4">
+            <h3 className="mb-1 text-sm font-semibold">Responsável pelo pagamento</h3>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Nome que aparece no extrato do cartão/PIX (ex.: criança paga pelo pai).
+              A recepção usa pra achar a cobrança.
+            </p>
+            <PayerEditor alunoId={f.id} payerName={f.payerName} />
+          </section>
+
           <section className="rounded-xl border bg-card p-4">
             <h3 className="mb-2 text-sm font-semibold">Mensalidade</h3>
             {!f.enrollment ? (

@@ -351,6 +351,33 @@ export async function updateAlunoSizes(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
+/**
+ * v1.2-BL: responsável pelo pagamento (nome no extrato do cartão/PIX). Guardado
+ * no lead do aluno. Editável na ficha (aba Financeiro).
+ */
+export async function updateAlunoPayer(input: unknown): Promise<Result> {
+  const parsed = z
+    .object({ alunoId: z.string().min(1), payerName: z.string().max(120).optional().nullable() })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant } = await requireRole("ADMIN");
+
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: parsed.data.alunoId, tenantId: tenant.id },
+    select: { id: true, leadId: true },
+  });
+  if (!aluno) return { ok: false, error: "aluno não encontrado" };
+
+  await prisma.lead.update({
+    where: { id: aluno.leadId },
+    data: { payerName: parsed.data.payerName?.trim() || null },
+  });
+
+  revalidatePath(`/settings/alunos/${aluno.id}`);
+  revalidatePath("/matriculas");
+  return { ok: true };
+}
+
 /** v1.2-E/G: redefine a senha de acesso do aluno (e opcionalmente avisa no zap). */
 export async function resetAlunoPassword(
   input: unknown,

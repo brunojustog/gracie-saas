@@ -435,6 +435,9 @@ model Lead {
   assignedSellerId String?
   potentialValue   Decimal? @db.Decimal(10, 2)
   notes            String?  @db.Text
+  // v1.2-BL: responsável pelo pagamento (nome que aparece no extrato do
+  // cartão/PIX). Ex.: criança paga pelo pai. Recepção usa pra achar a cobrança.
+  payerName        String?
 
   /**
    * Tags acumuláveis (orthogonais ao stage). Exemplos do playbook:

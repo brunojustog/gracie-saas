@@ -89,6 +89,7 @@ type Row = {
     beltDegree: number | null;
     assignedSeller: { id: string; name: string | null; email: string } | null;
     aluno: { id: string } | null;
+    payerName: string | null;
   };
   modality: { id: string; name: string; color: string | null };
   plan: { id: string; name: string };
@@ -553,6 +554,16 @@ function ConfirmPaymentBody({ target, onClose }: { target: Row; onClose: () => v
           {dueLabel ? ` · vencimento atual: ${dueLabel}` : ""}
         </DialogDescription>
       </DialogHeader>
+
+      {target.lead.payerName ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900/60 dark:bg-amber-950/40">
+          <span className="text-muted-foreground">Responsável pelo pagamento: </span>
+          <span className="font-semibold">{target.lead.payerName}</span>
+          <p className="text-[11px] text-muted-foreground">
+            Procure por este nome no extrato do cartão/PIX.
+          </p>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
         <div className="space-y-1">

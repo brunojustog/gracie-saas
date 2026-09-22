@@ -160,6 +160,8 @@ export async function getEnrollmentsForList(
           assignedSeller: { select: { id: true, name: true, email: true } },
           // v1.2-AY: link do nome pra ficha do aluno (só existe se o lead virou aluno).
           aluno: { select: { id: true } },
+          // v1.2-BL: responsável pelo pagamento (nome no extrato).
+          payerName: true,
         },
       },
       modality: { select: { id: true, name: true, color: true } },
