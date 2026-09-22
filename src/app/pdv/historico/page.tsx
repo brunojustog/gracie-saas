@@ -88,6 +88,24 @@ export default async function HistoricoPage({
     }),
   ]);
 
+  // v1.2-BM: pro gestor editar vendedora e aluno da venda (só ADMIN).
+  const [sellerRows, customerRows] = isAdmin
+    ? await Promise.all([
+        prisma.tenantUser.findMany({
+          where: { tenantId: tenant.id, active: true, role: { in: ["ADMIN", "MANAGER", "SELLER"] } },
+          orderBy: { user: { name: "asc" } },
+          select: { userId: true, user: { select: { name: true, email: true } } },
+        }),
+        prisma.lead.findMany({
+          where: { tenantId: tenant.id, deletedAt: null, aluno: { isNot: null } },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+          take: 1000,
+        }),
+      ])
+    : [[], []];
+  const sellerOptions = sellerRows.map((s) => ({ id: s.userId, name: s.user.name ?? s.user.email }));
+
   const total = sales.reduce((s, r) => s + r.total, 0);
 
   // v1.2-BA: resumo por forma de pagamento pro relatorio diario (o que o Junior
@@ -252,6 +270,10 @@ export default async function HistoricoPage({
                           saleId={s.id}
                           paymentMethod={s.paymentMethod}
                           discountOn={s.discount > 0}
+                          sellers={sellerOptions}
+                          customers={customerRows}
+                          currentSellerId={s.sellerUser.id}
+                          currentCustomerLeadId={s.customerLead?.id ?? null}
                           items={s.items.map((i) => ({
                             id: i.id,
                             name: i.productVariant.product.name,

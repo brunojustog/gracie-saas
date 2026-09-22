@@ -239,6 +239,9 @@ const updateSaleSchema = z.object({
     "OUTRO",
   ]),
   applyDiscount: z.boolean().optional(),
+  // v1.2-BM: gestor pode corrigir a vendedora e o aluno/cliente da venda.
+  sellerUserId: z.string().optional().nullable(),
+  customerLeadId: z.string().optional().nullable(), // null = avulsa
   items: z
     .array(z.object({ id: z.string().min(1), unitPrice: z.number().nonnegative().max(1_000_000) }))
     .min(1)
@@ -274,6 +277,39 @@ export async function updateSale(input: unknown): Promise<{ ok: true } | { ok: f
     : 0;
   const total = gross - discount;
 
+  // v1.2-BM: vendedora (valida staff ativo do tenant).
+  let sellerUserId: string | undefined;
+  if (parsed.data.sellerUserId) {
+    const seller = await prisma.tenantUser.findFirst({
+      where: {
+        tenantId: tenant.id,
+        userId: parsed.data.sellerUserId,
+        active: true,
+        role: { in: ["ADMIN", "MANAGER", "SELLER"] },
+      },
+      select: { userId: true },
+    });
+    if (!seller) return { ok: false, error: "vendedora inválida" };
+    sellerUserId = seller.userId;
+  }
+
+  // v1.2-BM: aluno/cliente (null = avulsa; senão valida lead e faz snapshot do nome).
+  let setCustomer = false;
+  let customerLeadId: string | null = null;
+  let customerName: string | null = null;
+  if (parsed.data.customerLeadId !== undefined) {
+    setCustomer = true;
+    if (parsed.data.customerLeadId) {
+      const lead = await prisma.lead.findFirst({
+        where: { id: parsed.data.customerLeadId, tenantId: tenant.id },
+        select: { id: true, name: true },
+      });
+      if (!lead) return { ok: false, error: "aluno inválido" };
+      customerLeadId = lead.id;
+      customerName = lead.name;
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     for (const u of updates) {
       await tx.saleItem.update({
@@ -283,7 +319,13 @@ export async function updateSale(input: unknown): Promise<{ ok: true } | { ok: f
     }
     await tx.sale.update({
       where: { id: sale.id },
-      data: { total, discount, paymentMethod: parsed.data.paymentMethod },
+      data: {
+        total,
+        discount,
+        paymentMethod: parsed.data.paymentMethod,
+        ...(sellerUserId ? { sellerUserId } : {}),
+        ...(setCustomer ? { customerLeadId, customerName } : {}),
+      },
     });
   });
 

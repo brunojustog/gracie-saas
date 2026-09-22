@@ -1,11 +1,19 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { Check, ChevronsUpDown, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -22,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 import { updateSale } from "../actions";
 
@@ -32,6 +42,10 @@ type Item = {
   quantity: number;
   unitPrice: number;
 };
+type Seller = { id: string; name: string };
+type Customer = { id: string; name: string };
+
+const NO_CUSTOMER = "__avulsa__";
 
 const PAYMENT_METHODS = [
   { value: "PIX", label: "Pix" },
@@ -45,17 +59,25 @@ const PAYMENT_METHODS = [
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-/** v1.2-BH: corrige preço unitário / forma de pagamento / desconto de uma venda. */
+/** v1.2-BH/BM: corrige preço, forma de pagamento, desconto, vendedora e aluno. */
 export function EditSaleButton({
   saleId,
   items,
   paymentMethod,
-  discountOn: initialDiscount,
+  discountOn,
+  sellers,
+  customers,
+  currentSellerId,
+  currentCustomerLeadId,
 }: {
   saleId: string;
   items: Item[];
   paymentMethod: string;
   discountOn: boolean;
+  sellers: Seller[];
+  customers: Customer[];
+  currentSellerId: string;
+  currentCustomerLeadId: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -78,7 +100,11 @@ export function EditSaleButton({
               saleId={saleId}
               items={items}
               paymentMethod={paymentMethod}
-              initialDiscount={initialDiscount}
+              initialDiscount={discountOn}
+              sellers={sellers}
+              customers={customers}
+              currentSellerId={currentSellerId}
+              currentCustomerLeadId={currentCustomerLeadId}
               onClose={() => setOpen(false)}
             />
           ) : null}
@@ -93,12 +119,20 @@ function EditForm({
   items,
   paymentMethod: initialPayment,
   initialDiscount,
+  sellers,
+  customers,
+  currentSellerId,
+  currentCustomerLeadId,
   onClose,
 }: {
   saleId: string;
   items: Item[];
   paymentMethod: string;
   initialDiscount: boolean;
+  sellers: Seller[];
+  customers: Customer[];
+  currentSellerId: string;
+  currentCustomerLeadId: string | null;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -107,7 +141,13 @@ function EditForm({
   );
   const [payment, setPayment] = useState(initialPayment);
   const [discountOn, setDiscountOn] = useState(initialDiscount);
+  const [sellerId, setSellerId] = useState(currentSellerId);
+  const [customerId, setCustomerId] = useState(currentCustomerLeadId ?? NO_CUSTOMER);
+  const [custOpen, setCustOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  const selectedCustomer =
+    customerId === NO_CUSTOMER ? null : customers.find((c) => c.id === customerId) ?? null;
 
   const gross = items.reduce(
     (s, i) => s + (Number(prices[i.id]?.replace(",", ".")) || 0) * i.quantity,
@@ -122,6 +162,8 @@ function EditForm({
         saleId,
         paymentMethod: payment,
         applyDiscount: discountOn,
+        sellerUserId: sellerId,
+        customerLeadId: customerId === NO_CUSTOMER ? null : customerId,
         items: items.map((i) => ({
           id: i.id,
           unitPrice: Number(prices[i.id]?.replace(",", ".")) || 0,
@@ -157,6 +199,57 @@ function EditForm({
             />
           </div>
         ))}
+
+        <div className="space-y-1">
+          <Label>Vendedora</Label>
+          <Select value={sellerId} onValueChange={setSellerId} disabled={pending}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sellers.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label>Aluno</Label>
+          <Popover open={custOpen} onOpenChange={setCustOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" role="combobox" className="h-9 w-full justify-between font-normal" disabled={pending}>
+                <span className={cn("truncate", !selectedCustomer && "text-muted-foreground")}>
+                  {selectedCustomer ? selectedCustomer.name : "Venda avulsa (sem aluno)"}
+                </span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+              <Command filter={(v, s) => (v.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}>
+                <CommandInput placeholder="Buscar aluno…" />
+                <CommandList>
+                  <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem
+                      value="Venda avulsa sem aluno"
+                      onSelect={() => { setCustomerId(NO_CUSTOMER); setCustOpen(false); }}
+                    >
+                      <Check className={cn("mr-2 h-4 w-4", customerId === NO_CUSTOMER ? "opacity-100" : "opacity-0")} />
+                      Venda avulsa (sem aluno)
+                    </CommandItem>
+                    {customers.map((c) => (
+                      <CommandItem key={c.id} value={c.name} onSelect={() => { setCustomerId(c.id); setCustOpen(false); }}>
+                        <Check className={cn("mr-2 h-4 w-4", customerId === c.id ? "opacity-100" : "opacity-0")} />
+                        <span className="flex-1 truncate">{c.name}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
 
         <div className="space-y-1">
           <Label>Pagamento</Label>
