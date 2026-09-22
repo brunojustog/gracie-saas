@@ -61,6 +61,7 @@ export type ExamSlot = {
     id: string;
     alunoNome: string;
     matricula: string | null;
+    beltSize: string | null;
     targetBelt: string | null;
     targetBeltDegree: number | null;
     professorNome: string | null;
@@ -88,7 +89,7 @@ export async function getExamSchedule(tenantId: string): Promise<ExamDay[]> {
       targetBeltDegree: true,
       status: true,
       notes: true,
-      aluno: { select: { matricula: true, lead: { select: { name: true } } } },
+      aluno: { select: { matricula: true, beltSize: true, lead: { select: { name: true } } } },
       professor: { select: { name: true } },
     },
   });
@@ -108,6 +109,7 @@ export async function getExamSchedule(tenantId: string): Promise<ExamDay[]> {
               id: e.id,
               alunoNome: e.aluno.lead.name,
               matricula: e.aluno.matricula,
+              beltSize: e.aluno.beltSize,
               targetBelt: e.targetBelt,
               targetBeltDegree: e.targetBeltDegree,
               professorNome: e.professor?.name ?? null,

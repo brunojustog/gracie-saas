@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Clock, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Clock, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -44,6 +44,7 @@ type Aluno = {
   matricula: string | null;
   belt: string | null;
   beltDegree: number | null;
+  beltSize: string | null;
   nextBelt: string | null;
   nextBeltDegree: number | null;
 };
@@ -66,11 +67,34 @@ export function GraduacaoView({
   window: { start: string; end: string };
 }) {
   const [target, setTarget] = useState<{ iso: string; time: string; dateLabel: string } | null>(null);
+  const [query, setQuery] = useState("");
 
   const totalBooked = schedule.reduce(
     (s, d) => s + d.slots.filter((sl) => sl.exam).length,
     0,
   );
+
+  // v1.2-BN: busca por nome — mostra quando o aluno agendou.
+  const q = query.trim().toLowerCase();
+  const matches = useMemo(() => {
+    if (!q) return [];
+    const rows: { alunoNome: string; when: string; time: string; belt: string | null; grau: number | null; size: string | null }[] = [];
+    for (const day of schedule) {
+      for (const sl of day.slots) {
+        if (sl.exam && sl.exam.alunoNome.toLowerCase().includes(q)) {
+          rows.push({
+            alunoNome: sl.exam.alunoNome,
+            when: `${day.label} ${ddmm(day.dateStr)}`,
+            time: sl.time,
+            belt: sl.exam.targetBelt,
+            grau: sl.exam.targetBeltDegree,
+            size: sl.exam.beltSize,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [q, schedule]);
 
   return (
     <div className="space-y-4">
@@ -78,6 +102,41 @@ export function GraduacaoView({
         Janela de provas: <b>{ddmm(win.start)}</b> a <b>{ddmm(win.end)}</b> ·{" "}
         {totalBooked} prova{totalBooked === 1 ? "" : "s"} agendada{totalBooked === 1 ? "" : "s"}.
         Horários fixos: seg–sex 08/10/13/16h · sáb 08/11h.
+      </div>
+
+      {/* Busca por nome: ver se/quando o aluno agendou */}
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar aluno pra ver se agendou…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        {q ? (
+          matches.length === 0 ? (
+            <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+              Nenhuma prova agendada pra “{query}”.
+            </p>
+          ) : (
+            <ul className="divide-y rounded-md border bg-card text-sm">
+              {matches.map((m, i) => (
+                <li key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0">
+                    <span className="font-medium">{m.alunoNome}</span>
+                    <span className="text-muted-foreground">
+                      {" "}· {m.when} às {m.time}
+                      {m.belt ? ` · ${beltLabel(m.belt, m.grau)}` : ""}
+                      {m.size ? ` · faixa tam ${m.size}` : ""}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : null}
       </div>
 
       {schedule.length === 0 ? (
@@ -149,6 +208,7 @@ function SlotRow({ slot, onBook }: { slot: ExamSlot; onBook: () => void }) {
         </div>
         <div className="pl-5 text-xs text-muted-foreground">
           {slot.exam.targetBelt ? `→ ${beltLabel(slot.exam.targetBelt, slot.exam.targetBeltDegree)}` : "faixa a definir"}
+          {slot.exam.beltSize ? ` · tam ${slot.exam.beltSize}` : ""}
           {slot.exam.notes ? ` · ${slot.exam.notes}` : ""}
         </div>
       </div>
@@ -198,6 +258,7 @@ function BookForm({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [belt, setBelt] = useState("");
   const [grau, setGrau] = useState("");
+  const [beltSizeVal, setBeltSizeVal] = useState("");
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -206,9 +267,10 @@ function BookForm({
   const pick = (a: Aluno) => {
     setAlunoId(a.id);
     setPickerOpen(false);
-    // prefilla a faixa sugerida (próxima graduação)
+    // prefilla a faixa sugerida (próxima graduação) e o tamanho já cadastrado
     setBelt(a.nextBelt ?? a.belt ?? "");
     setGrau(a.nextBeltDegree != null ? String(a.nextBeltDegree) : "");
+    setBeltSizeVal(a.beltSize ?? "");
   };
 
   const save = () => {
@@ -219,6 +281,7 @@ function BookForm({
         alunoId,
         targetBelt: belt || null,
         targetBeltDegree: grau ? Number(grau) : null,
+        beltSize: beltSizeVal || null,
         notes: notes || null,
       });
       if (!r.ok) return void toast.error(r.error);
@@ -297,6 +360,20 @@ function BookForm({
               disabled={pending}
             />
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="beltSize">Tamanho da faixa</Label>
+          <Input
+            id="beltSize"
+            value={beltSizeVal}
+            onChange={(e) => setBeltSizeVal(e.target.value)}
+            placeholder="ex: A3, M2, 3"
+            disabled={pending}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Fica salvo no cadastro do aluno (reusa nas próximas graduações).
+          </p>
         </div>
 
         <div className="space-y-1">

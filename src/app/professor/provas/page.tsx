@@ -48,6 +48,7 @@ export default async function ProfessorProvasPage() {
                       <div className="font-medium">{slot.exam!.alunoNome}</div>
                       <div className="text-xs text-muted-foreground">
                         → {beltLabel(slot.exam!.targetBelt, slot.exam!.targetBeltDegree)}
+                        {slot.exam!.beltSize ? ` · tam ${slot.exam!.beltSize}` : ""}
                         {slot.exam!.notes ? ` · ${slot.exam!.notes}` : ""}
                       </div>
                     </div>

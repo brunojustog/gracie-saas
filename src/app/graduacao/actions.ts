@@ -14,6 +14,7 @@ const bookSchema = z.object({
   alunoId: z.string().min(1),
   targetBelt: z.string().max(40).optional().nullable(),
   targetBeltDegree: z.number().int().min(0).max(6).optional().nullable(),
+  beltSize: z.string().max(20).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
 });
 
@@ -35,6 +36,14 @@ export async function bookExam(input: unknown): Promise<Result> {
     select: { id: true },
   });
   if (!aluno) return { ok: false, error: "aluno não encontrado" };
+
+  // v1.2-BN: tamanho da faixa fica no cadastro do aluno (reusa nas graduações).
+  if (d.beltSize !== undefined) {
+    await prisma.aluno.update({
+      where: { id: aluno.id },
+      data: { beltSize: d.beltSize?.trim() || null },
+    });
+  }
 
   try {
     await prisma.graduationExam.create({

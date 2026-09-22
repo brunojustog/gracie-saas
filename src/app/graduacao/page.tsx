@@ -18,6 +18,7 @@ export default async function GraduacaoPage() {
       select: {
         id: true,
         matricula: true,
+        beltSize: true,
         lead: { select: { name: true, belt: true, beltDegree: true } },
       },
     }),
@@ -32,6 +33,7 @@ export default async function GraduacaoPage() {
         matricula: a.matricula,
         belt: a.lead.belt,
         beltDegree: a.lead.beltDegree,
+        beltSize: a.beltSize,
         nextBelt: next?.belt ?? null,
         nextBeltDegree: next?.beltDegree ?? null,
       };
