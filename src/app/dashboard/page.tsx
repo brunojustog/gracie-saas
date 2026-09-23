@@ -329,6 +329,11 @@ function DueList({
             <tr key={r.enrollmentId} className="border-b last:border-0">
               <td className="px-2 py-1.5">
                 <div className="font-medium">{r.leadName}</div>
+                {r.payerName ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    resp.: <span className="font-medium text-foreground">{r.payerName}</span>
+                  </div>
+                ) : null}
                 {r.leadPhone ? (
                   <div className="text-[11px] text-muted-foreground">{r.leadPhone}</div>
                 ) : null}

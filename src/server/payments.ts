@@ -20,6 +20,8 @@ export type DueRow = {
   leadId: string;
   leadName: string;
   leadPhone: string | null;
+  /** v1.2-BP: responsável financeiro (nome no extrato). */
+  payerName: string | null;
   planName: string;
   modalityName: string;
   nextDueDate: Date;
@@ -55,7 +57,7 @@ export async function getDueOverview(
       id: true,
       nextDueDate: true,
       monthlyValue: true,
-      lead: { select: { id: true, name: true, phone: true } },
+      lead: { select: { id: true, name: true, phone: true, payerName: true } },
       plan: { select: { name: true } },
       modality: { select: { name: true } },
     },
@@ -68,6 +70,7 @@ export async function getDueOverview(
     leadId: r.lead.id,
     leadName: r.lead.name,
     leadPhone: r.lead.phone,
+    payerName: r.lead.payerName,
     planName: r.plan.name,
     modalityName: r.modality.name,
     nextDueDate: r.nextDueDate!,
