@@ -82,7 +82,7 @@ export async function createAlunoAccess(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
   }
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
   const d = parsed.data;
 
   const existing = await prisma.user.findUnique({
@@ -179,7 +179,7 @@ const updateSchema = z.object({
 export async function importMatriculados(): Promise<
   { ok: true; created: number } | { ok: false; error: string }
 > {
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
 
   const enrollments = await prisma.enrollment.findMany({
     where: { tenantId: tenant.id, lead: { deletedAt: null } },
@@ -220,7 +220,7 @@ export async function createAlunoLogin(input: unknown): Promise<Result> {
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
   }
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
   const d = parsed.data;
 
   const aluno = await prisma.aluno.findFirst({
@@ -257,7 +257,7 @@ export async function updateAluno(input: unknown): Promise<Result> {
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
   }
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
   const d = parsed.data;
 
   const aluno = await prisma.aluno.findFirst({
@@ -329,7 +329,7 @@ export async function updateAlunoSizes(input: unknown): Promise<Result> {
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
   const d = parsed.data;
 
   const aluno = await prisma.aluno.findFirst({
@@ -360,7 +360,7 @@ export async function updateAlunoPayer(input: unknown): Promise<Result> {
     .object({ alunoId: z.string().min(1), payerName: z.string().max(120).optional().nullable() })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
 
   const aluno = await prisma.aluno.findFirst({
     where: { id: parsed.data.alunoId, tenantId: tenant.id },
@@ -392,7 +392,7 @@ export async function resetAlunoPassword(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
   }
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
 
   const aluno = await prisma.aluno.findFirst({
     where: { id: parsed.data.alunoId, tenantId: tenant.id },
@@ -424,7 +424,7 @@ export async function resetAlunoPassword(
 export async function sendAlunoAccess(input: unknown): Promise<Result & { wa?: Wa }> {
   const parsed = z.object({ alunoId: z.string().min(1) }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
 
   const aluno = await prisma.aluno.findFirst({
     where: { id: parsed.data.alunoId, tenantId: tenant.id },
@@ -449,7 +449,7 @@ export async function toggleAluno(input: unknown): Promise<Result> {
     .object({ alunoId: z.string().min(1), active: z.boolean() })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
-  const { tenant } = await requireRole("ADMIN");
+  const { tenant } = await requireRole("SELLER");
 
   const aluno = await prisma.aluno.findFirst({
     where: { id: parsed.data.alunoId, tenantId: tenant.id },

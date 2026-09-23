@@ -37,7 +37,7 @@ const LINKS: NavLink[] = [
   { href: "/kanban", label: "Kanban", icon: Kanban },
   { href: "/aulas", label: "Aulas", icon: Calendar },
   // v1.2-R: atalho fácil pro cadastro de aluno (era enterrado em Config).
-  { href: "/settings/alunos", label: "Alunos", icon: UserPlus, adminOnly: true, exact: true },
+  { href: "/settings/alunos", label: "Alunos", icon: UserPlus, exact: true },
   { href: "/matriculas", label: "Matrículas", icon: GraduationCap },
   { href: "/graduacao", label: "Graduação", icon: CalendarClock },
   { href: "/particulares", label: "Particulares", icon: Ticket },

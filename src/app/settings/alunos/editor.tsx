@@ -55,11 +55,13 @@ export function AlunosEditor({
   location,
   showProgress,
   eventsByAluno,
+  isAdmin,
 }: {
   alunos: AlunoRow[];
   location: Location;
   showProgress: boolean;
   eventsByAluno: Record<string, AdminEvent[]>;
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -375,7 +377,8 @@ export function AlunosEditor({
         </p>
       </section>
 
-      {/* Localização da academia (geofence) */}
+      {/* Localização da academia (geofence) — só ADMIN */}
+      {isAdmin ? (
       <section className="rounded-xl border bg-card p-4">
         <h2 className="mb-1 text-sm font-semibold">Localização da academia (check-in)</h2>
         <p className="mb-3 text-xs text-muted-foreground">
@@ -409,8 +412,10 @@ export function AlunosEditor({
           ) : null}
         </div>
       </section>
+      ) : null}
 
-      {/* Progresso de graduação visível pro aluno */}
+      {/* Progresso de graduação visível pro aluno — só ADMIN */}
+      {isAdmin ? (
       <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-4">
         <div>
           <h2 className="text-sm font-semibold">Barra de progresso do aluno</h2>
@@ -428,6 +433,7 @@ export function AlunosEditor({
           {showProgress ? "Visível — desligar" : "Escondido — ligar"}
         </Button>
       </section>
+      ) : null}
 
       {/* Lista + filtros */}
       <section className="space-y-2">
@@ -484,25 +490,24 @@ export function AlunosEditor({
           filtered.map((a) => (
             <div key={a.id} className="rounded-lg border bg-card p-3 text-sm">
               <div className="flex items-center gap-2">
-                <Link
-                  href={`/settings/alunos/${a.id}`}
-                  className="min-w-0 flex-1 text-left hover:underline"
-                  title="Abrir ficha do aluno"
-                >
-                  <div className="flex items-center gap-1.5 font-medium">
-                    <span
-                      className={`inline-block h-2 w-2 shrink-0 rounded-full ${a.email ? "bg-emerald-500" : "bg-amber-400"}`}
-                      title={a.email ? "Verificado (com login)" : "Pendente (sem login)"}
-                    />
-                    {a.nome}
-                    {a.matricula ? <span className="ml-1 text-[10px] text-muted-foreground">#{a.matricula}</span> : null}
-                    {!a.active ? <span className="ml-1 rounded bg-muted px-1 text-[10px] text-muted-foreground">inativo</span> : null}
-                  </div>
-                  <div className="truncate text-[11px] text-muted-foreground">
-                    {a.email ?? "sem login"}
-                    {a.belt ? ` · ${a.belt}${a.beltDegree ? ` ${a.beltDegree}º` : ""}` : ""}
-                  </div>
-                </Link>
+                {isAdmin ? (
+                  <Link
+                    href={`/settings/alunos/${a.id}`}
+                    className="min-w-0 flex-1 text-left hover:underline"
+                    title="Abrir ficha do aluno"
+                  >
+                    <AlunoRowHeader a={a} />
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => (editId === a.id ? setEditId(null) : openEdit(a))}
+                    title="Editar aluno"
+                  >
+                    <AlunoRowHeader a={a} />
+                  </button>
+                )}
                 {a.phone ? (
                   <Button size="sm" variant="ghost" disabled={pending} onClick={() => sendAccess(a.id)} title="Enviar acesso por WhatsApp">
                     <Send className="h-4 w-4" />
@@ -637,5 +642,26 @@ export function AlunosEditor({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** Cabeçalho do item da lista (nome + status + faixa) — usado no link/botão. */
+function AlunoRowHeader({ a }: { a: AlunoRow }) {
+  return (
+    <>
+      <div className="flex items-center gap-1.5 font-medium">
+        <span
+          className={`inline-block h-2 w-2 shrink-0 rounded-full ${a.email ? "bg-emerald-500" : "bg-amber-400"}`}
+          title={a.email ? "Verificado (com login)" : "Pendente (sem login)"}
+        />
+        {a.nome}
+        {a.matricula ? <span className="ml-1 text-[10px] text-muted-foreground">#{a.matricula}</span> : null}
+        {!a.active ? <span className="ml-1 rounded bg-muted px-1 text-[10px] text-muted-foreground">inativo</span> : null}
+      </div>
+      <div className="truncate text-[11px] text-muted-foreground">
+        {a.email ?? "sem login"}
+        {a.belt ? ` · ${a.belt}${a.beltDegree ? ` ${a.beltDegree}º` : ""}` : ""}
+      </div>
+    </>
   );
 }

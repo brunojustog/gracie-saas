@@ -7,7 +7,10 @@ import type { AdminEvent } from "./aluno-events";
 import { AlunosEditor } from "./editor";
 
 export default async function AlunosSettingsPage() {
-  const { tenant } = await requireRole("ADMIN");
+  // v1.2-BO: recepção (SELLER) também acessa e edita. Config da academia
+  // (geofence, barra de progresso) fica só pro ADMIN — escondida abaixo.
+  const { tenant, membership } = await requireRole("SELLER");
+  const isAdmin = membership.role === "ADMIN";
 
   const [alunos, tenantRow] = await Promise.all([
     prisma.aluno.findMany({
@@ -78,6 +81,7 @@ export default async function AlunosSettingsPage() {
       }}
       showProgress={tenantRow?.showAlunoProgress ?? true}
       eventsByAluno={eventsByAluno}
+      isAdmin={isAdmin}
     />
   );
 }
