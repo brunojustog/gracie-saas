@@ -28,6 +28,11 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "browserslist": [
+    "defaults",
+    "Safari >= 15",
+    "iOS >= 15"
+  ],
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
     "@dnd-kit/core": "^6.3.1",
