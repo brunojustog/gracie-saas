@@ -9,13 +9,30 @@ import { requireRole } from "@/server/tenant";
 
 type Result = { ok: true } | { ok: false; error: string };
 
-const createSchema = z.object({
+// v1.2-BS: campos da encomenda (planilha Pedidos_de_venda), preenchidos pelo vendedor.
+const orderFields = {
   item: z.string().min(1, "descreva o item").max(200),
+  quantity: z.number().int().min(1).max(9999).optional(),
+  matricula: z.string().max(40).optional().nullable(),
   customerName: z.string().max(120).optional().nullable(),
   size: z.string().max(40).optional().nullable(),
+  progress: z.string().max(120).optional().nullable(),
   paymentStatus: z.enum(["TO_PAY", "PARTIAL", "PAID"]).default("TO_PAY"),
+  paymentMethod: z.string().max(40).optional().nullable(),
   amount: z.number().nonnegative().max(1_000_000).optional().nullable(),
+  pickupAt: z.string().optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
+};
+
+/** "YYYY-MM-DD" → Date no meio-dia BR (evita shift de fuso). null/'' → null. */
+function parseDay(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const d = new Date(`${s}T12:00:00-03:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+const createSchema = z.object({
+  ...orderFields,
   orderedAt: z.string().optional().nullable(),
 });
 
@@ -28,21 +45,58 @@ export async function createOrder(input: unknown): Promise<Result> {
   const d = parsed.data;
 
   const orderedAt = d.orderedAt ? new Date(d.orderedAt) : new Date();
-  if (Number.isNaN(orderedAt.getTime())) {
-    return { ok: false, error: "data inválida" };
-  }
+  if (Number.isNaN(orderedAt.getTime())) return { ok: false, error: "data inválida" };
 
   await prisma.order.create({
     data: {
       tenantId: tenant.id,
       item: d.item.trim(),
+      quantity: d.quantity ?? 1,
+      matricula: d.matricula?.trim() || null,
       customerName: d.customerName?.trim() || null,
       size: d.size?.trim() || null,
+      progress: d.progress?.trim() || null,
       paymentStatus: d.paymentStatus,
+      paymentMethod: d.paymentMethod?.trim() || null,
       amount: d.amount ?? null,
+      pickupAt: parseDay(d.pickupAt),
       notes: d.notes?.trim() || null,
       orderedAt,
       createdById: user.id,
+    },
+  });
+
+  revalidatePath("/pdv/encomendas");
+  return { ok: true };
+}
+
+const updateSchema = z.object({ id: z.string().min(1), ...orderFields });
+
+export async function updateOrder(input: unknown): Promise<Result> {
+  const parsed = updateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
+  }
+  const { tenant } = await requireRole("SELLER");
+  const d = parsed.data;
+
+  const found = await findOrderInTenant(tenant.id, d.id);
+  if (!found) return { ok: false, error: "encomenda não encontrada" };
+
+  await prisma.order.update({
+    where: { id: found.id },
+    data: {
+      item: d.item.trim(),
+      quantity: d.quantity ?? 1,
+      matricula: d.matricula?.trim() || null,
+      customerName: d.customerName?.trim() || null,
+      size: d.size?.trim() || null,
+      progress: d.progress?.trim() || null,
+      paymentStatus: d.paymentStatus,
+      paymentMethod: d.paymentMethod?.trim() || null,
+      amount: d.amount ?? null,
+      pickupAt: parseDay(d.pickupAt),
+      notes: d.notes?.trim() || null,
     },
   });
 
@@ -66,31 +120,6 @@ export async function updateOrderStatus(input: unknown): Promise<Result> {
   await prisma.order.update({
     where: { id: found.id },
     data: { status: parsed.data.status },
-  });
-  revalidatePath("/pdv/encomendas");
-  return { ok: true };
-}
-
-const paymentSchema = z.object({
-  id: z.string().min(1),
-  paymentStatus: z.enum(["TO_PAY", "PARTIAL", "PAID"]),
-  amount: z.number().nonnegative().max(1_000_000).optional().nullable(),
-});
-
-export async function updateOrderPayment(input: unknown): Promise<Result> {
-  const parsed = paymentSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "input inválido" };
-  const { tenant } = await requireRole("SELLER");
-
-  const found = await findOrderInTenant(tenant.id, parsed.data.id);
-  if (!found) return { ok: false, error: "encomenda não encontrada" };
-
-  await prisma.order.update({
-    where: { id: found.id },
-    data: {
-      paymentStatus: parsed.data.paymentStatus,
-      ...(parsed.data.amount !== undefined ? { amount: parsed.data.amount } : {}),
-    },
   });
   revalidatePath("/pdv/encomendas");
   return { ok: true };

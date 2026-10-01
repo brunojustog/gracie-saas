@@ -1488,13 +1488,18 @@ enum OrderStatus {
 model Order {
   id            String             @id @default(cuid())
   tenantId      String
-  item          String // descrição do item encomendado
-  customerName  String? // aluno/cliente que pediu (texto livre)
+  item          String // descrição do item encomendado (Produto)
+  quantity      Int                @default(1) // v1.2-BS: Quantidade
+  matricula     String? // v1.2-BS: matrícula do aluno
+  customerName  String? // aluno/cliente que pediu (Nome do Aluno)
   size          String? // tamanho
+  progress      String? // v1.2-BS: Progresso do Pedido (texto livre)
   orderedAt     DateTime           @default(now())
   paymentStatus OrderPaymentStatus @default(TO_PAY)
-  amount        Decimal?           @db.Decimal(10, 2) // valor combinado
-  notes         String?            @db.Text // o que foi combinado
+  paymentMethod String? // v1.2-BS: Forma de Pagamento
+  amount        Decimal?           @db.Decimal(10, 2) // valor combinado (Preço)
+  pickupAt      DateTime? // v1.2-BS: Retirada (data)
+  notes         String?            @db.Text // o que foi combinado (Observações)
   status        OrderStatus        @default(OPEN)
   createdById   String? // quem registrou (sem relação forte)
   createdAt     DateTime           @default(now())
