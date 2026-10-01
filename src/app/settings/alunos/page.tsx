@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/tenant";
 
-import type { AdminEvent } from "./aluno-events";
+import type { AdminEvent, AdminGraduation } from "./aluno-events";
 import { AlunosEditor } from "./editor";
 
 export default async function AlunosSettingsPage() {
@@ -57,6 +57,24 @@ export default async function AlunosSettingsPage() {
     });
   }
 
+  // v1.2-BT: graduações por aluno (pra gerir no gestor). Separadas dos eventos.
+  const allGrads = await prisma.graduation.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: { graduatedAt: "desc" },
+    select: { id: true, alunoId: true, belt: true, beltDegree: true, graduatedAt: true, note: true, photoMime: true },
+  });
+  const graduationsByAluno: Record<string, AdminGraduation[]> = {};
+  for (const g of allGrads) {
+    (graduationsByAluno[g.alunoId] ??= []).push({
+      id: g.id,
+      belt: g.belt,
+      beltDegree: g.beltDegree,
+      dateISO: format(g.graduatedAt, "yyyy-MM-dd"),
+      note: g.note,
+      hasPhoto: g.photoMime != null,
+    });
+  }
+
   return (
     <AlunosEditor
       alunos={alunos.map((a) => ({
@@ -81,6 +99,7 @@ export default async function AlunosSettingsPage() {
       }}
       showProgress={tenantRow?.showAlunoProgress ?? true}
       eventsByAluno={eventsByAluno}
+      graduationsByAluno={graduationsByAluno}
       isAdmin={isAdmin}
     />
   );

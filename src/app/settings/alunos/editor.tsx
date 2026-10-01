@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ALL_BELTS, beltRank as rankOf } from "@/lib/belts";
 
-import { AlunoEvents, type AdminEvent } from "./aluno-events";
+import { AlunoEvents, type AdminEvent, type AdminGraduation } from "./aluno-events";
 import {
   clearAcademyLocation,
   createAlunoAccess,
@@ -55,12 +55,14 @@ export function AlunosEditor({
   location,
   showProgress,
   eventsByAluno,
+  graduationsByAluno,
   isAdmin,
 }: {
   alunos: AlunoRow[];
   location: Location;
   showProgress: boolean;
   eventsByAluno: Record<string, AdminEvent[]>;
+  graduationsByAluno: Record<string, AdminGraduation[]>;
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -628,7 +630,11 @@ export function AlunosEditor({
                       </label>
                     </div>
                   ) : null}
-                  <AlunoEvents alunoId={a.id} events={eventsByAluno[a.id] ?? []} />
+                  <AlunoEvents
+                    alunoId={a.id}
+                    events={eventsByAluno[a.id] ?? []}
+                    graduations={graduationsByAluno[a.id] ?? []}
+                  />
                 </div>
               ) : null}
             </div>
