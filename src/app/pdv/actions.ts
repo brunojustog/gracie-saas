@@ -34,6 +34,8 @@ const createSaleSchema = z.object({
   // v1.2-BF: desconto de 5% deixou de ser automático no PIX — agora é uma OPÇÃO
   // que a recepção marca no fechamento.
   applyDiscount: z.boolean().optional(),
+  // v1.2-BR: venda retroativa — data/hora da venda (default agora). Não aceita futuro.
+  paidAt: z.string().optional().nullable(),
   notes: z.string().max(2000).optional(),
 });
 
@@ -134,6 +136,18 @@ export async function createSale(input: unknown): Promise<SaleResult> {
     sellerUserId = seller.userId;
   }
 
+  // 3c. Venda retroativa (v1.2-BR): data/hora opcional. Default = agora.
+  // Não aceita futuro (margem de 1 dia pra fuso).
+  let paidAt: Date | undefined;
+  if (parsed.data.paidAt) {
+    const d = new Date(parsed.data.paidAt);
+    if (Number.isNaN(d.getTime())) return { ok: false, error: "data da venda inválida" };
+    if (d.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+      return { ok: false, error: "a data da venda não pode ser no futuro" };
+    }
+    paidAt = d;
+  }
+
   // 4. Cria venda + items + decrementa estoque atomicamente.
   const sale = await prisma.$transaction(async (tx) => {
     const created = await tx.sale.create({
@@ -146,6 +160,7 @@ export async function createSale(input: unknown): Promise<SaleResult> {
         discount,
         paymentMethod: parsed.data.paymentMethod,
         notes: parsed.data.notes ?? null,
+        ...(paidAt ? { paidAt } : {}),
         items: {
           create: lines.map((l) => ({
             productVariantId: l.productVariantId,

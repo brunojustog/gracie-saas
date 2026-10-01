@@ -73,6 +73,12 @@ const PAYMENT_METHODS: Array<{ value: SalePaymentMethod; label: string }> = [
 const fmtBRL = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+/** Data de hoje (local) em YYYY-MM-DD — pro campo de data da venda. */
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 export function PdvClient({
   products,
   leads,
@@ -93,6 +99,7 @@ export function PdvClient({
   const [customerOpen, setCustomerOpen] = useState(false);
   const [sellerUserId, setSellerUserId] = useState<string>(defaultSellerId);
   const [discountOn, setDiscountOn] = useState(false);
+  const [saleDate, setSaleDate] = useState(todayISO());
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -191,6 +198,10 @@ export function PdvClient({
           customerLeadId === NO_CUSTOMER ? null : customerLeadId,
         sellerUserId,
         applyDiscount: discountOn,
+        paidAt:
+          saleDate && saleDate !== todayISO()
+            ? `${saleDate}T12:00:00-03:00`
+            : undefined,
         notes: notes || undefined,
       });
       if (!result.ok) {
@@ -203,6 +214,7 @@ export function PdvClient({
       setCustomerLeadId(NO_CUSTOMER);
       setPaymentMethod("PIX");
       setDiscountOn(false);
+      setSaleDate(todayISO());
       // mantém a vendedora selecionada pra próximas vendas
     });
   };
@@ -333,6 +345,18 @@ export function PdvClient({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          {/* v1.2-BR: venda retroativa — data da venda (default hoje). */}
+          <div className="space-y-1">
+            <Label htmlFor="saleDate">Data da venda</Label>
+            <Input
+              id="saleDate"
+              type="date"
+              value={saleDate}
+              max={todayISO()}
+              onChange={(e) => setSaleDate(e.target.value)}
+              className="h-9"
+            />
           </div>
           <div className="space-y-1">
             <Label htmlFor="payment">Pagamento</Label>
