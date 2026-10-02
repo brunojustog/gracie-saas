@@ -24,7 +24,7 @@ const PAY_LABEL: Record<string, string> = {
 
 const SALE_PAY: Record<string, string> = {
   PIX: "Pix", DINHEIRO: "Dinheiro", CARTAO_DEBITO: "Cartão débito",
-  CARTAO_CREDITO: "Cartão crédito", CORTESIA: "Cortesia", OUTRO: "Outro",
+  CARTAO_CREDITO: "Cartão crédito", CORTESIA: "Cortesia", BRINDE: "Brinde", OUTRO: "Outro",
 };
 
 const ENR_STATUS: Record<string, string> = {

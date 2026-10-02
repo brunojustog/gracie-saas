@@ -141,6 +141,7 @@ export function HistoricoToolbar({
             <SelectItem value="CARTAO_DEBITO">Débito</SelectItem>
             <SelectItem value="CARTAO_CREDITO">Crédito</SelectItem>
             <SelectItem value="CORTESIA">Cortesia</SelectItem>
+            <SelectItem value="BRINDE">Brinde</SelectItem>
             <SelectItem value="OUTRO">Outro</SelectItem>
           </SelectContent>
         </Select>

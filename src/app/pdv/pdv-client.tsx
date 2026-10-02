@@ -67,6 +67,7 @@ const PAYMENT_METHODS: Array<{ value: SalePaymentMethod; label: string }> = [
   { value: "CARTAO_DEBITO", label: "Cartão débito" },
   { value: "CARTAO_CREDITO", label: "Cartão crédito" },
   { value: "CORTESIA", label: "Cortesia" },
+  { value: "BRINDE", label: "Brinde (R$ 0 · baixa estoque)" },
   { value: "OUTRO", label: "Outro" },
 ];
 
@@ -117,9 +118,10 @@ export function PdvClient({
       );
   }, [products, search, category]);
 
+  const isGift = paymentMethod === "BRINDE";
   const gross = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
-  const discount = discountOn ? Math.round(gross * DISCOUNT_RATE * 100) / 100 : 0;
-  const total = gross - discount;
+  const discount = !isGift && discountOn ? Math.round(gross * DISCOUNT_RATE * 100) / 100 : 0;
+  const total = isGift ? 0 : gross - discount;
 
   const addVariant = (product: ProductListItem, variantId: string) => {
     const v = product.variants.find((x) => x.id === variantId);
@@ -454,15 +456,21 @@ export function PdvClient({
         </div>
 
         {/* v1.2-BF: desconto de 5% é opção da recepção (não é mais automático). */}
-        <label className="flex cursor-pointer items-center gap-2 border-t pt-3 text-sm">
-          <input
-            type="checkbox"
-            checked={discountOn}
-            onChange={(e) => setDiscountOn(e.target.checked)}
-            className="h-4 w-4"
-          />
-          Aplicar desconto de 5%
-        </label>
+        {isGift ? (
+          <p className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200">
+            Brinde — sai <b>R$ 0</b> (não entra na receita), mas <b>baixa o estoque</b> e fica vinculado ao aluno. Vincule o aluno acima.
+          </p>
+        ) : (
+          <label className="flex cursor-pointer items-center gap-2 border-t pt-3 text-sm">
+            <input
+              type="checkbox"
+              checked={discountOn}
+              onChange={(e) => setDiscountOn(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Aplicar desconto de 5%
+          </label>
+        )}
 
         <div className="space-y-1 border-t pt-3">
           {discount > 0 ? (

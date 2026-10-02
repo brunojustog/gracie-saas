@@ -53,6 +53,7 @@ const PAYMENT_METHODS = [
   { value: "CARTAO_DEBITO", label: "Cartão débito" },
   { value: "CARTAO_CREDITO", label: "Cartão crédito" },
   { value: "CORTESIA", label: "Cortesia" },
+  { value: "BRINDE", label: "Brinde" },
   { value: "OUTRO", label: "Outro" },
 ];
 

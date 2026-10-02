@@ -30,6 +30,7 @@ const PAYMENT_LABEL: Record<SalePaymentMethod, string> = {
   CARTAO_DEBITO: "Débito",
   CARTAO_CREDITO: "Crédito",
   CORTESIA: "Cortesia",
+  BRINDE: "Brinde",
   OUTRO: "Outro",
 };
 

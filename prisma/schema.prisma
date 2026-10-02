@@ -1411,6 +1411,7 @@ enum SalePaymentMethod {
   CARTAO_DEBITO
   CARTAO_CREDITO
   CORTESIA
+  BRINDE // v1.2-BU: brinde (ex.: kimono na matrícula anual) — baixa estoque, R$ 0
   OUTRO
 }
 

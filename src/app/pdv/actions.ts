@@ -26,6 +26,7 @@ const createSaleSchema = z.object({
     "CARTAO_DEBITO",
     "CARTAO_CREDITO",
     "CORTESIA",
+    "BRINDE",
     "OUTRO",
   ]),
   customerLeadId: z.string().optional().nullable(),
@@ -75,11 +76,13 @@ export async function createSale(input: unknown): Promise<SaleResult> {
     subtotal: number;
     stock: number | null;
   };
+  // v1.2-BU: brinde — sai R$ 0 (não é receita), mas baixa estoque e vincula aluno.
+  const isGift = parsed.data.paymentMethod === "BRINDE";
   const lines: LineDraft[] = [];
   for (const item of parsed.data.items) {
     const v = variantById.get(item.productVariantId)!;
-    const unitPrice = Number(v.price);
-    if (unitPrice <= 0) {
+    const unitPrice = isGift ? 0 : Number(v.price);
+    if (!isGift && unitPrice <= 0) {
       return {
         ok: false,
         error: `${v.product.name} (${v.label}) sem preço cadastrado`,
@@ -251,6 +254,7 @@ const updateSaleSchema = z.object({
     "CARTAO_DEBITO",
     "CARTAO_CREDITO",
     "CORTESIA",
+    "BRINDE",
     "OUTRO",
   ]),
   applyDiscount: z.boolean().optional(),
