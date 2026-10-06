@@ -14,6 +14,7 @@ import {
   Store,
   Ticket,
   UserPlus,
+  Wallet,
   X,
 } from "lucide-react";
 import type { Role } from "@prisma/client";
@@ -29,6 +30,8 @@ type NavLink = {
   label: string;
   icon: typeof Kanban;
   adminOnly?: boolean;
+  /** ADMIN + MANAGER (gestão), mas não vendedora. */
+  managerPlus?: boolean;
   exact?: boolean;
 };
 
@@ -39,6 +42,7 @@ const LINKS: NavLink[] = [
   // v1.2-R: atalho fácil pro cadastro de aluno (era enterrado em Config).
   { href: "/settings/alunos", label: "Alunos", icon: UserPlus, exact: true },
   { href: "/matriculas", label: "Matrículas", icon: GraduationCap },
+  { href: "/financeiro", label: "Financeiro", icon: Wallet, managerPlus: true },
   { href: "/graduacao", label: "Graduação", icon: CalendarClock },
   { href: "/particulares", label: "Particulares", icon: Ticket },
   { href: "/avulsas", label: "Aulas avulsas", icon: ShoppingBag },
@@ -81,7 +85,11 @@ export function TopNav({
     setOpen(false);
   }, [pathname]);
 
-  const links = LINKS.filter((l) => !l.adminOnly || role === "ADMIN");
+  const links = LINKS.filter((l) => {
+    if (l.adminOnly) return role === "ADMIN";
+    if (l.managerPlus) return role === "ADMIN" || role === "MANAGER";
+    return true;
+  });
 
   const Brand = (
     <Link href="/dashboard" className="flex items-center gap-2.5">

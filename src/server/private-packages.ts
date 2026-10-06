@@ -32,6 +32,84 @@ export function deriveStatus(
 }
 
 /**
+ * v1.2-BV: gera automaticamente o ciclo de recorrência dos pacotes particulares.
+ * Rodado uma vez por dia (cron diário). Para cada pacote recorrente cujo
+ * `recurringDay` cai hoje (fuso BR; dia 31 cai no último dia do mês), cria uma
+ * renovação de `recurringClasses` aulas — se ainda não gerou neste mês
+ * (idempotência via `lastRecurrenceAt`). Corrige a falha de não gerar sozinho.
+ */
+export async function runPrivateRecurrence(
+  now: Date = new Date(),
+): Promise<{ generated: number; skipped: number }> {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const dom = now.getDate();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+  const pkgs = await prisma.privatePackage.findMany({
+    where: { recurring: true, recurringDay: { not: null }, status: { not: "CANCELED" } },
+    select: {
+      id: true,
+      tenantId: true,
+      leadId: true,
+      recurringDay: true,
+      recurringClasses: true,
+      totalClasses: true,
+      status: true,
+      lastRecurrenceAt: true,
+      sessions: { select: { completedAt: true } },
+    },
+  });
+
+  let generated = 0;
+  let skipped = 0;
+  for (const p of pkgs) {
+    const add = p.recurringClasses ?? 0;
+    if (add <= 0) continue;
+    // Dia de cobrança (com clamp pro último dia do mês se recurringDay > dias do mês).
+    const targetDay = Math.min(p.recurringDay!, daysInMonth);
+    if (dom !== targetDay) continue;
+    // Idempotência: já gerou neste mês? pula.
+    if (
+      p.lastRecurrenceAt &&
+      p.lastRecurrenceAt.getFullYear() === y &&
+      p.lastRecurrenceAt.getMonth() === m
+    ) {
+      skipped++;
+      continue;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.privatePackageRenewal.create({
+        data: { packageId: p.id, paidAt: now, classesAdded: add, value: null, note: "recorrência automática" },
+      });
+      const newTotal = p.totalClasses + add;
+      const completed = countCompleted(p.sessions);
+      await tx.privatePackage.update({
+        where: { id: p.id },
+        data: {
+          totalClasses: newTotal,
+          status: deriveStatus(p.status, completed, newTotal),
+          lastRecurrenceAt: now,
+        },
+      });
+      await appendLeadNote(
+        {
+          tenantId: p.tenantId,
+          leadId: p.leadId,
+          kind: "PRIVATE_PACKAGE_RENEWED",
+          body: `Recorrência automática: +${add} aulas`,
+          metadata: { packageId: p.id, classesAdded: add, auto: true },
+        },
+        tx,
+      );
+    });
+    generated++;
+  }
+  return { generated, skipped };
+}
+
+/**
  * Recalcula o status do pacote a partir das sessões (concluídas >= total →
  * COMPLETED). v1.1-CF: fica AQUI (não mais dentro do actions de particulares)
  * pra que a confirmação de aula PELA TELA DO PROFESSOR também dispare o
@@ -96,6 +174,7 @@ export async function getPrivatePackagesForList(
       recurring: true,
       recurringDay: true,
       recurringClasses: true,
+      referralPromo: true,
       renewals: {
         select: { id: true, paidAt: true, classesAdded: true, value: true, note: true },
         orderBy: { paidAt: "desc" },

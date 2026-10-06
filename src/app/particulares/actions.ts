@@ -80,6 +80,7 @@ const createSchema = z.object({
   endDate: z.string().date().nullable().optional(),
   soldById: z.string().min(1).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  referralPromo: z.boolean().optional(),
   ...recurringFields,
 });
 
@@ -106,8 +107,10 @@ export async function createPrivatePackage(input: unknown): Promise<Result> {
         leadId: lead.id,
         modalityId: parsed.data.modalityId ?? null,
         totalClasses: parsed.data.totalClasses,
-        value: parsed.data.value,
+        // v1.2-BW: promoção de indicação zera o valor pro aluno.
+        value: parsed.data.referralPromo ? 0 : parsed.data.value,
         paymentMethod: parsed.data.paymentMethod ?? null,
+        referralPromo: parsed.data.referralPromo ?? false,
         startDate: parseLocalDate(parsed.data.startDate)!,
         endDate: parseLocalDate(parsed.data.endDate),
         soldById: parsed.data.soldById ?? null,
@@ -186,6 +189,7 @@ const updateSchema = z.object({
   endDate: z.string().date().nullable().optional(),
   soldById: z.string().min(1).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  referralPromo: z.boolean().optional(),
   ...recurringFields,
 });
 
@@ -206,8 +210,9 @@ export async function updatePrivatePackage(input: unknown): Promise<Result> {
     data: {
       modalityId: parsed.data.modalityId ?? null,
       totalClasses: parsed.data.totalClasses,
-      value: parsed.data.value,
+      value: parsed.data.referralPromo ? 0 : parsed.data.value,
       paymentMethod: parsed.data.paymentMethod ?? null,
+      referralPromo: parsed.data.referralPromo ?? false,
       startDate: parseLocalDate(parsed.data.startDate)!,
       endDate: parseLocalDate(parsed.data.endDate),
       soldById: parsed.data.soldById ?? null,

@@ -1171,17 +1171,27 @@ export type ProfessorReportRow = {
 };
 
 /**
+ * v1.2-BW: valor fixo pago ao professor por aula de pacote em PROMOÇÃO DE
+ * INDICAÇÃO (o aluno não paga; o professor recebe este valor por aula dada).
+ */
+export const REFERRAL_PROMO_RATE = 70;
+
+/**
  * v1.1-CA: quanto o professor recebe por UMA aula particular concluída.
  * Regra do Bruno: 60% do valor da aula (= valor do pacote ÷ nº de aulas).
  * Se o pacote foi pago no CARTÃO DE CRÉDITO, aplica 90% (desconto da taxa da
  * maquininha) — ex.: pacote 8× R$1500 → aula R$187,50 → prof R$112,50; no
  * cartão R$101,25.
+ * v1.2-BW: pacote em promoção de indicação paga REFERRAL_PROMO_RATE fixo/aula
+ * (o rateio normal daria 0, pois value = 0).
  */
 export function professorShareForSession(pkg: {
   value: unknown;
   totalClasses: number;
   paymentMethod: string | null;
+  referralPromo?: boolean | null;
 }): number {
+  if (pkg.referralPromo) return REFERRAL_PROMO_RATE;
   if (!pkg.totalClasses) return 0;
   const perClass = Number(pkg.value) / pkg.totalClasses;
   let share = perClass * 0.6;
@@ -1208,6 +1218,7 @@ export async function getPrivateClassesByProfessor(
           value: true,
           totalClasses: true,
           paymentMethod: true,
+          referralPromo: true,
           lead: { select: { name: true } },
         },
       },

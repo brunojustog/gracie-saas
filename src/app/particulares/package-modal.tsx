@@ -2,7 +2,7 @@
 
 import type { PaymentMethod } from "@prisma/client";
 import { format } from "date-fns";
-import { Check, ChevronsUpDown, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Gift, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -75,6 +75,8 @@ export type EditPackage = {
   recurring: boolean;
   recurringDay: number | null;
   recurringClasses: number | null;
+  // v1.2-BW: promoção de indicação (aluno não paga; professor recebe fixo).
+  referralPromo: boolean;
   renewals: RenewalRow[];
 };
 
@@ -157,6 +159,8 @@ function Body({
   const [recClasses, setRecClasses] = useState(
     editing?.recurringClasses ? String(editing.recurringClasses) : "",
   );
+  // Promoção de indicação (v1.2-BW).
+  const [referralPromo, setReferralPromo] = useState(editing?.referralPromo ?? false);
   const [renewals, setRenewals] = useState<RenewalRow[]>(editing?.renewals ?? []);
   const [localTotal, setLocalTotal] = useState(editing?.totalClasses ?? 0);
   const [renewDate, setRenewDate] = useState(todayISO());
@@ -245,12 +249,14 @@ function Body({
     const common = {
       modalityId: modalityId === NONE ? null : modalityId,
       totalClasses: total,
-      value: val,
+      // v1.2-BW: promoção de indicação zera o valor pro aluno.
+      value: referralPromo ? 0 : val,
       paymentMethod: paymentMethod === NONE ? null : paymentMethod,
       startDate,
       endDate: endDate || null,
       soldById: soldById === NONE ? null : soldById,
       notes: notes.trim() || null,
+      referralPromo,
       recurring,
       recurringDay: recurring && recDay ? Number(recDay) : null,
       recurringClasses: recurring && recClasses ? Number(recClasses) : null,
@@ -357,10 +363,15 @@ function Body({
                 type="number"
                 step="0.01"
                 min="0"
-                value={value}
+                value={referralPromo ? "0" : value}
                 onChange={(e) => setValue(e.target.value)}
-                disabled={pending}
+                disabled={pending || referralPromo}
               />
+              {referralPromo ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Promoção de indicação: aluno não paga.
+                </p>
+              ) : null}
             </div>
           )}
         </div>
@@ -454,6 +465,19 @@ function Body({
             placeholder="opcional"
             disabled={pending}
           />
+        </div>
+
+        {/* Promoção de indicação (v1.2-BW): aluno não paga; professor recebe fixo por aula. */}
+        <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 p-2.5 dark:bg-amber-500/5">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={referralPromo}
+              onChange={(e) => setReferralPromo(e.target.checked)}
+              disabled={pending}
+            />
+            <Gift className="h-3.5 w-3.5" /> Promoção de indicação (aluno não paga; professor recebe R$70/aula)
+          </label>
         </div>
 
         {/* Recorrência (v1.2-AG): cobrança do cartão a cada ciclo. */}

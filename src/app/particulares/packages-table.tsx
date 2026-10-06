@@ -47,6 +47,7 @@ type Row = {
   recurring: boolean;
   recurringDay: number | null;
   recurringClasses: number | null;
+  referralPromo: boolean;
   renewals: {
     id: string;
     paidAt: Date | string;
@@ -117,6 +118,7 @@ export function PackagesTable({
       recurring: r.recurring,
       recurringDay: r.recurringDay,
       recurringClasses: r.recurringClasses,
+      referralPromo: r.referralPromo,
       renewals: r.renewals.map((rn) => ({
         id: rn.id,
         paidAt: rn.paidAt,

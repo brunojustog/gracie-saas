@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Clock, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Clock, DollarSign, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -35,8 +35,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { ALL_BELTS } from "@/lib/belts";
 import { cn } from "@/lib/utils";
 
-import { bookExam, cancelExam } from "./actions";
+import { bookExam, cancelExam, setExamPayment } from "./actions";
 import type { ExamDay, ExamSlot } from "@/server/graduation-exams";
+
+const PAYMENTS: Array<{ value: string; label: string }> = [
+  { value: "PIX", label: "Pix" },
+  { value: "CREDIT_CARD", label: "Cartão" },
+  { value: "CASH", label: "Dinheiro" },
+  { value: "BOLETO", label: "Boleto" },
+  { value: "TRANSFER", label: "Transferência" },
+  { value: "OTHER", label: "Outro" },
+];
+const payLabel = (m: string | null) =>
+  PAYMENTS.find((p) => p.value === m)?.label ?? (m ? m : "");
+
+type PayFilter = "all" | "paid" | "unpaid";
 
 type Aluno = {
   id: string;
@@ -61,18 +74,41 @@ export function GraduacaoView({
   schedule,
   alunos,
   window: win,
+  canManagePayments,
 }: {
   schedule: ExamDay[];
   alunos: Aluno[];
   window: { start: string; end: string };
+  canManagePayments: boolean;
 }) {
   const [target, setTarget] = useState<{ iso: string; time: string; dateLabel: string } | null>(null);
   const [query, setQuery] = useState("");
+  const [payFilter, setPayFilter] = useState<PayFilter>("all");
 
   const totalBooked = schedule.reduce(
     (s, d) => s + d.slots.filter((sl) => sl.exam).length,
     0,
   );
+  // v1.2-BW: contagem de pagamento das provas agendadas.
+  const paidCount = schedule.reduce(
+    (s, d) => s + d.slots.filter((sl) => sl.exam?.paid).length,
+    0,
+  );
+  const unpaidCount = totalBooked - paidCount;
+
+  // Filtro por situação de pagamento (aplicado aos slots com prova; esconde
+  // os slots vazios quando um filtro está ativo).
+  const filteredSchedule = useMemo(() => {
+    if (payFilter === "all") return schedule;
+    return schedule
+      .map((d) => ({
+        ...d,
+        slots: d.slots.filter((sl) =>
+          sl.exam ? (payFilter === "paid" ? sl.exam.paid : !sl.exam.paid) : false,
+        ),
+      }))
+      .filter((d) => d.slots.length > 0);
+  }, [schedule, payFilter]);
 
   // v1.2-BN: busca por nome — mostra quando o aluno agendou.
   const q = query.trim().toLowerCase();
@@ -103,6 +139,33 @@ export function GraduacaoView({
         {totalBooked} prova{totalBooked === 1 ? "" : "s"} agendada{totalBooked === 1 ? "" : "s"}.
         Horários fixos: seg–sex 08/10/13/16h · sáb 08/11h.
       </div>
+
+      {/* v1.2-BW: painel de pagamento das taxas de prova (clicável = filtra). */}
+      {totalBooked > 0 ? (
+        <div className="grid grid-cols-3 gap-2">
+          <PayChip
+            active={payFilter === "all"}
+            onClick={() => setPayFilter("all")}
+            label="Agendadas"
+            count={totalBooked}
+            tone="neutral"
+          />
+          <PayChip
+            active={payFilter === "paid"}
+            onClick={() => setPayFilter(payFilter === "paid" ? "all" : "paid")}
+            label="Pagas"
+            count={paidCount}
+            tone="green"
+          />
+          <PayChip
+            active={payFilter === "unpaid"}
+            onClick={() => setPayFilter(payFilter === "unpaid" ? "all" : "unpaid")}
+            label="A pagar"
+            count={unpaidCount}
+            tone="amber"
+          />
+        </div>
+      ) : null}
 
       {/* Busca por nome: ver se/quando o aluno agendou */}
       <div className="space-y-2">
@@ -143,9 +206,13 @@ export function GraduacaoView({
         <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
           Sem dias de prova na janela configurada.
         </p>
+      ) : filteredSchedule.length === 0 ? (
+        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+          {payFilter === "paid" ? "Nenhuma prova paga." : "Nenhuma prova a pagar."}
+        </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {schedule.map((day) => (
+          {filteredSchedule.map((day) => (
             <div key={day.dateStr} className="rounded-lg border bg-card">
               <div className="flex items-baseline justify-between border-b px-3 py-2">
                 <span className="font-semibold">{day.label}</span>
@@ -156,6 +223,7 @@ export function GraduacaoView({
                   <SlotRow
                     key={slot.iso}
                     slot={slot}
+                    canManagePayments={canManagePayments}
                     onBook={() =>
                       setTarget({ iso: slot.iso, time: slot.time, dateLabel: `${day.label} ${ddmm(day.dateStr)}` })
                     }
@@ -172,9 +240,53 @@ export function GraduacaoView({
   );
 }
 
-function SlotRow({ slot, onBook }: { slot: ExamSlot; onBook: () => void }) {
+function PayChip({
+  active,
+  onClick,
+  label,
+  count,
+  tone,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  tone: "neutral" | "green" | "amber";
+}) {
+  const toneCls =
+    tone === "green"
+      ? "text-emerald-700 dark:text-emerald-400"
+      : tone === "amber"
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-foreground";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-lg border bg-card px-3 py-2 text-center transition-colors hover:bg-muted/50",
+        active && "ring-2 ring-primary",
+      )}
+    >
+      <div className={cn("text-xl font-semibold tabular-nums", toneCls)}>{count}</div>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+    </button>
+  );
+}
+
+function SlotRow({
+  slot,
+  onBook,
+  canManagePayments,
+}: {
+  slot: ExamSlot;
+  onBook: () => void;
+  canManagePayments: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [payOpen, setPayOpen] = useState(false);
+  const [method, setMethod] = useState("PIX");
 
   const cancel = () =>
     startTransition(async () => {
@@ -183,6 +295,25 @@ function SlotRow({ slot, onBook }: { slot: ExamSlot; onBook: () => void }) {
       const r = await cancelExam({ id: slot.exam.id });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Agendamento cancelado");
+      router.refresh();
+    });
+
+  const markPaid = () =>
+    startTransition(async () => {
+      if (!slot.exam) return;
+      const r = await setExamPayment({ id: slot.exam.id, paid: true, paymentMethod: method });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Pagamento registrado");
+      setPayOpen(false);
+      router.refresh();
+    });
+
+  const unmarkPaid = () =>
+    startTransition(async () => {
+      if (!slot.exam) return;
+      const r = await setExamPayment({ id: slot.exam.id, paid: false });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Pagamento desmarcado");
       router.refresh();
     });
 
@@ -199,29 +330,86 @@ function SlotRow({ slot, onBook }: { slot: ExamSlot; onBook: () => void }) {
     );
   }
 
+  const exam = slot.exam;
+
   return (
-    <li className="flex items-start justify-between gap-2 px-3 py-2 text-sm">
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5 font-medium">
-          <Clock className="h-3.5 w-3.5 text-muted-foreground" /> {slot.time}
-          <span className="truncate">· {slot.exam.alunoNome}</span>
+    <li className="space-y-1.5 px-3 py-2 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 font-medium">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" /> {slot.time}
+            <span className="truncate">· {exam.alunoNome}</span>
+          </div>
+          <div className="pl-5 text-xs text-muted-foreground">
+            {exam.targetBelt ? `→ ${beltLabel(exam.targetBelt, exam.targetBeltDegree)}` : "faixa a definir"}
+            {exam.beltSize ? ` · tam ${exam.beltSize}` : ""}
+            {exam.notes ? ` · ${exam.notes}` : ""}
+          </div>
         </div>
-        <div className="pl-5 text-xs text-muted-foreground">
-          {slot.exam.targetBelt ? `→ ${beltLabel(slot.exam.targetBelt, slot.exam.targetBeltDegree)}` : "faixa a definir"}
-          {slot.exam.beltSize ? ` · tam ${slot.exam.beltSize}` : ""}
-          {slot.exam.notes ? ` · ${slot.exam.notes}` : ""}
-        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 shrink-0 text-muted-foreground hover:text-destructive"
+          onClick={cancel}
+          disabled={pending}
+          title="Cancelar agendamento"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-7 shrink-0 text-muted-foreground hover:text-destructive"
-        onClick={cancel}
-        disabled={pending}
-        title="Cancelar agendamento"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+
+      {/* v1.2-BW: situação do pagamento + controle (só ADM/gerente edita). */}
+      <div className="flex items-center justify-between gap-2 pl-5">
+        {exam.paid ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+            <DollarSign className="h-3 w-3" /> Pago{exam.paymentMethod ? ` · ${payLabel(exam.paymentMethod)}` : ""}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+            <DollarSign className="h-3 w-3" /> A pagar
+          </span>
+        )}
+
+        {canManagePayments ? (
+          exam.paid ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[11px] text-muted-foreground"
+              onClick={unmarkPaid}
+              disabled={pending}
+            >
+              Desmarcar
+            </Button>
+          ) : payOpen ? (
+            <span className="flex items-center gap-1">
+              <Select value={method} onValueChange={setMethod} disabled={pending}>
+                <SelectTrigger className="h-7 w-28 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENTS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="h-7 text-[11px]" onClick={markPaid} disabled={pending}>
+                OK
+              </Button>
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[11px]"
+              onClick={() => setPayOpen(true)}
+              disabled={pending}
+            >
+              Marcar pago
+            </Button>
+          )
+        ) : null}
+      </div>
     </li>
   );
 }

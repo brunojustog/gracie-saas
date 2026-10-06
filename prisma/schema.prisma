@@ -834,6 +834,13 @@ model PrivatePackage {
   recurring        Boolean @default(false)
   recurringDay     Int?
   recurringClasses Int?
+  // v1.2-BV: quando o cron gerou o último ciclo automático (idempotência mensal).
+  lastRecurrenceAt DateTime?
+
+  // v1.2-BW: promoção de indicação. Aluno não paga (value = 0), mas o professor
+  // recebe um valor fixo (REFERRAL_PROMO_RATE) por aula dada, em vez do rateio
+  // normal de 60% do valor do pacote.
+  referralPromo Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1535,6 +1542,10 @@ model GraduationExam {
   professorId      String? // examinador (opcional; visível a todos)
   status           GraduationExamStatus @default(SCHEDULED)
   notes            String?              @db.Text
+  // v1.2-BW: controle de pagamento da taxa de exame de graduação.
+  paid          Boolean        @default(false)
+  paymentMethod PaymentMethod?
+  paidAt        DateTime?
   createdById      String?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt

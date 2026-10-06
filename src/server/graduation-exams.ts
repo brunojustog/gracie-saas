@@ -67,6 +67,9 @@ export type ExamSlot = {
     professorNome: string | null;
     status: string;
     notes: string | null;
+    paid: boolean;
+    paymentMethod: string | null;
+    paidAt: string | null;
   } | null;
 };
 export type ExamDay = { dateStr: string; label: string; slots: ExamSlot[] };
@@ -89,6 +92,9 @@ export async function getExamSchedule(tenantId: string): Promise<ExamDay[]> {
       targetBeltDegree: true,
       status: true,
       notes: true,
+      paid: true,
+      paymentMethod: true,
+      paidAt: true,
       aluno: { select: { matricula: true, beltSize: true, lead: { select: { name: true } } } },
       professor: { select: { name: true } },
     },
@@ -115,6 +121,9 @@ export async function getExamSchedule(tenantId: string): Promise<ExamDay[]> {
               professorNome: e.professor?.name ?? null,
               status: e.status,
               notes: e.notes,
+              paid: e.paid,
+              paymentMethod: e.paymentMethod,
+              paidAt: e.paidAt ? e.paidAt.toISOString() : null,
             }
           : null,
       };

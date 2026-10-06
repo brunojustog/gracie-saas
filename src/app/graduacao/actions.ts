@@ -67,6 +67,44 @@ export async function bookExam(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
+const PAYMENT = ["CREDIT_CARD", "PIX", "BOLETO", "CASH", "TRANSFER", "OTHER"] as const;
+
+const paymentSchema = z.object({
+  id: z.string().min(1),
+  paid: z.boolean(),
+  paymentMethod: z.enum(PAYMENT).optional().nullable(),
+});
+
+/**
+ * v1.2-BW: marca/desmarca o pagamento da taxa de exame (ADM/gerente).
+ * Ao marcar pago, grava a forma e a data; ao desmarcar, limpa tudo.
+ */
+export async function setExamPayment(input: unknown): Promise<Result> {
+  const parsed = paymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant } = await requireRole("MANAGER");
+
+  const exam = await prisma.graduationExam.findFirst({
+    where: { id: parsed.data.id, tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!exam) return { ok: false, error: "agendamento não encontrado" };
+
+  await prisma.graduationExam.update({
+    where: { id: exam.id },
+    data: parsed.data.paid
+      ? {
+          paid: true,
+          paymentMethod: parsed.data.paymentMethod ?? null,
+          paidAt: new Date(),
+        }
+      : { paid: false, paymentMethod: null, paidAt: null },
+  });
+
+  revalidatePath("/graduacao");
+  return { ok: true };
+}
+
 export async function cancelExam(input: unknown): Promise<Result> {
   const parsed = z.object({ id: z.string().min(1) }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };

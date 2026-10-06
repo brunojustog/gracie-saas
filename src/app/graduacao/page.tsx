@@ -4,6 +4,7 @@ import { signOut } from "@/server/auth";
 import { getExamSchedule, EXAM_WINDOW } from "@/server/graduation-exams";
 import { nextGraduation } from "@/server/graduations";
 import { prisma } from "@/lib/prisma";
+import { roleAtLeast } from "@/server/rbac";
 import { requireTenantUser } from "@/server/tenant";
 
 import { GraduacaoView } from "./graduacao-view";
@@ -68,7 +69,12 @@ export default async function GraduacaoPage() {
             recebe uma prova; os professores veem tudo no app deles.
           </p>
         </div>
-        <GraduacaoView schedule={schedule} alunos={alunos} window={EXAM_WINDOW} />
+        <GraduacaoView
+          schedule={schedule}
+          alunos={alunos}
+          window={EXAM_WINDOW}
+          canManagePayments={roleAtLeast(membership.role, "MANAGER")}
+        />
       </main>
     </>
   );

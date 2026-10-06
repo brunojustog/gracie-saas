@@ -244,7 +244,7 @@ export async function getProfessorEarnings(
         package: { tenantId, lead: { deletedAt: null } },
       },
       select: {
-        package: { select: { value: true, totalClasses: true, paymentMethod: true } },
+        package: { select: { value: true, totalClasses: true, paymentMethod: true, referralPromo: true } },
       },
     }),
   ]);
@@ -593,6 +593,7 @@ export async function getProfessorReport(
             value: true,
             totalClasses: true,
             paymentMethod: true,
+            referralPromo: true,
             lead: { select: { name: true } },
           },
         },

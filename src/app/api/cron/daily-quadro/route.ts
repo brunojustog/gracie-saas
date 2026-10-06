@@ -9,6 +9,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { backfillAllSnapshots, runDailyReports } from "@/server/daily-report";
+import { runPrivateRecurrence } from "@/server/private-packages";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, backfill: summary });
     }
     const summary = await runDailyReports();
-    return NextResponse.json({ ok: true, ...summary });
+    // v1.2-BV: gera os ciclos de recorrência das aulas particulares do dia.
+    let recurrence: { generated: number; skipped: number } | { error: string };
+    try {
+      recurrence = await runPrivateRecurrence();
+    } catch (e) {
+      recurrence = { error: e instanceof Error ? e.message : "erro" };
+      console.error("[cron/daily-quadro] recorrência erro", e);
+    }
+    return NextResponse.json({ ok: true, ...summary, recurrence });
   } catch (err) {
     console.error("[cron/daily-quadro] erro", err);
     const message = err instanceof Error ? err.message : "erro desconhecido";
