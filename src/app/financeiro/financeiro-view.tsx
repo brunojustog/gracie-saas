@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { Money } from "@/components/money";
 import { cn } from "@/lib/utils";
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import type { FinancialOverview, FinancialRow, FinancialStatus } from "@/server/financial";
 
 type Filter = "all" | FinancialStatus;
@@ -100,6 +101,7 @@ export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
                 <th className="px-3 py-2 text-left font-medium">Aluno</th>
                 <th className="px-3 py-2 text-left font-medium">Plano</th>
                 <th className="px-3 py-2 text-right font-medium">Vencimento</th>
+                <th className="px-3 py-2 text-right font-medium">Pagamento</th>
                 <th className="px-3 py-2 text-right font-medium">Valor</th>
                 <th className="px-3 py-2 text-right font-medium">Situação</th>
               </tr>
@@ -188,6 +190,9 @@ function Row({ r }: { r: FinancialRow }) {
         ) : (
           "—"
         )}
+      </td>
+      <td className="px-3 py-2 text-right text-xs text-muted-foreground">
+        {r.paymentMethod ? PAYMENT_METHOD_LABELS[r.paymentMethod] : "—"}
       </td>
       <td className="px-3 py-2 text-right font-mono text-xs">
         <Money value={r.paid && r.paidAmount != null ? r.paidAmount : r.monthlyValue} />

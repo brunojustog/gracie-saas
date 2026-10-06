@@ -22,6 +22,8 @@ const orderFields = {
   amount: z.number().nonnegative().max(1_000_000).optional().nullable(),
   pickupAt: z.string().optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
+  // v1.2-BX: encomenda de brinde (saída de kimono de matrícula).
+  isGift: z.boolean().optional(),
 };
 
 /** "YYYY-MM-DD" → Date no meio-dia BR (evita shift de fuso). null/'' → null. */
@@ -58,9 +60,10 @@ export async function createOrder(input: unknown): Promise<Result> {
       progress: d.progress?.trim() || null,
       paymentStatus: d.paymentStatus,
       paymentMethod: d.paymentMethod?.trim() || null,
-      amount: d.amount ?? null,
+      amount: d.isGift ? null : d.amount ?? null,
       pickupAt: parseDay(d.pickupAt),
       notes: d.notes?.trim() || null,
+      isGift: d.isGift ?? false,
       orderedAt,
       createdById: user.id,
     },
@@ -94,9 +97,10 @@ export async function updateOrder(input: unknown): Promise<Result> {
       progress: d.progress?.trim() || null,
       paymentStatus: d.paymentStatus,
       paymentMethod: d.paymentMethod?.trim() || null,
-      amount: d.amount ?? null,
+      amount: d.isGift ? null : d.amount ?? null,
       pickupAt: parseDay(d.pickupAt),
       notes: d.notes?.trim() || null,
+      isGift: d.isGift ?? false,
     },
   });
 
@@ -120,6 +124,33 @@ export async function updateOrderStatus(input: unknown): Promise<Result> {
   await prisma.order.update({
     where: { id: found.id },
     data: { status: parsed.data.status },
+  });
+  revalidatePath("/pdv/encomendas");
+  return { ok: true };
+}
+
+// v1.2-BX: avança a etapa do processo de venda (Kanban). DELIVERED também
+// marca a encomenda como entregue (status FULFILLED) pra fechar o ciclo;
+// qualquer outra etapa reabre (OPEN).
+const stageSchema = z.object({
+  id: z.string().min(1),
+  stage: z.enum(["REQUESTED", "ORDERED", "ARRIVED", "DELIVERED", "EXCHANGE"]),
+});
+
+export async function setOrderStage(input: unknown): Promise<Result> {
+  const parsed = stageSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+  const { tenant } = await requireRole("SELLER");
+
+  const found = await findOrderInTenant(tenant.id, parsed.data.id);
+  if (!found) return { ok: false, error: "encomenda não encontrada" };
+
+  await prisma.order.update({
+    where: { id: found.id },
+    data: {
+      stage: parsed.data.stage,
+      status: parsed.data.stage === "DELIVERED" ? "FULFILLED" : "OPEN",
+    },
   });
   revalidatePath("/pdv/encomendas");
   return { ok: true };

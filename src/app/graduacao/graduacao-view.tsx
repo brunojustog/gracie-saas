@@ -34,6 +34,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ALL_BELTS } from "@/lib/belts";
 import { cn } from "@/lib/utils";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_ORDER } from "@/lib/payment-methods";
+import type { PaymentMethod } from "@prisma/client";
 
 import { bookExam, cancelExam, setExamPayment } from "./actions";
 import type { ExamDay, ExamSlot } from "@/server/graduation-exams";
@@ -95,6 +97,20 @@ export function GraduacaoView({
     0,
   );
   const unpaidCount = totalBooked - paidCount;
+
+  // v1.2-BX: consolidado das provas PAGAS por forma de pagamento.
+  const paidByMethod = useMemo(() => {
+    const m = new Map<PaymentMethod, number>();
+    for (const d of schedule) {
+      for (const sl of d.slots) {
+        if (sl.exam?.paid) {
+          const k = (sl.exam.paymentMethod as PaymentMethod | null) ?? "OTHER";
+          m.set(k, (m.get(k) ?? 0) + 1);
+        }
+      }
+    }
+    return m;
+  }, [schedule]);
 
   // Filtro por situação de pagamento (aplicado aos slots com prova; esconde
   // os slots vazios quando um filtro está ativo).
@@ -164,6 +180,19 @@ export function GraduacaoView({
             count={unpaidCount}
             tone="amber"
           />
+        </div>
+      ) : null}
+
+      {/* v1.2-BX: consolidado por forma de pagamento (só das pagas). */}
+      {paidCount > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Pagas por forma:</span>
+          {PAYMENT_METHOD_ORDER.filter((m) => (paidByMethod.get(m) ?? 0) > 0).map((m) => (
+            <span key={m}>
+              {PAYMENT_METHOD_LABELS[m]}{" "}
+              <b className="text-foreground">{paidByMethod.get(m)}</b>
+            </span>
+          ))}
         </div>
       ) : null}
 

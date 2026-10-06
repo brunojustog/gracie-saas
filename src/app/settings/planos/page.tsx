@@ -28,6 +28,7 @@ export default async function PlanosPage() {
         description: p.description,
         monthlyValue: Number(p.monthlyValue),
         setupFee: p.setupFee ? Number(p.setupFee) : null,
+        durationMonths: p.durationMonths,
         modalityId: p.modalityId,
         modalityName: p.modality?.name ?? null,
         active: p.active,

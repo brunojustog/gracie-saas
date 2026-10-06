@@ -2,8 +2,8 @@
 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Check, Pencil, Plus, RotateCcw, X } from "lucide-react";
-import { useState, useTransition } from "react";
+import { Gift, Pencil, RotateCcw, X } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -18,9 +18,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
-import { createOrder, updateOrder, updateOrderStatus } from "./actions";
+import { createOrder, setOrderStage, updateOrder, updateOrderStatus } from "./actions";
 import type { OrderRow } from "@/server/orders";
+
+type Stage = "REQUESTED" | "ORDERED" | "ARRIVED" | "DELIVERED" | "EXCHANGE";
+type StageFilter = "ALL" | Stage | "CANCELED";
+
+const STAGES: Array<{ key: Stage; label: string; tone: string }> = [
+  { key: "REQUESTED", label: "Pedido feito", tone: "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-200" },
+  { key: "ORDERED", label: "Encomendado", tone: "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200" },
+  { key: "ARRIVED", label: "Chegou na unidade", tone: "bg-indigo-100 text-indigo-900 dark:bg-indigo-900/40 dark:text-indigo-200" },
+  { key: "DELIVERED", label: "Entregue", tone: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" },
+  { key: "EXCHANGE", label: "Troca", tone: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" },
+];
+const STAGE_LABEL: Record<Stage, string> = Object.fromEntries(
+  STAGES.map((s) => [s.key, s.label]),
+) as Record<Stage, string>;
+const STAGE_TONE: Record<Stage, string> = Object.fromEntries(
+  STAGES.map((s) => [s.key, s.tone]),
+) as Record<Stage, string>;
 
 const PAY_LABEL: Record<string, string> = {
   TO_PAY: "A pagar",
@@ -43,58 +61,105 @@ const ddmm = (d: Date) => format(new Date(d), "dd/MM/yyyy", { locale: ptBR });
 
 export function EncomendasClient({ orders }: { orders: OrderRow[] }) {
   const [creating, setCreating] = useState(false);
-  const [showClosed, setShowClosed] = useState(false);
+  const [filter, setFilter] = useState<StageFilter>("ALL");
 
-  const open = orders.filter((o) => o.status === "OPEN");
-  const closed = orders.filter((o) => o.status !== "OPEN");
+  const active = orders.filter((o) => o.status !== "CANCELED");
+  const canceledCount = orders.length - active.length;
+
+  const byStage = useMemo(() => {
+    const m = new Map<Stage, number>();
+    for (const o of active) {
+      const s = (o.stage as Stage) ?? "REQUESTED";
+      m.set(s, (m.get(s) ?? 0) + 1);
+    }
+    return m;
+  }, [active]);
+
+  // v1.2-BX: financeiro das encomendas (não-brinde, não-canceladas).
+  const previsto = active.reduce((s, o) => s + (o.isGift ? 0 : o.amount ?? 0), 0);
+  const recebido = active.reduce(
+    (s, o) => s + (!o.isGift && o.paymentStatus === "PAID" ? o.amount ?? 0 : 0),
+    0,
+  );
+
+  const visible = orders.filter((o) => {
+    if (filter === "ALL") return o.status !== "CANCELED";
+    if (filter === "CANCELED") return o.status === "CANCELED";
+    return o.status !== "CANCELED" && ((o.stage as Stage) ?? "REQUESTED") === filter;
+  });
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs text-muted-foreground">
+          Previsto <b className="text-foreground">{brl(previsto)}</b> · Recebido{" "}
+          <b className="text-emerald-700 dark:text-emerald-400">{brl(recebido)}</b>
+        </div>
         <Button size="sm" onClick={() => setCreating((v) => !v)}>
-          <Plus className="mr-1 h-4 w-4" />
+          <Gift className="mr-1 h-4 w-4" />
           Nova encomenda
         </Button>
       </div>
 
       {creating ? <OrderForm onDone={() => setCreating(false)} /> : null}
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          Abertas ({open.length})
-        </h2>
-        {open.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Nenhuma encomenda aberta.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {open.map((o) => (
-              <OrderCard key={o.id} order={o} />
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* v1.2-BX: cards clicáveis por etapa (Kanban) = filtro. */}
+      <div className="flex flex-wrap gap-2">
+        <FilterChip active={filter === "ALL"} onClick={() => setFilter("ALL")} label="Todas" count={active.length} />
+        {STAGES.map((s) => (
+          <FilterChip
+            key={s.key}
+            active={filter === s.key}
+            onClick={() => setFilter(filter === s.key ? "ALL" : s.key)}
+            label={s.label}
+            count={byStage.get(s.key) ?? 0}
+          />
+        ))}
+        {canceledCount > 0 ? (
+          <FilterChip active={filter === "CANCELED"} onClick={() => setFilter(filter === "CANCELED" ? "ALL" : "CANCELED")} label="Canceladas" count={canceledCount} />
+        ) : null}
+      </div>
 
-      {closed.length > 0 ? (
-        <section className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setShowClosed((v) => !v)}
-            className="text-sm font-semibold text-muted-foreground hover:underline"
-          >
-            {showClosed ? "▾" : "▸"} Entregues / canceladas ({closed.length})
-          </button>
-          {showClosed ? (
-            <ul className="space-y-2">
-              {closed.map((o) => (
-                <OrderCard key={o.id} order={o} />
-              ))}
-            </ul>
-          ) : null}
-        </section>
-      ) : null}
+      {visible.length === 0 ? (
+        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Nenhuma encomenda nesta etapa.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {visible.map((o) => (
+            <OrderCard key={o.id} order={o} />
+          ))}
+        </ul>
+      )}
     </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-lg border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-muted/50",
+        active && "ring-2 ring-primary",
+      )}
+    >
+      <span className="font-medium">{label}</span>
+      <span className="ml-1.5 rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground">
+        {count}
+      </span>
+    </button>
   );
 }
 
@@ -113,6 +178,7 @@ function OrderForm({ order, onDone }: { order?: OrderRow; onDone: () => void }) 
   const [orderedAt, setOrderedAt] = useState(iso(order ? new Date(order.orderedAt) : new Date()));
   const [pickupAt, setPickupAt] = useState(order?.pickupAt ? iso(new Date(order.pickupAt)) : "");
   const [notes, setNotes] = useState(order?.notes ?? "");
+  const [isGift, setIsGift] = useState(order?.isGift ?? false);
   const [pending, startTransition] = useTransition();
 
   const save = () => {
@@ -125,11 +191,12 @@ function OrderForm({ order, onDone }: { order?: OrderRow; onDone: () => void }) 
         customerName: customerName || null,
         size: size || null,
         progress: progress || null,
-        amount: amount ? Number(amount.replace(",", ".")) : null,
-        paymentMethod: paymentMethod === NONE ? null : paymentMethod,
-        paymentStatus,
+        amount: isGift ? null : amount ? Number(amount.replace(",", ".")) : null,
+        paymentMethod: isGift || paymentMethod === NONE ? null : paymentMethod,
+        paymentStatus: isGift ? "PAID" : paymentStatus,
         pickupAt: pickupAt || null,
         notes: notes || null,
+        isGift,
       };
       const r = editing
         ? await updateOrder({ id: order!.id, ...payload })
@@ -143,6 +210,10 @@ function OrderForm({ order, onDone }: { order?: OrderRow; onDone: () => void }) 
 
   return (
     <div className="space-y-3 rounded-xl border bg-card p-4">
+      <label className="flex items-center gap-2 rounded-lg border border-amber-400/40 bg-amber-50/60 px-3 py-2 text-sm font-medium dark:bg-amber-500/5">
+        <input type="checkbox" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} disabled={pending} />
+        <Gift className="h-3.5 w-3.5" /> Encomenda de brinde (kimono de matrícula — sem cobrança)
+      </label>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1 sm:col-span-2">
           <Label htmlFor="item">Produto *</Label>
@@ -168,33 +239,37 @@ function OrderForm({ order, onDone }: { order?: OrderRow; onDone: () => void }) 
           <Label htmlFor="progress">Progresso do pedido</Label>
           <Input id="progress" value={progress} onChange={(e) => setProgress(e.target.value)} placeholder="ex: pedido ao fornecedor" disabled={pending} />
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="amount">Preço (R$)</Label>
-          <Input id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="opcional" disabled={pending} />
-        </div>
-        <div className="space-y-1">
-          <Label>Forma de pagamento</Label>
-          <Select value={paymentMethod} onValueChange={setPaymentMethod} disabled={pending}>
-            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>—</SelectItem>
-              {PAY_METHODS.map((m) => (
-                <SelectItem key={m} value={m}>{m}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>Status do pagamento</Label>
-          <Select value={paymentStatus} onValueChange={setPaymentStatus} disabled={pending}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="TO_PAY">A pagar</SelectItem>
-              <SelectItem value="PARTIAL">Parcial / sinal</SelectItem>
-              <SelectItem value="PAID">Pago</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {isGift ? null : (
+          <>
+            <div className="space-y-1">
+              <Label htmlFor="amount">Preço (R$)</Label>
+              <Input id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="opcional" disabled={pending} />
+            </div>
+            <div className="space-y-1">
+              <Label>Forma de pagamento</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod} disabled={pending}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>—</SelectItem>
+                  {PAY_METHODS.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Status do pagamento</Label>
+              <Select value={paymentStatus} onValueChange={setPaymentStatus} disabled={pending}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TO_PAY">A pagar</SelectItem>
+                  <SelectItem value="PARTIAL">Parcial / sinal</SelectItem>
+                  <SelectItem value="PAID">Pago</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
         {editing ? null : (
           <div className="space-y-1">
             <Label htmlFor="date">Data da encomenda</Label>
@@ -225,15 +300,24 @@ function OrderCard({ order: o }: { order: OrderRow }) {
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const setStatus = (status: "OPEN" | "FULFILLED" | "CANCELED") =>
+  const canceled = o.status === "CANCELED";
+  const stage = (o.stage as Stage) ?? "REQUESTED";
+
+  const changeStage = (next: Stage) =>
     startTransition(async () => {
-      const r = await updateOrderStatus({ id: o.id, status });
+      const r = await setOrderStage({ id: o.id, stage: next });
       if (!r.ok) return void toast.error(r.error);
-      toast.success("Atualizado");
+      toast.success(`Etapa: ${STAGE_LABEL[next]}`);
       router.refresh();
     });
 
-  const closed = o.status !== "OPEN";
+  const setStatus = (status: "OPEN" | "CANCELED") =>
+    startTransition(async () => {
+      const r = await updateOrderStatus({ id: o.id, status });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success(status === "CANCELED" ? "Encomenda cancelada" : "Encomenda reaberta");
+      router.refresh();
+    });
 
   if (editing) {
     return (
@@ -244,12 +328,17 @@ function OrderCard({ order: o }: { order: OrderRow }) {
   }
 
   return (
-    <li className={`rounded-lg border bg-card p-3 ${closed ? "opacity-70" : ""}`}>
+    <li className={`rounded-lg border bg-card p-3 ${canceled ? "opacity-70" : ""}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="font-medium">
+          <div className="flex items-center gap-1.5 font-medium">
             {o.quantity > 1 ? `${o.quantity}× ` : ""}{o.item}
-            {o.size ? <span className="ml-1 text-xs text-muted-foreground">· {o.size}</span> : null}
+            {o.size ? <span className="text-xs text-muted-foreground">· {o.size}</span> : null}
+            {o.isGift ? (
+              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                <Gift className="h-3 w-3" /> brinde
+              </span>
+            ) : null}
           </div>
           <div className="text-xs text-muted-foreground">
             {o.customerName ? o.customerName : "sem aluno"}
@@ -267,13 +356,14 @@ function OrderCard({ order: o }: { order: OrderRow }) {
           {o.notes ? <div className="mt-1 text-xs italic text-muted-foreground">“{o.notes}”</div> : null}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          {o.status === "FULFILLED" ? (
-            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200">entregue</span>
-          ) : o.status === "CANCELED" ? (
+          {canceled ? (
             <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-900 dark:bg-red-900/40 dark:text-red-200">cancelada</span>
           ) : (
-            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${PAY_TONE[o.paymentStatus]}`}>{PAY_LABEL[o.paymentStatus]}</span>
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STAGE_TONE[stage]}`}>{STAGE_LABEL[stage]}</span>
           )}
+          {!o.isGift ? (
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${PAY_TONE[o.paymentStatus]}`}>{PAY_LABEL[o.paymentStatus]}</span>
+          ) : null}
         </div>
       </div>
 
@@ -281,19 +371,27 @@ function OrderCard({ order: o }: { order: OrderRow }) {
         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(true)} disabled={pending}>
           <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
         </Button>
-        {!closed ? (
+        {canceled ? (
+          <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setStatus("OPEN")} disabled={pending}>
+            <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reabrir
+          </Button>
+        ) : (
           <>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setStatus("FULFILLED")} disabled={pending}>
-              <Check className="mr-1 h-3.5 w-3.5" /> Entregue
-            </Button>
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-muted-foreground">Etapa:</span>
+              <Select value={stage} onValueChange={(v) => changeStage(v as Stage)} disabled={pending}>
+                <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {STAGES.map((s) => (
+                    <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setStatus("CANCELED")} disabled={pending}>
               <X className="mr-1 h-3.5 w-3.5" /> Cancelar
             </Button>
           </>
-        ) : (
-          <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setStatus("OPEN")} disabled={pending}>
-            <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reabrir
-          </Button>
         )}
       </div>
     </li>

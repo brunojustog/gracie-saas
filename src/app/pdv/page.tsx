@@ -77,6 +77,13 @@ export default async function PdvPage() {
                 Encomendas
               </Button>
             </Link>
+            {membership.role === "ADMIN" || membership.role === "MANAGER" ? (
+              <Link href="/pdv/compras">
+                <Button variant="outline" size="sm">
+                  Compras
+                </Button>
+              </Link>
+            ) : null}
             <Link href="/pdv/historico">
               <Button variant="outline" size="sm">
                 Histórico

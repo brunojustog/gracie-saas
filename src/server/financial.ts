@@ -14,7 +14,7 @@
  * entra aqui; tela é de gestão).
  */
 import { endOfMonth, startOfMonth } from "date-fns";
-import type { TenantUser } from "@prisma/client";
+import type { PaymentMethod, TenantUser } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { isOverdue } from "@/lib/overdue";
@@ -36,6 +36,8 @@ export type FinancialRow = {
   paidAmount: number | null;
   daysOverdue: number;
   status: FinancialStatus;
+  /** Forma de pagamento: a usada na baixa do mês, senão a cadastrada na matrícula. */
+  paymentMethod: PaymentMethod | null;
 };
 
 export type FinancialOverview = {
@@ -84,6 +86,7 @@ export async function getFinancialOverview(
         id: true,
         monthlyValue: true,
         nextDueDate: true,
+        paymentMethod: true,
         lead: { select: { id: true, name: true, phone: true, payerName: true } },
         plan: { select: { name: true } },
         modality: { select: { name: true } },
@@ -91,7 +94,7 @@ export async function getFinancialOverview(
           where: { paidAt: { gte: start, lte: end } },
           orderBy: { paidAt: "desc" },
           take: 1,
-          select: { paidAt: true, amount: true },
+          select: { paidAt: true, amount: true, method: true },
         },
       },
       orderBy: { nextDueDate: "asc" },
@@ -145,6 +148,7 @@ export async function getFinancialOverview(
       paidAmount: payment ? Number(payment.amount) : null,
       daysOverdue,
       status,
+      paymentMethod: payment?.method ?? e.paymentMethod,
     };
   });
 

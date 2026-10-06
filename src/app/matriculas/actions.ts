@@ -1,11 +1,11 @@
 "use server";
 
-import { addDays, addMonths, differenceInCalendarDays, startOfDay } from "date-fns";
+import { addMonths } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
-import { findEnrollmentInScope } from "@/server/enrollments";
+import { findEnrollmentInScope, unfreezeEnrollment } from "@/server/enrollments";
 import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
 import { roleAtLeast } from "@/server/rbac";
@@ -923,7 +923,6 @@ export async function reinstateEnrollment(input: unknown): Promise<ActionResult>
 // ──────────────────────────────────────────────────────────────────────────
 
 const FROZEN_TAG = "Congelado";
-const FERIAS_LIMIT_DAYS = 30;
 
 const suspendSchema = z.object({
   enrollmentId: z.string().min(1),
@@ -1016,62 +1015,15 @@ export async function reactivateEnrollment(input: unknown): Promise<ActionResult
   const parsed = reactivateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
-  const { tenant, user, membership } = await requireTenantUser();
+  const { user, membership } = await requireTenantUser();
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
   if (!enrollment.suspendedAt) {
     return { ok: false, error: "matrícula não está congelada" };
   }
 
-  // Dias congelados (calendário). Férias é limitada a 30 dias; doença usa o
-  // período real (= tempo do atestado).
-  const rawDays = Math.max(
-    0,
-    differenceInCalendarDays(startOfDay(new Date()), startOfDay(enrollment.suspendedAt)),
-  );
-  const frozenDays =
-    enrollment.frozenKind === "FERIAS" ? Math.min(rawDays, FERIAS_LIMIT_DAYS) : rawDays;
-  const newTotal = enrollment.frozenDaysUsed + frozenDays;
-  const newContractEnd = enrollment.contractEndAt
-    ? addDays(enrollment.contractEndAt, frozenDays)
-    : null;
-
-  await prisma.$transaction(async (tx) => {
-    await tx.enrollment.update({
-      where: { id: enrollment.id },
-      data: {
-        suspendedAt: null,
-        suspensionReason: null,
-        frozenKind: null,
-        expectedReturnAt: null,
-        frozenDaysUsed: newTotal,
-        ...(newContractEnd ? { contractEndAt: newContractEnd } : {}),
-      },
-    });
-
-    const lead = await tx.lead.findUnique({
-      where: { id: enrollment.leadId },
-      select: { tags: true },
-    });
-    if (lead?.tags.includes(FROZEN_TAG)) {
-      await tx.lead.update({
-        where: { id: enrollment.leadId },
-        data: { tags: lead.tags.filter((t) => t !== FROZEN_TAG) },
-      });
-    }
-
-    await appendLeadNote(
-      {
-        tenantId: tenant.id,
-        leadId: enrollment.leadId,
-        authorId: user.id,
-        kind: "ENROLLMENT_REACTIVATED",
-        body: `Descongelado — ${frozenDays} dia(s) a repor (total acumulado: ${newTotal})${newContractEnd ? `; novo fim de contrato ${newContractEnd.toLocaleDateString("pt-BR")}` : ""}.`,
-        metadata: { enrollmentId: enrollment.id, frozenDays, frozenDaysTotal: newTotal },
-      },
-      tx,
-    );
-  });
+  // Lógica única do descongelamento (compartilhada com o cron automático).
+  await unfreezeEnrollment(enrollment, { authorId: user.id });
 
   revalidatePath("/matriculas");
   revalidatePath("/kanban");

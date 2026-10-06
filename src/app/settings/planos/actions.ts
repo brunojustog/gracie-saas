@@ -14,6 +14,7 @@ const planSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   monthlyValue: z.number().positive().max(100_000),
   setupFee: z.number().nonnegative().max(100_000).nullable().optional(),
+  durationMonths: z.number().int().min(1).max(120).nullable().optional(),
   modalityId: z.string().nullable().optional(),
   active: z.boolean().default(true),
 });
@@ -46,6 +47,7 @@ export async function upsertPlan(input: unknown): Promise<Result> {
         description: parsed.data.description ?? null,
         monthlyValue: parsed.data.monthlyValue,
         setupFee: parsed.data.setupFee ?? null,
+        durationMonths: parsed.data.durationMonths ?? null,
         modalityId: parsed.data.modalityId ?? null,
         active: parsed.data.active,
       },
@@ -58,6 +60,7 @@ export async function upsertPlan(input: unknown): Promise<Result> {
         description: parsed.data.description ?? null,
         monthlyValue: parsed.data.monthlyValue,
         setupFee: parsed.data.setupFee ?? null,
+        durationMonths: parsed.data.durationMonths ?? null,
         modalityId: parsed.data.modalityId ?? null,
       },
     });

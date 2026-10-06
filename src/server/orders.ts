@@ -26,6 +26,8 @@ export async function getOrdersForTenant(tenantId: string) {
       pickupAt: true,
       notes: true,
       status: true,
+      stage: true,
+      isGift: true,
       createdAt: true,
     },
   });

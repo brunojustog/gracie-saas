@@ -10,6 +10,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { backfillAllSnapshots, runDailyReports } from "@/server/daily-report";
 import { runPrivateRecurrence } from "@/server/private-packages";
+import { runAutoUnfreeze } from "@/server/enrollments";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,15 @@ export async function GET(req: NextRequest) {
       recurrence = { error: e instanceof Error ? e.message : "erro" };
       console.error("[cron/daily-quadro] recorrência erro", e);
     }
-    return NextResponse.json({ ok: true, ...summary, recurrence });
+    // v1.2-BX: descongelamento automático das matrículas com retorno vencido.
+    let autoUnfreeze: { unfrozen: number } | { error: string };
+    try {
+      autoUnfreeze = await runAutoUnfreeze();
+    } catch (e) {
+      autoUnfreeze = { error: e instanceof Error ? e.message : "erro" };
+      console.error("[cron/daily-quadro] auto-unfreeze erro", e);
+    }
+    return NextResponse.json({ ok: true, ...summary, recurrence, autoUnfreeze });
   } catch (err) {
     console.error("[cron/daily-quadro] erro", err);
     const message = err instanceof Error ? err.message : "erro desconhecido";

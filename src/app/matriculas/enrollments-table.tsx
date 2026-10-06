@@ -73,6 +73,7 @@ type Row = {
   expectedReturnAt: Date | string | null;
   frozenDaysUsed: number;
   contractEndAt: Date | string | null;
+  planEndAt: Date | string | null;
   nextDueDate: Date | string | null;
   paidInFullUntil: Date | string | null;
   // null quando SELLER — backend mascara pra não vazar receita.
@@ -213,6 +214,7 @@ export function EnrollmentsTable({
               <TableHead>Pagamento</TableHead>
               <TableHead>Vendedora</TableHead>
               <TableHead>Matriculado em</TableHead>
+              <TableHead>Término do plano</TableHead>
               <TableHead>Vencimento</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[120px] text-right">Ações</TableHead>
@@ -261,6 +263,25 @@ export function EnrollmentsTable({
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {format(new Date(r.enrolledAt), "dd/MM/yyyy")}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {r.planEndAt ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span>{format(new Date(r.planEndAt), "dd/MM/yyyy")}</span>
+                        {r.frozenDaysUsed > 0 ? (
+                          <span className="text-[10px]" title="Dias de congelamento já somados ao término">
+                            +{r.frozenDaysUsed}d congelado
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-[11px]">
+                        —
+                        {r.frozenDaysUsed > 0 ? (
+                          <span className="block">({r.frozenDaysUsed}d congelado)</span>
+                        ) : null}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <DueDateCell row={r} />

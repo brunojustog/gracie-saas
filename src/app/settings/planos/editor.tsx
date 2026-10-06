@@ -31,6 +31,7 @@ type Plan = {
   description: string | null;
   monthlyValue: number;
   setupFee: number | null;
+  durationMonths: number | null;
   modalityId: string | null;
   modalityName: string | null;
   active: boolean;
@@ -87,6 +88,7 @@ export function PlansEditor({
                   currency: "BRL",
                 })}
                 /mês{p.setupFee ? ` · setup ${p.setupFee.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : ""}
+                {p.durationMonths ? ` · ${p.durationMonths} ${p.durationMonths === 1 ? "mês" : "meses"}` : ""}
                 {p.modalityName ? ` · ${p.modalityName}` : " · global"}
               </div>
             </div>
@@ -141,6 +143,9 @@ function PlanFormBody({
   const [setupFee, setSetupFee] = useState(
     plan?.setupFee != null ? String(plan.setupFee) : "",
   );
+  const [durationMonths, setDurationMonths] = useState(
+    plan?.durationMonths != null ? String(plan.durationMonths) : "",
+  );
   const [modalityId, setModalityId] = useState(plan?.modalityId ?? NO_MODALITY);
   const [active, setActive] = useState(plan?.active ?? true);
   const [pending, startTransition] = useTransition();
@@ -152,6 +157,11 @@ function PlanFormBody({
       return;
     }
     const fee = setupFee ? Number(setupFee.replace(",", ".")) : null;
+    const duration = durationMonths ? Number(durationMonths) : null;
+    if (duration !== null && (!Number.isInteger(duration) || duration < 1)) {
+      toast.error("Duração em meses inválida");
+      return;
+    }
     startTransition(async () => {
       const result = await upsertPlan({
         id: plan?.id,
@@ -159,6 +169,7 @@ function PlanFormBody({
         description: description.trim() || null,
         monthlyValue: value,
         setupFee: fee,
+        durationMonths: duration,
         modalityId: modalityId === NO_MODALITY ? null : modalityId,
         active,
       });
@@ -212,6 +223,21 @@ function PlanFormBody({
               placeholder="opcional"
             />
           </div>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="duration">Duração do plano (meses)</Label>
+          <Input
+            id="duration"
+            type="number"
+            min="1"
+            step="1"
+            value={durationMonths}
+            onChange={(e) => setDurationMonths(e.target.value)}
+            placeholder="ex: 12 (deixe vazio p/ mensal sem término)"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Usado pra calcular o término do contrato na tela de Matrículas.
+          </p>
         </div>
         <div className="space-y-1">
           <Label htmlFor="modality">Modalidade (opcional)</Label>
