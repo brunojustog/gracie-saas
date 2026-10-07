@@ -126,6 +126,20 @@ export function ComprasClient({
   );
 }
 
+const CATEGORIES: Array<{ value: string; label: string }> = [
+  { value: "KIMONO", label: "Kimonos" },
+  { value: "FAIXA", label: "Faixas" },
+  { value: "CAMISETA", label: "Camisetas" },
+  { value: "RASHGUARD", label: "Rashguards" },
+  { value: "BERMUDA_SHORT", label: "Bermudas/Shorts" },
+  { value: "ACESSORIO", label: "Acessórios" },
+  { value: "SUPLEMENTO", label: "Suplementos" },
+  { value: "BEBIDA", label: "Bebidas" },
+  { value: "ALIMENTOS", label: "Alimentos" },
+  { value: "OUTRO", label: "Outro" },
+];
+const NEW_PRODUCT = "__new__";
+
 function PurchaseForm({ variants, onDone }: { variants: Variant[]; onDone: () => void }) {
   const router = useRouter();
   const [variantId, setVariantId] = useState("");
@@ -136,9 +150,25 @@ function PurchaseForm({ variants, onDone }: { variants: Variant[]; onDone: () =>
   const [supplier, setSupplier] = useState("");
   const [notes, setNotes] = useState("");
   const [purchasedAt, setPurchasedAt] = useState(iso(new Date()));
+  // v1.2-BY: cadastrar produto na própria compra.
+  const [newName, setNewName] = useState("");
+  const [newCategory, setNewCategory] = useState("OUTRO");
+  const [newLabel, setNewLabel] = useState("");
   const [pending, startTransition] = useTransition();
 
+  const isNew = variantId === NEW_PRODUCT;
   const selected = variants.find((v) => v.variantId === variantId) ?? null;
+
+  // v1.2-BY: ao escolher um produto existente, puxa o preço de venda da lojinha.
+  const pickVariant = (val: string) => {
+    setVariantId(val);
+    if (val !== NEW_PRODUCT) {
+      const v = variants.find((x) => x.variantId === val);
+      if (v) setUnitSalePrice(String(v.price));
+    } else {
+      setUnitSalePrice("");
+    }
+  };
 
   const save = () => {
     if (!variantId) return void toast.error("Escolha o produto");
@@ -146,10 +176,14 @@ function PurchaseForm({ variants, onDone }: { variants: Variant[]; onDone: () =>
     const cost = Number(unitCost.replace(",", "."));
     if (!Number.isInteger(qty) || qty < 1) return void toast.error("Quantidade inválida");
     if (!Number.isFinite(cost) || cost < 0) return void toast.error("Custo inválido");
+    if (isNew && !newName.trim()) return void toast.error("Dê um nome ao produto novo");
     const sale = unitSalePrice ? Number(unitSalePrice.replace(",", ".")) : null;
     startTransition(async () => {
       const r = await createPurchase({
-        variantId,
+        variantId: isNew ? null : variantId,
+        newProduct: isNew
+          ? { name: newName.trim(), category: newCategory, label: newLabel || null, salePrice: sale }
+          : null,
         quantity: qty,
         unitCost: cost,
         unitSalePrice: sale,
@@ -159,7 +193,7 @@ function PurchaseForm({ variants, onDone }: { variants: Variant[]; onDone: () =>
         updateSalePrice,
       });
       if (!r.ok) return void toast.error(r.error);
-      toast.success("Compra lançada · estoque atualizado");
+      toast.success(isNew ? "Produto criado e compra lançada" : "Compra lançada · estoque atualizado");
       router.refresh();
       onDone();
     });
@@ -169,9 +203,10 @@ function PurchaseForm({ variants, onDone }: { variants: Variant[]; onDone: () =>
     <div className="space-y-3 rounded-xl border bg-card p-4">
       <div className="space-y-1">
         <Label>Produto</Label>
-        <Select value={variantId} onValueChange={setVariantId} disabled={pending}>
+        <Select value={variantId} onValueChange={pickVariant} disabled={pending}>
           <SelectTrigger><SelectValue placeholder="Escolha o produto…" /></SelectTrigger>
           <SelectContent>
+            <SelectItem value={NEW_PRODUCT}>+ Cadastrar produto novo</SelectItem>
             {variants.map((v) => (
               <SelectItem key={v.variantId} value={v.variantId}>
                 {v.productName} · {v.variantLabel}
@@ -187,6 +222,30 @@ function PurchaseForm({ variants, onDone }: { variants: Variant[]; onDone: () =>
           </p>
         ) : null}
       </div>
+
+      {isNew ? (
+        <div className="grid gap-3 rounded-lg border border-dashed p-3 sm:grid-cols-3">
+          <div className="space-y-1 sm:col-span-1">
+            <Label htmlFor="np-name">Nome do produto</Label>
+            <Input id="np-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="ex: Kimono azul" disabled={pending} />
+          </div>
+          <div className="space-y-1">
+            <Label>Categoria</Label>
+            <Select value={newCategory} onValueChange={setNewCategory} disabled={pending}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="np-label">Variação/tamanho</Label>
+            <Input id="np-label" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="ex: A3 (ou vazio = Padrão)" disabled={pending} />
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="qty">Quantidade</Label>

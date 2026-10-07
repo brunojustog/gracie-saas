@@ -1546,7 +1546,9 @@ model Order {
   orderedAt     DateTime           @default(now())
   paymentStatus OrderPaymentStatus @default(TO_PAY)
   paymentMethod String? // v1.2-BS: Forma de Pagamento
-  amount        Decimal?           @db.Decimal(10, 2) // valor combinado (Preço)
+  amount        Decimal?           @db.Decimal(10, 2) // valor combinado (Preço de venda)
+  // v1.2-BY: custo da encomenda (o que a academia pagou) → lucro por venda.
+  cost          Decimal?           @db.Decimal(10, 2)
   pickupAt      DateTime? // v1.2-BS: Retirada (data)
   notes         String?            @db.Text // o que foi combinado (Observações)
   status        OrderStatus        @default(OPEN)

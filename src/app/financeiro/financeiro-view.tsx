@@ -57,28 +57,30 @@ export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
         </Link>
       </div>
 
-      {/* Previsto × recebido */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-lg border bg-card p-4">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Previsto</div>
-          <div className="mt-1 text-2xl font-semibold">
-            <Money value={overview.previsto} />
+      {/* Previsto × recebido (só ADM vê os valores) */}
+      {overview.canSeeValues ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Previsto</div>
+            <div className="mt-1 text-2xl font-semibold">
+              <Money value={overview.previsto} />
+            </div>
+            <div className="text-[11px] text-muted-foreground">mensalidades das matrículas ativas</div>
           </div>
-          <div className="text-[11px] text-muted-foreground">mensalidades das matrículas ativas</div>
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Recebido</div>
+            <div className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-400">
+              <Money value={overview.recebido} />
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              baixas registradas no mês ·{" "}
+              {overview.previsto && overview.recebido != null && overview.previsto > 0
+                ? `${Math.round((overview.recebido / overview.previsto) * 100)}% do previsto`
+                : "—"}
+            </div>
+          </div>
         </div>
-        <div className="rounded-lg border bg-card p-4">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Recebido</div>
-          <div className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-400">
-            <Money value={overview.recebido} />
-          </div>
-          <div className="text-[11px] text-muted-foreground">
-            baixas registradas no mês ·{" "}
-            {overview.previsto > 0
-              ? `${Math.round((overview.recebido / overview.previsto) * 100)}% do previsto`
-              : "—"}
-          </div>
-        </div>
-      </div>
+      ) : null}
 
       {/* Semáforo clicável */}
       <div className="grid grid-cols-4 gap-2">
@@ -102,13 +104,15 @@ export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
                 <th className="px-3 py-2 text-left font-medium">Plano</th>
                 <th className="px-3 py-2 text-right font-medium">Vencimento</th>
                 <th className="px-3 py-2 text-right font-medium">Pagamento</th>
-                <th className="px-3 py-2 text-right font-medium">Valor</th>
+                {overview.canSeeValues ? (
+                  <th className="px-3 py-2 text-right font-medium">Valor</th>
+                ) : null}
                 <th className="px-3 py-2 text-right font-medium">Situação</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <Row key={r.enrollmentId} r={r} />
+                <Row key={r.enrollmentId} r={r} canSeeValues={overview.canSeeValues} />
               ))}
             </tbody>
           </table>
@@ -159,7 +163,7 @@ function CountChip({
   );
 }
 
-function Row({ r }: { r: FinancialRow }) {
+function Row({ r, canSeeValues }: { r: FinancialRow; canSeeValues: boolean }) {
   const meta = STATUS_META[r.status];
   return (
     <tr className="border-b last:border-0">
@@ -194,9 +198,11 @@ function Row({ r }: { r: FinancialRow }) {
       <td className="px-3 py-2 text-right text-xs text-muted-foreground">
         {r.paymentMethod ? PAYMENT_METHOD_LABELS[r.paymentMethod] : "—"}
       </td>
-      <td className="px-3 py-2 text-right font-mono text-xs">
-        <Money value={r.paid && r.paidAmount != null ? r.paidAmount : r.monthlyValue} />
-      </td>
+      {canSeeValues ? (
+        <td className="px-3 py-2 text-right font-mono text-xs">
+          <Money value={r.paid && r.paidAmount != null ? r.paidAmount : r.monthlyValue} />
+        </td>
+      ) : null}
       <td className="px-3 py-2 text-right">
         {r.status === "paid" ? (
           <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.text)}>

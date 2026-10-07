@@ -23,6 +23,7 @@ export async function getOrdersForTenant(tenantId: string) {
       paymentStatus: true,
       paymentMethod: true,
       amount: true,
+      cost: true,
       pickupAt: true,
       notes: true,
       status: true,
@@ -34,6 +35,7 @@ export async function getOrdersForTenant(tenantId: string) {
   return rows.map((r) => ({
     ...r,
     amount: r.amount != null ? Number(r.amount) : null,
+    cost: r.cost != null ? Number(r.cost) : null,
   }));
 }
 

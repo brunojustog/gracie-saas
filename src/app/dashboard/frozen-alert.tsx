@@ -1,16 +1,17 @@
 "use client";
 
 import { format } from "date-fns";
-import { Check, Loader2, Snowflake } from "lucide-react";
+import { CalendarPlus, Check, Loader2, Snowflake } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { FrozenEnrollment } from "@/server/enrollments";
 
-import { reactivateEnrollment } from "../matriculas/actions";
+import { extendFreeze, reactivateEnrollment } from "../matriculas/actions";
 
 const d = (x: Date | string | null) => (x ? format(new Date(x), "dd/MM/yy") : null);
 
@@ -23,6 +24,9 @@ const d = (x: Date | string | null) => (x ? format(new Date(x), "dd/MM/yy") : nu
 export function FrozenAlert({ rows }: { rows: FrozenEnrollment[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [extendId, setExtendId] = useState<string | null>(null);
+  const [extDate, setExtDate] = useState("");
+  const [extReason, setExtReason] = useState("");
 
   if (rows.length === 0) return null;
 
@@ -31,6 +35,23 @@ export function FrozenAlert({ rows }: { rows: FrozenEnrollment[] }) {
       const r = await reactivateEnrollment({ enrollmentId });
       if (!r.ok) return void toast.error(r.error ?? "erro");
       toast.success("Aluno descongelado");
+      router.refresh();
+    });
+
+  const openExtend = (id: string) => {
+    setExtendId(id);
+    setExtDate("");
+    setExtReason("");
+  };
+
+  const confirmExtend = (enrollmentId: string) =>
+    startTransition(async () => {
+      if (!extDate) return void toast.error("Escolha a nova data de retorno");
+      if (!extReason.trim()) return void toast.error("Informe o motivo");
+      const r = await extendFreeze({ enrollmentId, expectedReturnAt: extDate, reason: extReason.trim() });
+      if (!r.ok) return void toast.error(r.error ?? "erro");
+      toast.success("Congelamento estendido");
+      setExtendId(null);
       router.refresh();
     });
 
@@ -87,18 +108,51 @@ export function FrozenAlert({ rows }: { rows: FrozenEnrollment[] }) {
                   )}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs"
-                    disabled={pending}
-                    onClick={() => unfreeze(r.enrollmentId)}
-                  >
-                    <Check className="mr-1 h-3.5 w-3.5" /> Descongelar
-                  </Button>
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      disabled={pending}
+                      onClick={() => openExtend(r.enrollmentId)}
+                    >
+                      <CalendarPlus className="mr-1 h-3.5 w-3.5" /> Estender
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={pending}
+                      onClick={() => unfreeze(r.enrollmentId)}
+                    >
+                      <Check className="mr-1 h-3.5 w-3.5" /> Descongelar
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
+            {extendId ? (
+              <tr className="border-b border-sky-100 bg-sky-50/60 dark:border-sky-900 dark:bg-sky-950/30">
+                <td colSpan={5} className="px-3 py-2">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="space-y-0.5">
+                      <label className="text-[10px] uppercase text-muted-foreground">Novo retorno</label>
+                      <Input type="date" value={extDate} onChange={(e) => setExtDate(e.target.value)} className="h-8 w-40 text-xs" disabled={pending} />
+                    </div>
+                    <div className="flex-1 space-y-0.5" style={{ minWidth: 180 }}>
+                      <label className="text-[10px] uppercase text-muted-foreground">Motivo do aumento</label>
+                      <Input value={extReason} onChange={(e) => setExtReason(e.target.value)} placeholder="ex: novo atestado 30 dias" className="h-8 text-xs" disabled={pending} />
+                    </div>
+                    <Button size="sm" className="h-8 text-xs" disabled={pending} onClick={() => confirmExtend(extendId)}>
+                      Salvar
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={pending} onClick={() => setExtendId(null)}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>

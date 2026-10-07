@@ -75,10 +75,15 @@ export function EncomendasClient({ orders }: { orders: OrderRow[] }) {
     return m;
   }, [active]);
 
-  // v1.2-BX: financeiro das encomendas (não-brinde, não-canceladas).
+  // v1.2-BX/BY: financeiro das encomendas (não-brinde, não-canceladas).
   const previsto = active.reduce((s, o) => s + (o.isGift ? 0 : o.amount ?? 0), 0);
   const recebido = active.reduce(
     (s, o) => s + (!o.isGift && o.paymentStatus === "PAID" ? o.amount ?? 0 : 0),
+    0,
+  );
+  const gasto = active.reduce((s, o) => s + (o.cost ?? 0), 0);
+  const lucro = active.reduce(
+    (s, o) => s + (!o.isGift && o.amount != null && o.cost != null ? o.amount - o.cost : 0),
     0,
   );
 
@@ -90,10 +95,12 @@ export function EncomendasClient({ orders }: { orders: OrderRow[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
           Previsto <b className="text-foreground">{brl(previsto)}</b> · Recebido{" "}
-          <b className="text-emerald-700 dark:text-emerald-400">{brl(recebido)}</b>
+          <b className="text-emerald-700 dark:text-emerald-400">{brl(recebido)}</b> · Gasto{" "}
+          <b className="text-foreground">{brl(gasto)}</b> · Lucro{" "}
+          <b className="text-emerald-700 dark:text-emerald-400">{brl(lucro)}</b>
         </div>
         <Button size="sm" onClick={() => setCreating((v) => !v)}>
           <Gift className="mr-1 h-4 w-4" />
@@ -173,6 +180,7 @@ function OrderForm({ order, onDone }: { order?: OrderRow; onDone: () => void }) 
   const [size, setSize] = useState(order?.size ?? "");
   const [progress, setProgress] = useState(order?.progress ?? "");
   const [amount, setAmount] = useState(order?.amount != null ? String(order.amount) : "");
+  const [cost, setCost] = useState(order?.cost != null ? String(order.cost) : "");
   const [paymentMethod, setPaymentMethod] = useState(order?.paymentMethod ?? NONE);
   const [paymentStatus, setPaymentStatus] = useState<string>(order?.paymentStatus ?? "TO_PAY");
   const [orderedAt, setOrderedAt] = useState(iso(order ? new Date(order.orderedAt) : new Date()));
@@ -192,6 +200,7 @@ function OrderForm({ order, onDone }: { order?: OrderRow; onDone: () => void }) 
         size: size || null,
         progress: progress || null,
         amount: isGift ? null : amount ? Number(amount.replace(",", ".")) : null,
+        cost: cost ? Number(cost.replace(",", ".")) : null,
         paymentMethod: isGift || paymentMethod === NONE ? null : paymentMethod,
         paymentStatus: isGift ? "PAID" : paymentStatus,
         pickupAt: pickupAt || null,
@@ -239,10 +248,14 @@ function OrderForm({ order, onDone }: { order?: OrderRow; onDone: () => void }) 
           <Label htmlFor="progress">Progresso do pedido</Label>
           <Input id="progress" value={progress} onChange={(e) => setProgress(e.target.value)} placeholder="ex: pedido ao fornecedor" disabled={pending} />
         </div>
+        <div className="space-y-1">
+          <Label htmlFor="cost">Custo (R$)</Label>
+          <Input id="cost" value={cost} onChange={(e) => setCost(e.target.value)} inputMode="decimal" placeholder="quanto você pagou" disabled={pending} />
+        </div>
         {isGift ? null : (
           <>
             <div className="space-y-1">
-              <Label htmlFor="amount">Preço (R$)</Label>
+              <Label htmlFor="amount">Preço de venda (R$)</Label>
               <Input id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="opcional" disabled={pending} />
             </div>
             <div className="space-y-1">
@@ -344,9 +357,15 @@ function OrderCard({ order: o }: { order: OrderRow }) {
             {o.customerName ? o.customerName : "sem aluno"}
             {o.matricula ? ` · mat. ${o.matricula}` : ""}
             {" · "}{ddmm(o.orderedAt)}
-            {o.amount != null ? ` · ${brl(o.amount)}` : ""}
+            {o.amount != null ? ` · venda ${brl(o.amount)}` : ""}
+            {o.cost != null ? ` · custo ${brl(o.cost)}` : ""}
             {o.paymentMethod ? ` · ${o.paymentMethod}` : ""}
           </div>
+          {!o.isGift && o.amount != null && o.cost != null ? (
+            <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              lucro {brl(o.amount - o.cost)}
+            </div>
+          ) : null}
           {o.progress ? (
             <div className="mt-1 text-xs"><span className="text-muted-foreground">progresso:</span> {o.progress}</div>
           ) : null}

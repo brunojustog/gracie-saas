@@ -29,7 +29,8 @@ export type FinancialRow = {
   leadPhone: string | null;
   planName: string;
   modalityName: string;
-  monthlyValue: number;
+  /** null quando o usuário não é ADM (valores mascarados). */
+  monthlyValue: number | null;
   nextDueDate: Date | null;
   paid: boolean;
   paidAt: Date | null;
@@ -43,11 +44,14 @@ export type FinancialRow = {
 export type FinancialOverview = {
   monthRef: string; // YYYY-MM
   monthLabel: string;
-  previsto: number;
-  recebido: number;
+  /** null quando o usuário não é ADM (valores mascarados; v1.2-BY). */
+  previsto: number | null;
+  recebido: number | null;
   pagosCount: number;
   naoPagosCount: number;
   overdueCount: number;
+  /** true só pra ADM — libera os valores em R$. */
+  canSeeValues: boolean;
   rows: FinancialRow[];
 };
 
@@ -78,6 +82,8 @@ export async function getFinancialOverview(
 ): Promise<FinancialOverview> {
   const { start, end, key, label } = monthBounds(ref);
   const now = new Date();
+  // v1.2-BY: só ADM enxerga valores em R$ (as meninas veem só a situação).
+  const canSeeValues = membership.role === "ADMIN";
 
   const [enrollments, received] = await Promise.all([
     prisma.enrollment.findMany({
@@ -141,11 +147,12 @@ export async function getFinancialOverview(
       leadPhone: e.lead.phone,
       planName: e.plan.name,
       modalityName: e.modality.name,
-      monthlyValue,
+      // v1.2-BY: só ADM vê valores em R$.
+      monthlyValue: canSeeValues ? monthlyValue : null,
       nextDueDate: e.nextDueDate,
       paid,
       paidAt: payment?.paidAt ?? null,
-      paidAmount: payment ? Number(payment.amount) : null,
+      paidAmount: canSeeValues && payment ? Number(payment.amount) : null,
       daysOverdue,
       status,
       paymentMethod: payment?.method ?? e.paymentMethod,
@@ -155,11 +162,12 @@ export async function getFinancialOverview(
   return {
     monthRef: key,
     monthLabel: label,
-    previsto,
-    recebido: Number(received._sum.amount ?? 0),
+    previsto: canSeeValues ? previsto : null,
+    recebido: canSeeValues ? Number(received._sum.amount ?? 0) : null,
     pagosCount,
     naoPagosCount: rows.length - pagosCount,
     overdueCount,
+    canSeeValues,
     rows,
   };
 }

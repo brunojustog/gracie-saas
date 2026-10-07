@@ -20,6 +20,8 @@ const orderFields = {
   paymentStatus: z.enum(["TO_PAY", "PARTIAL", "PAID"]).default("TO_PAY"),
   paymentMethod: z.string().max(40).optional().nullable(),
   amount: z.number().nonnegative().max(1_000_000).optional().nullable(),
+  // v1.2-BY: custo da encomenda (p/ lucro por venda).
+  cost: z.number().nonnegative().max(1_000_000).optional().nullable(),
   pickupAt: z.string().optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   // v1.2-BX: encomenda de brinde (saída de kimono de matrícula).
@@ -61,6 +63,7 @@ export async function createOrder(input: unknown): Promise<Result> {
       paymentStatus: d.paymentStatus,
       paymentMethod: d.paymentMethod?.trim() || null,
       amount: d.isGift ? null : d.amount ?? null,
+      cost: d.cost ?? null,
       pickupAt: parseDay(d.pickupAt),
       notes: d.notes?.trim() || null,
       isGift: d.isGift ?? false,
@@ -98,6 +101,7 @@ export async function updateOrder(input: unknown): Promise<Result> {
       paymentStatus: d.paymentStatus,
       paymentMethod: d.paymentMethod?.trim() || null,
       amount: d.isGift ? null : d.amount ?? null,
+      cost: d.cost ?? null,
       pickupAt: parseDay(d.pickupAt),
       notes: d.notes?.trim() || null,
       isGift: d.isGift ?? false,

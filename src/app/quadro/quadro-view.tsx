@@ -48,6 +48,7 @@ export function QuadroBody({
   to,
   publicMode = false,
   shareSlot,
+  alertsSlot,
   dailySnapshots,
   dailyDays = 7,
   rangeResumo,
@@ -60,6 +61,8 @@ export function QuadroBody({
   to?: string;
   publicMode?: boolean;
   shareSlot?: React.ReactNode;
+  /** v1.2-BY: painéis de cancelamentos pendentes + alunos congelados (gestão). */
+  alertsSlot?: React.ReactNode;
   /** v1.1-BJ: faixa "últimos dias" (resumo diário). */
   dailySnapshots?: DailySnapshot[];
   /** v1.1-CG: nº de dias da faixa + resumo por período. */
@@ -80,6 +83,9 @@ export function QuadroBody({
         </div>
         {shareSlot}
       </div>
+
+      {/* v1.2-BY: alertas de gestão (cancelamentos pendentes + congelados). */}
+      {publicMode ? null : alertsSlot}
 
       {/* Resumo consolidado do mês (v1.1-BM, item 4) — painel fixo grandão. */}
       <MonthBoard m={data.monthResumo} ativos={data.matriculas.totalActive} />

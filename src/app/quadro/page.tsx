@@ -8,9 +8,12 @@ import {
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getRecentSnapshots } from "@/server/daily-report";
+import { getFrozenEnrollments, getPendingCancellations } from "@/server/enrollments";
 import { getQuadroData, getRangeResumo, type RangeResumo } from "@/server/quadro";
 import { requireRole } from "@/server/tenant";
 
+import { CancelationsAlert } from "../dashboard/cancelations-alert";
+import { FrozenAlert } from "../dashboard/frozen-alert";
 import { PublicLinkButton } from "./public-link-button";
 import { QuadroBody } from "./quadro-view";
 
@@ -58,17 +61,20 @@ export default async function QuadroPage({
   // v1.1-CG: resumo por período (só quando as duas datas vêm).
   const rangePeriod = sp.rfrom && sp.rto ? resolveCustom(sp.rfrom, sp.rto) : null;
 
-  const [data, tenantRow, snapshots, rangeResumo] = await Promise.all([
-    getQuadroData(tenant.id, expPeriod),
-    prisma.tenant.findUnique({
-      where: { id: tenant.id },
-      select: { publicQuadroToken: true },
-    }),
-    getRecentSnapshots(tenant.id, daysNum),
-    rangePeriod
-      ? getRangeResumo(tenant.id, rangePeriod.from, rangePeriod.to, rangePeriod.label)
-      : (Promise.resolve(null) as Promise<RangeResumo | null>),
-  ]);
+  const [data, tenantRow, snapshots, rangeResumo, pendingCancellations, frozenEnrollments] =
+    await Promise.all([
+      getQuadroData(tenant.id, expPeriod),
+      prisma.tenant.findUnique({
+        where: { id: tenant.id },
+        select: { publicQuadroToken: true },
+      }),
+      getRecentSnapshots(tenant.id, daysNum),
+      rangePeriod
+        ? getRangeResumo(tenant.id, rangePeriod.from, rangePeriod.to, rangePeriod.label)
+        : (Promise.resolve(null) as Promise<RangeResumo | null>),
+      getPendingCancellations(tenant.id),
+      getFrozenEnrollments(tenant.id),
+    ]);
 
   return (
     <>
@@ -101,6 +107,12 @@ export default async function QuadroPage({
         rangeFrom={sp.rfrom}
         rangeTo={sp.rto}
         shareSlot={<PublicLinkButton token={tenantRow?.publicQuadroToken ?? null} />}
+        alertsSlot={
+          <>
+            <CancelationsAlert rows={pendingCancellations} />
+            <FrozenAlert rows={frozenEnrollments} />
+          </>
+        }
       />
     </>
   );

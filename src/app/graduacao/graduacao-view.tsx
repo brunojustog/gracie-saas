@@ -98,19 +98,23 @@ export function GraduacaoView({
   );
   const unpaidCount = totalBooked - paidCount;
 
-  // v1.2-BX: consolidado das provas PAGAS por forma de pagamento.
-  const paidByMethod = useMemo(() => {
-    const m = new Map<PaymentMethod, number>();
+  // v1.2-BX: consolidado das provas PAGAS por forma de pagamento (com os nomes).
+  const paidNamesByMethod = useMemo(() => {
+    const m = new Map<PaymentMethod, string[]>();
     for (const d of schedule) {
       for (const sl of d.slots) {
         if (sl.exam?.paid) {
           const k = (sl.exam.paymentMethod as PaymentMethod | null) ?? "OTHER";
-          m.set(k, (m.get(k) ?? 0) + 1);
+          const arr = m.get(k) ?? [];
+          arr.push(sl.exam.alunoNome);
+          m.set(k, arr);
         }
       }
     }
     return m;
   }, [schedule]);
+  // v1.2-BY: forma expandida (clicou pra ver os nomes).
+  const [openMethod, setOpenMethod] = useState<PaymentMethod | null>(null);
 
   // Filtro por situação de pagamento (aplicado aos slots com prova; esconde
   // os slots vazios quando um filtro está ativo).
@@ -183,16 +187,33 @@ export function GraduacaoView({
         </div>
       ) : null}
 
-      {/* v1.2-BX: consolidado por forma de pagamento (só das pagas). */}
+      {/* v1.2-BX/BY: consolidado por forma de pagamento (clicável → nomes). */}
       {paidCount > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Pagas por forma:</span>
-          {PAYMENT_METHOD_ORDER.filter((m) => (paidByMethod.get(m) ?? 0) > 0).map((m) => (
-            <span key={m}>
-              {PAYMENT_METHOD_LABELS[m]}{" "}
-              <b className="text-foreground">{paidByMethod.get(m)}</b>
-            </span>
-          ))}
+        <div className="space-y-1.5 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+            <span className="font-medium text-foreground">Pagas por forma:</span>
+            {PAYMENT_METHOD_ORDER.filter((m) => (paidNamesByMethod.get(m)?.length ?? 0) > 0).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setOpenMethod(openMethod === m ? null : m)}
+                className={cn(
+                  "rounded-full border px-2 py-0.5 transition-colors hover:bg-background",
+                  openMethod === m && "bg-background ring-1 ring-primary",
+                )}
+              >
+                {PAYMENT_METHOD_LABELS[m]}{" "}
+                <b className="text-foreground">{paidNamesByMethod.get(m)?.length}</b>
+              </button>
+            ))}
+          </div>
+          {openMethod ? (
+            <ul className="flex flex-wrap gap-x-3 gap-y-0.5 border-t pt-1.5 text-muted-foreground">
+              {(paidNamesByMethod.get(openMethod) ?? []).map((nome, i) => (
+                <li key={`${nome}-${i}`}>• {nome}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 

@@ -1032,6 +1032,63 @@ export async function reactivateEnrollment(input: unknown): Promise<ActionResult
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Estender congelamento (v1.2-BY) — aluno trouxe novo atestado: só empurra o
+// retorno previsto (mantém o congelamento, dias seguem acumulando) e registra
+// o motivo + a nova data. NÃO descongela.
+// ──────────────────────────────────────────────────────────────────────────
+
+const extendFreezeSchema = z.object({
+  enrollmentId: z.string().min(1),
+  expectedReturnAt: z.string().date(),
+  reason: z.string().min(1).max(2000),
+});
+
+export async function extendFreeze(input: unknown): Promise<ActionResult> {
+  const parsed = extendFreezeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  if (!enrollment.suspendedAt) {
+    return { ok: false, error: "matrícula não está congelada" };
+  }
+
+  const newReturn = new Date(parsed.data.expectedReturnAt);
+  if (Number.isNaN(newReturn.getTime())) return { ok: false, error: "data inválida" };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
+        expectedReturnAt: newReturn,
+        suspensionReason: parsed.data.reason,
+      },
+    });
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "ENROLLMENT_SUSPENDED",
+        body: `Congelamento estendido — ${parsed.data.reason}. Novo retorno previsto: ${newReturn.toLocaleDateString("pt-BR")}.`,
+        metadata: {
+          enrollmentId: enrollment.id,
+          reason: parsed.data.reason,
+          expectedReturnAt: newReturn.toISOString(),
+          extended: true,
+        },
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/dashboard");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Marcar como Judicial (v1.1-AU) — aluno que sumiu devendo (perda). Sai dos
 // ativos, conta como cancelamento, vai pra carteira jurídica separada.
 // ──────────────────────────────────────────────────────────────────────────
