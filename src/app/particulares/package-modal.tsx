@@ -245,6 +245,12 @@ function Body({
       toast.error("Escolha o aluno");
       return;
     }
+    // v1.2-CA: recorrente exige dia de cobrança + aulas por ciclo (senão o cron
+    // não gera nada).
+    if (recurring && (!recDay || !recClasses)) {
+      toast.error("Pacote recorrente: preencha o dia da cobrança e as aulas por ciclo.");
+      return;
+    }
 
     const common = {
       modalityId: modalityId === NONE ? null : modalityId,

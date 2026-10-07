@@ -70,23 +70,38 @@ const recurringFields = {
   recurringClasses: z.number().int().min(1).max(500).nullable().optional(),
 };
 
-const createSchema = z.object({
-  leadId: z.string().min(1),
-  modalityId: z.string().min(1).nullable().optional(),
-  totalClasses: z.number().int().min(1).max(500),
-  value: z.number().nonnegative().max(1_000_000),
-  paymentMethod: z.enum(PAYMENT).nullable().optional(),
-  startDate: z.string().date(),
-  endDate: z.string().date().nullable().optional(),
-  soldById: z.string().min(1).nullable().optional(),
-  notes: z.string().max(2000).nullable().optional(),
-  referralPromo: z.boolean().optional(),
-  ...recurringFields,
-});
+// v1.2-CA: pacote recorrente OBRIGA dia de cobrança + aulas por ciclo (senão o
+// cron não sabe quando cobrar nem quantas aulas somar — bug dos 4 pacotes).
+const requireRecurrenceConfig = (d: {
+  recurring?: boolean;
+  recurringDay?: number | null;
+  recurringClasses?: number | null;
+}) => !d.recurring || (d.recurringDay != null && d.recurringClasses != null);
+const recurrenceConfigMsg = {
+  message: "Pacote recorrente precisa do dia de cobrança e das aulas por ciclo.",
+};
+
+const createSchema = z
+  .object({
+    leadId: z.string().min(1),
+    modalityId: z.string().min(1).nullable().optional(),
+    totalClasses: z.number().int().min(1).max(500),
+    value: z.number().nonnegative().max(1_000_000),
+    paymentMethod: z.enum(PAYMENT).nullable().optional(),
+    startDate: z.string().date(),
+    endDate: z.string().date().nullable().optional(),
+    soldById: z.string().min(1).nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+    referralPromo: z.boolean().optional(),
+    ...recurringFields,
+  })
+  .refine(requireRecurrenceConfig, recurrenceConfigMsg);
 
 export async function createPrivatePackage(input: unknown): Promise<Result> {
   const parsed = createSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "input inválido" };
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
+  }
 
   const { tenant, user, membership } = await requireTenantUser();
   const lead = await findLeadInScope(membership, parsed.data.leadId);
@@ -179,23 +194,27 @@ export async function createPrivatePackage(input: unknown): Promise<Result> {
 // Editar pacote
 // ──────────────────────────────────────────────────────────────────────────
 
-const updateSchema = z.object({
-  packageId: z.string().min(1),
-  modalityId: z.string().min(1).nullable().optional(),
-  totalClasses: z.number().int().min(1).max(500),
-  value: z.number().nonnegative().max(1_000_000),
-  paymentMethod: z.enum(PAYMENT).nullable().optional(),
-  startDate: z.string().date(),
-  endDate: z.string().date().nullable().optional(),
-  soldById: z.string().min(1).nullable().optional(),
-  notes: z.string().max(2000).nullable().optional(),
-  referralPromo: z.boolean().optional(),
-  ...recurringFields,
-});
+const updateSchema = z
+  .object({
+    packageId: z.string().min(1),
+    modalityId: z.string().min(1).nullable().optional(),
+    totalClasses: z.number().int().min(1).max(500),
+    value: z.number().nonnegative().max(1_000_000),
+    paymentMethod: z.enum(PAYMENT).nullable().optional(),
+    startDate: z.string().date(),
+    endDate: z.string().date().nullable().optional(),
+    soldById: z.string().min(1).nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+    referralPromo: z.boolean().optional(),
+    ...recurringFields,
+  })
+  .refine(requireRecurrenceConfig, recurrenceConfigMsg);
 
 export async function updatePrivatePackage(input: unknown): Promise<Result> {
   const parsed = updateSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "input inválido" };
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
+  }
 
   const { membership } = await requireTenantUser();
   const pkg = await findPackageInScope(membership, parsed.data.packageId);
