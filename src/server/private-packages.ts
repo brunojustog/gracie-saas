@@ -31,41 +31,65 @@ export function deriveStatus(
   return completed >= total ? "COMPLETED" : "ACTIVE";
 }
 
+/** Nº de cobranças mensais que já deveriam ter acontecido (BACKFILL). v1.2-CA.
+ *
+ * Âncora: a 1ª cobrança da recorrência cai no `recurringDay` do mês SEGUINTE ao
+ * início do pacote; daí em diante, todo mês. Retorna a lista de datas de
+ * cobrança (meio-dia BR) que já venceram (<= now) e que AINDA não têm uma
+ * renovação registrada naquele mês (pula as já lançadas — manual ou auto).
+ */
+function missingRecurrenceDates(
+  startDate: Date,
+  recurringDay: number,
+  renewalMonthKeys: Set<string>,
+  now: Date,
+): Date[] {
+  const out: Date[] = [];
+  // 1º mês candidato = mês seguinte ao do início.
+  let cy = startDate.getFullYear();
+  let cm = startDate.getMonth() + 1;
+  if (cm > 11) { cm = 0; cy += 1; }
+  // Trava de segurança: no máx. 24 meses pra trás.
+  let guard = 0;
+  while (guard++ < 400) {
+    // Passou do mês atual? para.
+    if (cy > now.getFullYear() || (cy === now.getFullYear() && cm > now.getMonth())) break;
+    const dim = new Date(cy, cm + 1, 0).getDate();
+    const day = Math.min(recurringDay, dim);
+    const billing = new Date(cy, cm, day, 12, 0, 0);
+    if (billing.getTime() <= now.getTime() && !renewalMonthKeys.has(`${cy}-${cm}`)) {
+      out.push(billing);
+    }
+    cm += 1;
+    if (cm > 11) { cm = 0; cy += 1; }
+  }
+  return out;
+}
+
 /**
- * v1.2-BV: gera automaticamente o ciclo de recorrência dos pacotes particulares.
- * Rodado uma vez por dia (cron diário). Para cada pacote recorrente cujo
- * `recurringDay` cai hoje (fuso BR; dia 31 cai no último dia do mês), cria uma
- * renovação de `recurringClasses` aulas — se ainda não gerou neste mês
- * (idempotência via `lastRecurrenceAt`). Corrige a falha de não gerar sozinho.
+ * v1.2-BV/CA: gera automaticamente os ciclos de recorrência dos pacotes
+ * particulares. Rodado 1x/dia (cron diário). AUTO-CURATIVO: pra cada pacote
+ * recorrente, gera TODOS os ciclos que já deveriam ter acontecido desde o
+ * início (ou desde a última renovação), não só o do dia — assim ciclos que
+ * passaram (deploy tardio, mês sem rodar) entram sozinhos. Idempotente: pula
+ * meses que já têm renovação registrada (manual ou automática).
  */
 export async function runPrivateRecurrence(
   now: Date = new Date(),
 ): Promise<{ generated: number; skipped: number }> {
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const dom = now.getDate();
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const monthStart = new Date(y, m, 1);
-  const nextMonthStart = new Date(y, m + 1, 1);
-
   const pkgs = await prisma.privatePackage.findMany({
     where: { recurring: true, recurringDay: { not: null }, status: { not: "CANCELED" } },
     select: {
       id: true,
       tenantId: true,
       leadId: true,
+      startDate: true,
       recurringDay: true,
       recurringClasses: true,
       totalClasses: true,
       status: true,
-      lastRecurrenceAt: true,
       sessions: { select: { completedAt: true } },
-      // v1.2-BZ: renovações do mês (manual OU auto) pra não duplicar o ciclo.
-      renewals: {
-        where: { paidAt: { gte: monthStart, lt: nextMonthStart } },
-        select: { id: true },
-        take: 1,
-      },
+      renewals: { select: { paidAt: true } },
     },
   });
 
@@ -74,49 +98,46 @@ export async function runPrivateRecurrence(
   for (const p of pkgs) {
     const add = p.recurringClasses ?? 0;
     if (add <= 0) continue;
-    // Dia de cobrança (com clamp pro último dia do mês se recurringDay > dias do mês).
-    const targetDay = Math.min(p.recurringDay!, daysInMonth);
-    // v1.2-BZ: "pega" o ciclo do mês assim que chega/passa o dia de cobrança
-    // (antes só no dia exato — se o deploy caísse depois do dia, o ciclo do mês
-    // nunca entrava). Idempotência garante 1x por mês.
-    if (dom < targetDay) continue;
-    // Idempotência: já gerou neste mês (auto via lastRecurrenceAt OU renovação
-    // manual registrada neste mês)? pula.
-    const autoThisMonth =
-      p.lastRecurrenceAt != null &&
-      p.lastRecurrenceAt.getFullYear() === y &&
-      p.lastRecurrenceAt.getMonth() === m;
-    if (autoThisMonth || p.renewals.length > 0) {
+
+    // Meses que já têm renovação (chave ano-mês) — pra não duplicar.
+    const renewalMonthKeys = new Set(
+      p.renewals.map((r) => `${r.paidAt.getFullYear()}-${r.paidAt.getMonth()}`),
+    );
+    const missing = missingRecurrenceDates(p.startDate, p.recurringDay!, renewalMonthKeys, now);
+    if (missing.length === 0) {
       skipped++;
       continue;
     }
 
     await prisma.$transaction(async (tx) => {
-      await tx.privatePackageRenewal.create({
-        data: { packageId: p.id, paidAt: now, classesAdded: add, value: null, note: "recorrência automática" },
-      });
-      const newTotal = p.totalClasses + add;
+      let total = p.totalClasses;
+      for (const billing of missing) {
+        await tx.privatePackageRenewal.create({
+          data: { packageId: p.id, paidAt: billing, classesAdded: add, value: null, note: "recorrência automática" },
+        });
+        total += add;
+        await appendLeadNote(
+          {
+            tenantId: p.tenantId,
+            leadId: p.leadId,
+            kind: "PRIVATE_PACKAGE_RENEWED",
+            body: `Recorrência automática: +${add} aulas (cobrança ${billing.toLocaleDateString("pt-BR")})`,
+            metadata: { packageId: p.id, classesAdded: add, auto: true, billingDate: billing.toISOString() },
+          },
+          tx,
+        );
+      }
       const completed = countCompleted(p.sessions);
       await tx.privatePackage.update({
         where: { id: p.id },
         data: {
-          totalClasses: newTotal,
-          status: deriveStatus(p.status, completed, newTotal),
-          lastRecurrenceAt: now,
+          totalClasses: total,
+          status: deriveStatus(p.status, completed, total),
+          lastRecurrenceAt: missing[missing.length - 1],
         },
       });
-      await appendLeadNote(
-        {
-          tenantId: p.tenantId,
-          leadId: p.leadId,
-          kind: "PRIVATE_PACKAGE_RENEWED",
-          body: `Recorrência automática: +${add} aulas`,
-          metadata: { packageId: p.id, classesAdded: add, auto: true },
-        },
-        tx,
-      );
     });
-    generated++;
+    generated += missing.length;
   }
   return { generated, skipped };
 }
