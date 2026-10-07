@@ -3,20 +3,25 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/top-nav";
 import { signOut } from "@/server/auth";
-import { getPurchasesForTenant, getVariantsForPurchase } from "@/server/purchases";
+import {
+  getPurchasesForTenant,
+  getSupplyExpensesForTenant,
+  getVariantsForPurchase,
+} from "@/server/purchases";
 import { requireRole } from "@/server/tenant";
 
-import { ComprasClient } from "./compras-client";
+import { ComprasTabs } from "./compras-tabs";
 
 export const dynamic = "force-dynamic";
 
 export default async function ComprasPage() {
-  // Custo é dado de gestão — ADM/gerente.
+  // Custo é dado de gestão — ADM/gerente (Gisele).
   const { tenant, user, membership } = await requireRole("MANAGER");
 
-  const [purchases, variants] = await Promise.all([
+  const [purchases, variants, supplies] = await Promise.all([
     getPurchasesForTenant(tenant.id),
     getVariantsForPurchase(tenant.id),
+    getSupplyExpensesForTenant(tenant.id),
   ]);
 
   return (
@@ -45,18 +50,14 @@ export default async function ComprasPage() {
             <Link href="/pdv" className="text-sm text-muted-foreground hover:underline">
               ← Lojinha
             </Link>
-            <h1 className="text-lg font-semibold tracking-tight">Compras da lojinha</h1>
+            <h1 className="text-lg font-semibold tracking-tight">Compras</h1>
             <p className="text-sm text-muted-foreground">
-              Lance o que a academia comprou: soma ao estoque e registra o custo
-              (controle de gasto × margem). Produto novo? Cadastre antes em{" "}
-              <Link href="/pdv/produtos" className="font-medium text-primary hover:underline">
-                Produtos
-              </Link>
-              .
+              Compras da lojinha (geram estoque/venda) e insumos da academia
+              (despesas). Acesso restrito a administração.
             </p>
           </div>
         </div>
-        <ComprasClient purchases={purchases} variants={variants} />
+        <ComprasTabs purchases={purchases} variants={variants} supplies={supplies} />
       </main>
     </>
   );

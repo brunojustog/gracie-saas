@@ -407,6 +407,7 @@ export async function confirmPayment(input: unknown): Promise<ActionResult> {
 
   revalidatePath("/matriculas");
   revalidatePath("/dashboard");
+  revalidatePath("/financeiro");
   return { ok: true, enrollmentId: enrollment.id };
 }
 

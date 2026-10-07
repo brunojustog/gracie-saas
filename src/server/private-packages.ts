@@ -45,6 +45,8 @@ export async function runPrivateRecurrence(
   const m = now.getMonth();
   const dom = now.getDate();
   const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const monthStart = new Date(y, m, 1);
+  const nextMonthStart = new Date(y, m + 1, 1);
 
   const pkgs = await prisma.privatePackage.findMany({
     where: { recurring: true, recurringDay: { not: null }, status: { not: "CANCELED" } },
@@ -58,6 +60,12 @@ export async function runPrivateRecurrence(
       status: true,
       lastRecurrenceAt: true,
       sessions: { select: { completedAt: true } },
+      // v1.2-BZ: renovações do mês (manual OU auto) pra não duplicar o ciclo.
+      renewals: {
+        where: { paidAt: { gte: monthStart, lt: nextMonthStart } },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
 
@@ -68,13 +76,17 @@ export async function runPrivateRecurrence(
     if (add <= 0) continue;
     // Dia de cobrança (com clamp pro último dia do mês se recurringDay > dias do mês).
     const targetDay = Math.min(p.recurringDay!, daysInMonth);
-    if (dom !== targetDay) continue;
-    // Idempotência: já gerou neste mês? pula.
-    if (
-      p.lastRecurrenceAt &&
+    // v1.2-BZ: "pega" o ciclo do mês assim que chega/passa o dia de cobrança
+    // (antes só no dia exato — se o deploy caísse depois do dia, o ciclo do mês
+    // nunca entrava). Idempotência garante 1x por mês.
+    if (dom < targetDay) continue;
+    // Idempotência: já gerou neste mês (auto via lastRecurrenceAt OU renovação
+    // manual registrada neste mês)? pula.
+    const autoThisMonth =
+      p.lastRecurrenceAt != null &&
       p.lastRecurrenceAt.getFullYear() === y &&
-      p.lastRecurrenceAt.getMonth() === m
-    ) {
+      p.lastRecurrenceAt.getMonth() === m;
+    if (autoThisMonth || p.renewals.length > 0) {
       skipped++;
       continue;
     }

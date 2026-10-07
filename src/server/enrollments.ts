@@ -128,6 +128,24 @@ export function buildEnrollmentListWhere(
   return where;
 }
 
+/**
+ * v1.2-BZ: infere a duração do plano (meses) pelo NOME quando não há
+ * `durationMonths` cadastrado. Cobre a nomenclatura do GBAF ("Plano anual
+ * fundador", "Mensal", etc.). Retorna null quando não dá pra inferir.
+ */
+export function inferDurationMonths(planName: string): number | null {
+  const n = planName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, ""); // tira acentos
+  if (/\banual\b|\bano\b|\banuidade\b/.test(n)) return 12;
+  if (/\bsemestral\b|\bsemestre\b/.test(n)) return 6;
+  if (/\btrimestral\b|\btrimestre\b/.test(n)) return 3;
+  if (/\bbimestral\b|\bbimestre\b/.test(n)) return 2;
+  if (/\bmensal\b|\bmes\b|\bmensalidade\b/.test(n)) return 1;
+  return null;
+}
+
 export async function getEnrollmentsForList(
   membership: TenantUser,
   filters: EnrollmentListFilters = {},
@@ -176,13 +194,16 @@ export async function getEnrollmentsForList(
     ? rows.filter((r) => r.nextDueDate?.getDate() === filters.dueDay)
     : rows;
 
-  // v1.2-BX: término do contrato = início + duração do plano + dias congelados
-  // (acumulados + os em andamento, se ainda congelado). Null = plano sem
-  // término fixo (mensal recorrente). Cai no contractEndAt legado se existir.
+  // v1.2-BX/BZ: término do contrato = início + duração do plano + dias
+  // congelados (acumulados + os em andamento, se ainda congelado). A duração
+  // vem de `durationMonths` (Config → Planos); se null, é INFERIDA pelo nome do
+  // plano (anual→12, mensal→1, etc.). Null = sem término fixo (cai no
+  // contractEndAt legado se existir).
   const today = startOfDay(new Date());
   const planEndFor = (r: (typeof filtered)[number]): Date | null => {
-    if (r.plan.durationMonths == null) return r.contractEndAt ?? null;
-    const base = addMonths(r.enrolledAt, r.plan.durationMonths);
+    const months = r.plan.durationMonths ?? inferDurationMonths(r.plan.name);
+    if (months == null) return r.contractEndAt ?? null;
+    const base = addMonths(r.enrolledAt, months);
     const inProgress = r.suspendedAt
       ? Math.max(0, differenceInCalendarDays(today, startOfDay(r.suspendedAt)))
       : 0;

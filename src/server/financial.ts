@@ -13,11 +13,11 @@
  * base clicável. Mascaramento de valores segue a política v1.1-P (SELLER não
  * entra aqui; tela é de gestão).
  */
-import { endOfMonth, startOfMonth } from "date-fns";
+import { differenceInCalendarDays, endOfMonth, startOfDay, startOfMonth } from "date-fns";
 import type { PaymentMethod, TenantUser } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { isOverdue } from "@/lib/overdue";
+import { OVERDUE_GRACE_DAYS } from "@/lib/overdue";
 
 export type FinancialStatus = "paid" | "due" | "overdue";
 
@@ -29,8 +29,8 @@ export type FinancialRow = {
   leadPhone: string | null;
   planName: string;
   modalityName: string;
-  /** null quando o usuário não é ADM (valores mascarados). */
-  monthlyValue: number | null;
+  /** Mensalidade do aluno — visível a todas as contas (v1.2-BZ). */
+  monthlyValue: number;
   nextDueDate: Date | null;
   paid: boolean;
   paidAt: Date | null;
@@ -44,14 +44,14 @@ export type FinancialRow = {
 export type FinancialOverview = {
   monthRef: string; // YYYY-MM
   monthLabel: string;
-  /** null quando o usuário não é ADM (valores mascarados; v1.2-BY). */
+  /** null pra SELLER — a caixa de totais some (mensalidade por linha fica). v1.2-BZ. */
   previsto: number | null;
   recebido: number | null;
   pagosCount: number;
   naoPagosCount: number;
   overdueCount: number;
-  /** true só pra ADM — libera os valores em R$. */
-  canSeeValues: boolean;
+  /** true p/ MANAGER+ADMIN — mostra a caixa de totais (previsto/recebido). */
+  canSeeTotals: boolean;
   rows: FinancialRow[];
 };
 
@@ -82,22 +82,33 @@ export async function getFinancialOverview(
 ): Promise<FinancialOverview> {
   const { start, end, key, label } = monthBounds(ref);
   const now = new Date();
-  // v1.2-BY: só ADM enxerga valores em R$ (as meninas veem só a situação).
-  const canSeeValues = membership.role === "ADMIN";
+  // v1.2-BZ: a caixa de totais some pra vendedora; a mensalidade por linha
+  // aparece pra todas as contas.
+  const canSeeTotals = membership.role !== "SELLER";
 
   const [enrollments, received] = await Promise.all([
     prisma.enrollment.findMany({
-      where: { tenantId: membership.tenantId, status: "ACTIVE" },
+      // Só matrículas que já existiam no mês de referência (enrolledAt <= fim
+      // do mês) — não mostra aluno novo em meses passados. v1.2-BZ.
+      where: {
+        tenantId: membership.tenantId,
+        status: "ACTIVE",
+        enrolledAt: { lte: end },
+      },
       select: {
         id: true,
         monthlyValue: true,
         nextDueDate: true,
+        enrolledAt: true,
         paymentMethod: true,
+        paidInFullUntil: true,
         lead: { select: { id: true, name: true, phone: true, payerName: true } },
         plan: { select: { name: true } },
         modality: { select: { name: true } },
+        // v1.2-BZ: pagamento ESPECÍFICO do mês de referência — a baixa guarda o
+        // vencimento quitado (dueDate). Inadimplência é por mês, não acumula.
         payments: {
-          where: { paidAt: { gte: start, lte: end } },
+          where: { dueDate: { gte: start, lte: end } },
           orderBy: { paidAt: "desc" },
           take: 1,
           select: { paidAt: true, amount: true, method: true },
@@ -105,13 +116,15 @@ export async function getFinancialOverview(
       },
       orderBy: { nextDueDate: "asc" },
     }),
-    // Recebido no mês = tudo que entrou via baixa (inclui matrículas que já
-    // saíram/pausaram depois); conta o caixa real do mês.
+    // Recebido no mês = tudo que entrou via baixa (caixa real do mês).
     prisma.paymentRecord.aggregate({
       where: { tenantId: membership.tenantId, paidAt: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
   ]);
+
+  const today = startOfDay(now);
+  const daysInRefMonth = end.getDate();
 
   let previsto = 0;
   let pagosCount = 0;
@@ -121,21 +134,28 @@ export async function getFinancialOverview(
     const monthlyValue = Number(e.monthlyValue);
     previsto += monthlyValue;
     const payment = e.payments[0] ?? null;
-    const paid = payment !== null;
+    // Pago o MÊS: baixa com vencimento no mês, ou quitação em dia que cobre o mês.
+    const paidInFull = e.paidInFullUntil != null && e.paidInFullUntil >= end;
+    const paid = payment !== null || paidInFull;
+
+    // Vencimento do mês de referência (dia de cobrança da matrícula aplicado ao mês).
+    const billingDay = (e.nextDueDate ?? e.enrolledAt).getDate();
+    const dueThisMonth = new Date(
+      start.getFullYear(),
+      start.getMonth(),
+      Math.min(billingDay, daysInRefMonth),
+    );
+
     let status: FinancialStatus;
     let daysOverdue = 0;
     if (paid) {
       status = "paid";
       pagosCount++;
-    } else if (isOverdue(e.nextDueDate, now)) {
+    } else if (differenceInCalendarDays(today, dueThisMonth) >= OVERDUE_GRACE_DAYS) {
+      // Passou do vencimento do mês + carência → inadimplente daquele mês.
       status = "overdue";
       overdueCount++;
-      if (e.nextDueDate) {
-        daysOverdue = Math.max(
-          0,
-          Math.floor((now.getTime() - e.nextDueDate.getTime()) / 86_400_000),
-        );
-      }
+      daysOverdue = differenceInCalendarDays(today, dueThisMonth);
     } else {
       status = "due";
     }
@@ -147,12 +167,11 @@ export async function getFinancialOverview(
       leadPhone: e.lead.phone,
       planName: e.plan.name,
       modalityName: e.modality.name,
-      // v1.2-BY: só ADM vê valores em R$.
-      monthlyValue: canSeeValues ? monthlyValue : null,
-      nextDueDate: e.nextDueDate,
+      monthlyValue,
+      nextDueDate: dueThisMonth,
       paid,
       paidAt: payment?.paidAt ?? null,
-      paidAmount: canSeeValues && payment ? Number(payment.amount) : null,
+      paidAmount: payment ? Number(payment.amount) : null,
       daysOverdue,
       status,
       paymentMethod: payment?.method ?? e.paymentMethod,
@@ -162,12 +181,12 @@ export async function getFinancialOverview(
   return {
     monthRef: key,
     monthLabel: label,
-    previsto: canSeeValues ? previsto : null,
-    recebido: canSeeValues ? Number(received._sum.amount ?? 0) : null,
+    previsto: canSeeTotals ? previsto : null,
+    recebido: canSeeTotals ? Number(received._sum.amount ?? 0) : null,
     pagosCount,
     naoPagosCount: rows.length - pagosCount,
     overdueCount,
-    canSeeValues,
+    canSeeTotals,
     rows,
   };
 }

@@ -1,13 +1,18 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
 import { cn } from "@/lib/utils";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import type { FinancialOverview, FinancialRow, FinancialStatus } from "@/server/financial";
+
+import { confirmPayment } from "../matriculas/actions";
 
 type Filter = "all" | FinancialStatus;
 
@@ -57,8 +62,8 @@ export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
         </Link>
       </div>
 
-      {/* Previsto × recebido (só ADM vê os valores) */}
-      {overview.canSeeValues ? (
+      {/* Previsto × recebido — caixa some pra vendedora (v1.2-BZ) */}
+      {overview.canSeeTotals ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg border bg-card p-4">
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Previsto</div>
@@ -104,15 +109,14 @@ export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
                 <th className="px-3 py-2 text-left font-medium">Plano</th>
                 <th className="px-3 py-2 text-right font-medium">Vencimento</th>
                 <th className="px-3 py-2 text-right font-medium">Pagamento</th>
-                {overview.canSeeValues ? (
-                  <th className="px-3 py-2 text-right font-medium">Valor</th>
-                ) : null}
+                <th className="px-3 py-2 text-right font-medium">Valor</th>
                 <th className="px-3 py-2 text-right font-medium">Situação</th>
+                <th className="px-3 py-2 text-right font-medium">Ação</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <Row key={r.enrollmentId} r={r} canSeeValues={overview.canSeeValues} />
+                <Row key={r.enrollmentId} r={r} />
               ))}
             </tbody>
           </table>
@@ -163,8 +167,18 @@ function CountChip({
   );
 }
 
-function Row({ r, canSeeValues }: { r: FinancialRow; canSeeValues: boolean }) {
+function Row({ r }: { r: FinancialRow }) {
   const meta = STATUS_META[r.status];
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const pay = () =>
+    startTransition(async () => {
+      const res = await confirmPayment({ enrollmentId: r.enrollmentId });
+      if (!res.ok) return void toast.error(res.error ?? "erro");
+      toast.success("Pagamento confirmado");
+      router.refresh();
+    });
   return (
     <tr className="border-b last:border-0">
       <td className="px-3 py-2">
@@ -198,24 +212,29 @@ function Row({ r, canSeeValues }: { r: FinancialRow; canSeeValues: boolean }) {
       <td className="px-3 py-2 text-right text-xs text-muted-foreground">
         {r.paymentMethod ? PAYMENT_METHOD_LABELS[r.paymentMethod] : "—"}
       </td>
-      {canSeeValues ? (
-        <td className="px-3 py-2 text-right font-mono text-xs">
-          <Money value={r.paid && r.paidAmount != null ? r.paidAmount : r.monthlyValue} />
-        </td>
-      ) : null}
+      <td className="px-3 py-2 text-right font-mono text-xs">
+        <Money value={r.paid && r.paidAmount != null ? r.paidAmount : r.monthlyValue} />
+      </td>
+      <td className="px-3 py-2 text-right">
+        <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.text)}>
+          <span className={cn("h-2 w-2 rounded-full", meta.dot)} /> {meta.label}
+        </span>
+      </td>
       <td className="px-3 py-2 text-right">
         {r.status === "paid" ? (
-          <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.text)}>
-            <span className={cn("h-2 w-2 rounded-full", meta.dot)} /> {meta.label}
+          <span className="text-[11px] text-muted-foreground">
+            {r.paidAt ? `baixado ${r.paidAt.toLocaleDateString("pt-BR")}` : "pago"}
           </span>
         ) : (
-          <Link
-            href={`/matriculas?due=${r.status === "overdue" ? "overdue" : "due7"}`}
-            className={cn("inline-flex items-center gap-1.5 text-xs font-medium hover:underline", meta.text)}
-            title="Ir para Matrículas registrar o pagamento"
-          >
-            <span className={cn("h-2 w-2 rounded-full", meta.dot)} /> {meta.label}
-          </Link>
+          <Button size="sm" className="h-7 text-xs" onClick={pay} disabled={pending}>
+            {pending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <>
+                <Check className="mr-1 h-3.5 w-3.5" /> Pagar
+              </>
+            )}
+          </Button>
         )}
       </td>
     </tr>

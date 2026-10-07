@@ -59,3 +59,30 @@ export async function getVariantsForPurchase(tenantId: string) {
       })),
     );
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// v1.2-BZ: insumos da academia (despesas que NÃO mexem em estoque/venda).
+// ──────────────────────────────────────────────────────────────────────────
+
+export async function getSupplyExpensesForTenant(tenantId: string) {
+  const rows = await prisma.supplyExpense.findMany({
+    where: { tenantId },
+    orderBy: { purchasedAt: "desc" },
+    take: 500,
+    select: {
+      id: true,
+      item: true,
+      category: true,
+      quantity: true,
+      amount: true,
+      supplier: true,
+      notes: true,
+      purchasedAt: true,
+    },
+  });
+  return rows.map((r) => ({ ...r, amount: Number(r.amount) }));
+}
+
+export type SupplyExpenseRow = Awaited<
+  ReturnType<typeof getSupplyExpensesForTenant>
+>[number];

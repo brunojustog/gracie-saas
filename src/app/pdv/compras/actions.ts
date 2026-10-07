@@ -123,3 +123,43 @@ export async function createPurchase(input: unknown): Promise<Result> {
   revalidatePath("/pdv");
   return { ok: true };
 }
+
+// v1.2-BZ: compra de insumo da academia (despesa; não mexe em estoque/venda).
+const supplySchema = z.object({
+  item: z.string().min(1).max(160),
+  category: z.string().max(60).optional().nullable(),
+  quantity: z.number().int().min(1).max(100_000).optional().nullable(),
+  amount: z.number().nonnegative().max(1_000_000),
+  supplier: z.string().max(120).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  purchasedAt: z.string().optional().nullable(),
+});
+
+export async function createSupplyExpense(input: unknown): Promise<Result> {
+  const parsed = supplySchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
+  }
+  const { tenant, user } = await requireRole("MANAGER");
+  const d = parsed.data;
+
+  const purchasedAt = d.purchasedAt ? new Date(`${d.purchasedAt}T12:00:00-03:00`) : new Date();
+  if (Number.isNaN(purchasedAt.getTime())) return { ok: false, error: "data inválida" };
+
+  await prisma.supplyExpense.create({
+    data: {
+      tenantId: tenant.id,
+      item: d.item.trim(),
+      category: d.category?.trim() || null,
+      quantity: d.quantity ?? null,
+      amount: d.amount,
+      supplier: d.supplier?.trim() || null,
+      notes: d.notes?.trim() || null,
+      purchasedAt,
+      createdById: user.id,
+    },
+  });
+
+  revalidatePath("/pdv/compras");
+  return { ok: true };
+}
