@@ -1,6 +1,68 @@
 import { describe, expect, it } from "vitest";
 
-import { countActiveAt, isActiveAt, lastMonthStarts, ratePct } from "../quadro";
+import {
+  countActiveAt,
+  isActiveAt,
+  lastMonthStarts,
+  professorShareForSession,
+  ratePct,
+} from "../quadro";
+
+describe("professorShareForSession — repasse da aula particular (v1.2-CB)", () => {
+  it("60% do valor da aula, sobre o contrato original", () => {
+    // 8 aulas por R$1500 = R$187,50/aula → 60% = R$112,50
+    expect(
+      professorShareForSession({ value: 1500, totalClasses: 8, paymentMethod: "PIX" }),
+    ).toBe(112.5);
+  });
+
+  it("cartão de crédito aplica 90% (taxa da maquininha)", () => {
+    expect(
+      professorShareForSession({ value: 1500, totalClasses: 8, paymentMethod: "CREDIT_CARD" }),
+    ).toBe(101.25);
+  });
+
+  it("renovação NÃO dilui: usa as aulas do contrato original (total − renovadas)", () => {
+    // Pacote 8× R$1500, renovado +8 (total 16). O valor/aula continua R$187,50
+    // (1500÷8), não R$93,75 (1500÷16). No cartão → R$101,25, não R$50,63.
+    expect(
+      professorShareForSession({
+        value: 1500,
+        totalClasses: 16,
+        paymentMethod: "CREDIT_CARD",
+        renewals: [{ classesAdded: 8 }],
+      }),
+    ).toBe(101.25);
+  });
+
+  it("várias renovações seguem constantes", () => {
+    expect(
+      professorShareForSession({
+        value: 1500,
+        totalClasses: 24,
+        paymentMethod: "PIX",
+        renewals: [{ classesAdded: 8 }, { classesAdded: 8 }],
+      }),
+    ).toBe(112.5);
+  });
+
+  it("promoção de indicação paga valor fixo (R$70)", () => {
+    expect(
+      professorShareForSession({ value: 0, totalClasses: 4, paymentMethod: null, referralPromo: true }),
+    ).toBe(70);
+  });
+
+  it("contrato original <= 0 → 0 (sem divisão por zero)", () => {
+    expect(
+      professorShareForSession({
+        value: 1500,
+        totalClasses: 8,
+        paymentMethod: "PIX",
+        renewals: [{ classesAdded: 8 }],
+      }),
+    ).toBe(0);
+  });
+});
 
 describe("ratePct", () => {
   it("calcula percentual", () => {

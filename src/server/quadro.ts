@@ -1178,10 +1178,16 @@ export const REFERRAL_PROMO_RATE = 70;
 
 /**
  * v1.1-CA: quanto o professor recebe por UMA aula particular concluída.
- * Regra do Bruno: 60% do valor da aula (= valor do pacote ÷ nº de aulas).
- * Se o pacote foi pago no CARTÃO DE CRÉDITO, aplica 90% (desconto da taxa da
- * maquininha) — ex.: pacote 8× R$1500 → aula R$187,50 → prof R$112,50; no
- * cartão R$101,25.
+ * Regra do Bruno: 60% do valor da aula. Se pago no CARTÃO DE CRÉDITO, aplica
+ * 90% (desconto da taxa da maquininha) — ex.: pacote 8× R$1500 → aula R$187,50
+ * → prof R$112,50; no cartão R$101,25.
+ *
+ * v1.2-CB (fix): o valor da aula é `valor do pacote ÷ aulas do CONTRATO
+ * ORIGINAL`, NÃO pelo total acumulado. Cada renovação/ciclo recorrente soma
+ * aulas (totalClasses cresce) mas NÃO altera `value`; usar o total acumulado
+ * diluía o valor/aula e pagava o professor a menos a cada ciclo. Aulas do
+ * contrato original = totalClasses − soma das aulas adicionadas por renovação.
+ *
  * v1.2-BW: pacote em promoção de indicação paga REFERRAL_PROMO_RATE fixo/aula
  * (o rateio normal daria 0, pois value = 0).
  */
@@ -1190,10 +1196,13 @@ export function professorShareForSession(pkg: {
   totalClasses: number;
   paymentMethod: string | null;
   referralPromo?: boolean | null;
+  renewals?: { classesAdded: number }[] | null;
 }): number {
   if (pkg.referralPromo) return REFERRAL_PROMO_RATE;
-  if (!pkg.totalClasses) return 0;
-  const perClass = Number(pkg.value) / pkg.totalClasses;
+  const renewed = (pkg.renewals ?? []).reduce((s, r) => s + r.classesAdded, 0);
+  const originalClasses = pkg.totalClasses - renewed;
+  if (originalClasses <= 0) return 0;
+  const perClass = Number(pkg.value) / originalClasses;
   let share = perClass * 0.6;
   if (pkg.paymentMethod === "CREDIT_CARD") share *= 0.9;
   return Math.round(share * 100) / 100;
@@ -1219,6 +1228,7 @@ export async function getPrivateClassesByProfessor(
           totalClasses: true,
           paymentMethod: true,
           referralPromo: true,
+          renewals: { select: { classesAdded: true } },
           lead: { select: { name: true } },
         },
       },
