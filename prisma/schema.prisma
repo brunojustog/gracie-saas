@@ -496,6 +496,7 @@ model Lead {
   leadNotes           LeadNote[]
   privatePackages     PrivatePackage[]
   looseClasses        LooseClass[]
+  orders              Order[] // v1.2-CC: encomendas vinculadas ao aluno (débito na ficha)
   aluno               Aluno?
 
   @@index([tenantId])
@@ -1500,6 +1501,8 @@ model Sale {
   paymentMethod  SalePaymentMethod
   paidAt         DateTime          @default(now())
   notes          String?           @db.Text
+  // v1.2-CC: quando a venda é o pagamento (total/parcial) de uma encomenda.
+  orderId        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1507,11 +1510,13 @@ model Sale {
   tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sellerUser   User       @relation("SaleSeller", fields: [sellerUserId], references: [id])
   customerLead Lead?      @relation(fields: [customerLeadId], references: [id])
+  order        Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
   items        SaleItem[]
 
   @@index([tenantId, paidAt])
   @@index([tenantId, sellerUserId])
   @@index([customerLeadId])
+  @@index([orderId])
 }
 
 model SaleItem {
@@ -1564,7 +1569,9 @@ model Order {
   item          String // descrição do item encomendado (Produto)
   quantity      Int                @default(1) // v1.2-BS: Quantidade
   matricula     String? // v1.2-BS: matrícula do aluno
-  customerName  String? // aluno/cliente que pediu (Nome do Aluno)
+  customerName  String? // aluno/cliente que pediu (Nome do Aluno) — snapshot
+  // v1.2-CC: aluno vinculado (pra lançar o débito do saldo na ficha dele).
+  customerLeadId String?
   size          String? // tamanho
   progress      String? // v1.2-BS: Progresso do Pedido (texto livre)
   orderedAt     DateTime           @default(now())
@@ -1581,13 +1588,19 @@ model Order {
   stage         OrderStage         @default(REQUESTED)
   // v1.2-BX: encomenda de brinde (saída de estoque de kimono de matrícula).
   isGift        Boolean            @default(false)
+  // v1.2-CC: combinado/forma do pagamento do restante (ex.: "2x", "toda sexta").
+  paymentPlan   String?
   createdById   String? // quem registrou (sem relação forte)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // v1.2-CC: aluno vinculado + pagamentos (cada pagamento é uma venda da lojinha).
+  customerLead Lead?  @relation(fields: [customerLeadId], references: [id], onDelete: SetNull)
+  payments     Sale[]
 
   @@index([tenantId, status, orderedAt])
+  @@index([customerLeadId])
 }
 
 /** v1.2-BJ: status da prova de graduação. */

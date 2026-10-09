@@ -279,6 +279,38 @@ export default async function AlunoFichaPage({
             )}
           </section>
 
+          {/* v1.2-CC: encomendas com saldo devedor (débito de lojinha). */}
+          {f.orderDebits.length > 0 ? (
+            <section className="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  Débitos de encomendas
+                </h3>
+                <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                  Total: <Money value={f.orderDebits.reduce((s, d) => s + d.balance, 0)} />
+                </span>
+              </div>
+              <ul className="space-y-2 text-sm">
+                {f.orderDebits.map((d) => (
+                  <li key={d.id} className="rounded-lg border border-amber-200 bg-card p-2.5 dark:border-amber-900">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium">
+                        {d.quantity > 1 ? `${d.quantity}× ` : ""}{d.item}
+                      </span>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">
+                        <Money value={d.balance} />
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      pedido {dt(d.orderedAt)} · total <Money value={d.amount} /> · pago <Money value={d.paid} />
+                      {d.paymentPlan ? ` · ${d.paymentPlan}` : ""}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <section className="rounded-xl border bg-card p-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold">Compras na lojinha</h3>

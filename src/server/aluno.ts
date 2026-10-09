@@ -10,6 +10,7 @@ import type { TenantUser } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 import { getAlunoProgress, getAlunoTimeline, nextGraduation } from "./graduations";
+import { getOrderDebitsForLead } from "./orders";
 import { getSalesForLead } from "./pdv";
 
 export type AlunoFicha = Awaited<ReturnType<typeof getAlunoFicha>>;
@@ -59,7 +60,7 @@ export async function getAlunoFicha(membership: TenantUser, alunoId: string) {
 
   const enr = aluno.lead.enrollment;
 
-  const [payments, sales, progress, graduations, checkIns] = await Promise.all([
+  const [payments, sales, progress, graduations, checkIns, orderDebits] = await Promise.all([
     enr
       ? prisma.paymentRecord.findMany({
           where: { enrollmentId: enr.id },
@@ -92,6 +93,8 @@ export async function getAlunoFicha(membership: TenantUser, alunoId: string) {
         },
       },
     }),
+    // v1.2-CC: encomendas com saldo devedor (débito na ficha).
+    getOrderDebitsForLead(membership.tenantId, aluno.leadId),
   ]);
 
   const now = new Date();
@@ -144,6 +147,7 @@ export async function getAlunoFicha(membership: TenantUser, alunoId: string) {
     })),
     sales,
     totalGasto,
+    orderDebits,
     graduations,
     checkIns: checkIns.map((c) => ({
       id: c.id,

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getOrdersForTenant } from "@/server/orders";
 import { requireTenantUser } from "@/server/tenant";
@@ -9,7 +10,17 @@ import { EncomendasClient } from "./encomendas-client";
 
 export default async function EncomendasPage() {
   const { tenant, user, membership } = await requireTenantUser();
-  const orders = await getOrdersForTenant(tenant.id);
+  const [orders, leadRows] = await Promise.all([
+    getOrdersForTenant(tenant.id),
+    // v1.2-CC: alunos do tenant pra vincular a encomenda (débito vai na ficha).
+    prisma.lead.findMany({
+      where: { tenantId: tenant.id, deletedAt: null, aluno: { isNot: null } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, phone: true },
+      take: 2000,
+    }),
+  ]);
+  const leads = leadRows.map((l) => ({ id: l.id, name: l.name, phone: l.phone }));
 
   return (
     <main className="mx-auto max-w-[1100px] space-y-4 px-4 py-6">
@@ -43,7 +54,7 @@ export default async function EncomendasPage() {
         marque como entregue e feche a venda normal na lojinha.
       </p>
 
-      <EncomendasClient orders={orders} />
+      <EncomendasClient orders={orders} leads={leads} />
     </main>
   );
 }
