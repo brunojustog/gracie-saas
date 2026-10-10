@@ -503,11 +503,11 @@ function Body({
               <div className="flex flex-wrap items-end gap-2">
                 <div className="w-24 space-y-1">
                   <span className="text-[11px] text-muted-foreground">Dia da cobrança</span>
-                  <Input type="number" min={1} max={31} value={recDay} onChange={(e) => setRecDay(e.target.value)} disabled={pending} placeholder="23" />
+                  <Input type="number" min={1} max={31} value={recDay} onChange={(e) => setRecDay(e.target.value)} disabled={pending} placeholder="ex: 23" />
                 </div>
                 <div className="w-28 space-y-1">
                   <span className="text-[11px] text-muted-foreground">Aulas por ciclo</span>
-                  <Input type="number" min={1} max={500} value={recClasses} onChange={(e) => setRecClasses(e.target.value)} disabled={pending} placeholder="8" />
+                  <Input type="number" min={1} max={500} value={recClasses} onChange={(e) => setRecClasses(e.target.value)} disabled={pending} placeholder="ex: 8" />
                 </div>
                 {recDay ? (
                   <p className="pb-2 text-[11px] text-muted-foreground">
