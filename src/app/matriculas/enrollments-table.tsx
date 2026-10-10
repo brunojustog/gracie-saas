@@ -109,7 +109,7 @@ const PAYMENT_LABEL: Record<PaymentMethod, string> = {
  * Situação visual (v1.1-AT/AU): congelada deixou de ser status no banco
  * (é ACTIVE + suspendedAt). Aqui derivamos o rótulo/cor.
  */
-function statusView(r: { status: EnrollmentStatus; suspendedAt: Date | string | null }): {
+function statusView(r: { status: EnrollmentStatus; suspendedAt: Date | string | null; frozenKind?: string | null }): {
   label: string;
   tone: string;
 } {
@@ -123,7 +123,9 @@ function statusView(r: { status: EnrollmentStatus; suspendedAt: Date | string | 
   if (r.status === "JUDICIAL")
     return { label: "judicial", tone: "bg-purple-100 text-purple-900 dark:bg-purple-900/40 dark:text-purple-200" };
   if (r.suspendedAt)
-    return { label: "congelada", tone: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" };
+    return r.frozenKind === "PAUSADO"
+      ? { label: "pausada (s/ receita)", tone: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200" }
+      : { label: "congelada", tone: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" };
   return { label: "ativa", tone: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" };
 }
 
@@ -961,7 +963,7 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
   // useState inicia natural a cada novo congelamento. Sem useEffect.
   const router = useRouter();
   const [reason, setReason] = useState("");
-  const [frozenKind, setFrozenKind] = useState<"DOENCA" | "FERIAS">("DOENCA");
+  const [frozenKind, setFrozenKind] = useState<"DOENCA" | "FERIAS" | "PAUSADO">("DOENCA");
   const [expectedReturnAt, setExpectedReturnAt] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -992,8 +994,10 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
       <DialogHeader>
         <DialogTitle>Congelar matrícula</DialogTitle>
         <DialogDescription>
-          {target.lead.name} — continua ativo e cobrando; os dias congelados
-          são repostos no fim do contrato.
+          {target.lead.name} — os dias congelados são repostos no fim do contrato.
+          {frozenKind === "PAUSADO"
+            ? " Pausado: a cobrança para e sai da previsão de receita."
+            : " Continua ativo e cobrando."}
         </DialogDescription>
       </DialogHeader>
 
@@ -1002,15 +1006,16 @@ function FreezeBody({ target, onClose }: { target: Row; onClose: () => void }) {
           <Label htmlFor="freeze-kind">Tipo</Label>
           <Select
             value={frozenKind}
-            onValueChange={(v) => setFrozenKind(v as "DOENCA" | "FERIAS")}
+            onValueChange={(v) => setFrozenKind(v as "DOENCA" | "FERIAS" | "PAUSADO")}
             disabled={pending}
           >
             <SelectTrigger id="freeze-kind">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="DOENCA">Doença (repõe o tempo do atestado)</SelectItem>
-              <SelectItem value="FERIAS">Férias (limite de 30 dias)</SelectItem>
+              <SelectItem value="DOENCA">Doença — continua cobrando (repõe o tempo)</SelectItem>
+              <SelectItem value="FERIAS">Férias — continua cobrando (limite 30 dias)</SelectItem>
+              <SelectItem value="PAUSADO">Pausado — SEM receita (pausa a cobrança; sai do previsto)</SelectItem>
             </SelectContent>
           </Select>
         </div>

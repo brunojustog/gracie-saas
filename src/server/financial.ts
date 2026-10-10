@@ -17,9 +17,21 @@ import { differenceInCalendarDays, endOfMonth, startOfDay, startOfMonth } from "
 import type { PaymentMethod, TenantUser } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { OVERDUE_GRACE_DAYS } from "@/lib/overdue";
+import { OVERDUE_GRACE_DAYS, overdueCutoff } from "@/lib/overdue";
 
-export type FinancialStatus = "paid" | "due" | "overdue";
+export type FinancialStatus = "paid" | "due" | "overdue" | "paused";
+
+/** Linha da inadimplência TOTAL (academia), independente do mês. v1.2-CD. */
+export type OverdueRow = {
+  enrollmentId: string;
+  leadId: string;
+  leadName: string;
+  payerName: string | null;
+  leadPhone: string | null;
+  monthlyValue: number;
+  nextDueDate: Date;
+  daysOverdue: number;
+};
 
 export type FinancialRow = {
   enrollmentId: string;
@@ -50,9 +62,13 @@ export type FinancialOverview = {
   pagosCount: number;
   naoPagosCount: number;
   overdueCount: number;
+  /** v1.2-CD: congelados sem receita (fora do previsto) no mês. */
+  pausedCount: number;
   /** true p/ MANAGER+ADMIN — mostra a caixa de totais (previsto/recebido). */
   canSeeTotals: boolean;
   rows: FinancialRow[];
+  /** v1.2-CD: inadimplência TOTAL da academia (todos os meses em aberto). */
+  overdueAll: OverdueRow[];
 };
 
 const MONTHS = [
@@ -102,6 +118,8 @@ export async function getFinancialOverview(
         enrolledAt: true,
         paymentMethod: true,
         paidInFullUntil: true,
+        suspendedAt: true,
+        frozenKind: true,
         lead: { select: { id: true, name: true, phone: true, payerName: true } },
         plan: { select: { name: true } },
         modality: { select: { name: true } },
@@ -129,11 +147,13 @@ export async function getFinancialOverview(
   let previsto = 0;
   let pagosCount = 0;
   let overdueCount = 0;
+  let pausedCount = 0;
 
   const rows: FinancialRow[] = enrollments.map((e) => {
     const monthlyValue = Number(e.monthlyValue);
-    previsto += monthlyValue;
     const payment = e.payments[0] ?? null;
+    // v1.2-CD: congelamento SEM receita (PAUSADO) sai do previsto e não é cobrança.
+    const paused = e.suspendedAt != null && e.frozenKind === "PAUSADO";
     // Pago o MÊS: baixa com vencimento no mês, ou quitação em dia que cobre o mês.
     const paidInFull = e.paidInFullUntil != null && e.paidInFullUntil >= end;
     const paid = payment !== null || paidInFull;
@@ -148,16 +168,22 @@ export async function getFinancialOverview(
 
     let status: FinancialStatus;
     let daysOverdue = 0;
-    if (paid) {
-      status = "paid";
-      pagosCount++;
-    } else if (differenceInCalendarDays(today, dueThisMonth) >= OVERDUE_GRACE_DAYS) {
-      // Passou do vencimento do mês + carência → inadimplente daquele mês.
-      status = "overdue";
-      overdueCount++;
-      daysOverdue = differenceInCalendarDays(today, dueThisMonth);
+    if (paused) {
+      status = "paused";
+      pausedCount++;
     } else {
-      status = "due";
+      previsto += monthlyValue;
+      if (paid) {
+        status = "paid";
+        pagosCount++;
+      } else if (differenceInCalendarDays(today, dueThisMonth) >= OVERDUE_GRACE_DAYS) {
+        // Passou do vencimento do mês + carência → inadimplente daquele mês.
+        status = "overdue";
+        overdueCount++;
+        daysOverdue = differenceInCalendarDays(today, dueThisMonth);
+      } else {
+        status = "due";
+      }
     }
     return {
       enrollmentId: e.id,
@@ -178,14 +204,47 @@ export async function getFinancialOverview(
     };
   });
 
+  // v1.2-CD: inadimplência TOTAL da academia (todos os meses em aberto, não só
+  // o de referência). Exclui congelados sem receita (PAUSADO) e quitados.
+  const overdueEnrollments = await prisma.enrollment.findMany({
+    where: {
+      tenantId: membership.tenantId,
+      status: "ACTIVE",
+      nextDueDate: { not: null, lt: overdueCutoff(now) },
+      NOT: [
+        { AND: [{ suspendedAt: { not: null } }, { frozenKind: "PAUSADO" }] },
+        { paidInFullUntil: { gte: today } },
+      ],
+    },
+    orderBy: { nextDueDate: "asc" },
+    select: {
+      id: true,
+      monthlyValue: true,
+      nextDueDate: true,
+      lead: { select: { id: true, name: true, phone: true, payerName: true } },
+    },
+  });
+  const overdueAll: OverdueRow[] = overdueEnrollments.map((e) => ({
+    enrollmentId: e.id,
+    leadId: e.lead.id,
+    leadName: e.lead.name,
+    payerName: e.lead.payerName,
+    leadPhone: e.lead.phone,
+    monthlyValue: Number(e.monthlyValue),
+    nextDueDate: e.nextDueDate!,
+    daysOverdue: differenceInCalendarDays(today, startOfDay(e.nextDueDate!)),
+  }));
+
   return {
     monthRef: key,
     monthLabel: label,
     previsto: canSeeTotals ? previsto : null,
     recebido: canSeeTotals ? Number(received._sum.amount ?? 0) : null,
     pagosCount,
-    naoPagosCount: rows.length - pagosCount,
+    naoPagosCount: rows.length - pagosCount - pausedCount,
     overdueCount,
+    pausedCount,
+    overdueAll,
     canSeeTotals,
     rows,
   };

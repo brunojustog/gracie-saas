@@ -412,6 +412,55 @@ export async function confirmPayment(input: unknown): Promise<ActionResult> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Estornar pagamento (v1.2-CD) — desfaz a ÚLTIMA baixa (clicou errado). Remove
+// o PaymentRecord mais recente e volta o nextDueDate pro vencimento que ele
+// havia quitado. Reunião 09/10 (caso Mateus Cavalcante).
+// ──────────────────────────────────────────────────────────────────────────
+
+export async function reversePayment(input: unknown): Promise<ActionResult> {
+  const parsed = z.object({ enrollmentId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+
+  const last = await prisma.paymentRecord.findFirst({
+    where: { enrollmentId: enrollment.id },
+    orderBy: { paidAt: "desc" },
+    select: { id: true, dueDate: true, paidAt: true },
+  });
+  if (!last) return { ok: false, error: "não há pagamento pra estornar" };
+
+  // Volta o vencimento pro que foi quitado (ou -1 mês se o registro não tinha).
+  const revertedDue = last.dueDate ?? addMonths(enrollment.nextDueDate ?? new Date(), -1);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.paymentRecord.delete({ where: { id: last.id } });
+    await tx.enrollment.update({
+      where: { id: enrollment.id },
+      data: { nextDueDate: revertedDue },
+    });
+    await appendLeadNote(
+      {
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "PAYMENT_CONFIRMED",
+        body: `Pagamento ESTORNADO (baixa desfeita). Vencimento volta pra ${revertedDue.toLocaleDateString("pt-BR")}.`,
+        metadata: { enrollmentId: enrollment.id, reversedPaymentId: last.id, revertedDue: revertedDue.toISOString() },
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/matriculas");
+  revalidatePath("/dashboard");
+  revalidatePath("/financeiro");
+  return { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Pagamento TOTAL / quitação (v1.1-BB) — aluno paga N meses de uma vez.
 // Empurra o vencimento e marca `paidInFullUntil`; enquanto quitado, sai da
 // receita mensal recorrente (já foi recebido de uma vez).
@@ -928,8 +977,12 @@ const FROZEN_TAG = "Congelado";
 const suspendSchema = z.object({
   enrollmentId: z.string().min(1),
   reason: z.string().min(1).max(2000),
-  /** DOENCA = repõe o tempo do atestado; FERIAS = limite de 30 dias. */
-  frozenKind: z.enum(["DOENCA", "FERIAS"]),
+  /**
+   * DOENCA = repõe o tempo do atestado; FERIAS = limite de 30 dias.
+   * v1.2-CD: PAUSADO = congelamento SEM receita — pausa a cobrança (recorrência
+   * adiada na Cielo) e sai da previsibilidade de receita; repõe os dias no fim.
+   */
+  frozenKind: z.enum(["DOENCA", "FERIAS", "PAUSADO"]),
   /** Data prevista de retorno. ISO yyyy-mm-dd; null/undefined = sem prazo. */
   expectedReturnAt: z.string().date().nullable().optional(),
 });
@@ -951,7 +1004,13 @@ export async function suspendEnrollment(input: unknown): Promise<ActionResult> {
   const expectedReturn = parsed.data.expectedReturnAt
     ? new Date(parsed.data.expectedReturnAt)
     : null;
-  const kindLabel = parsed.data.frozenKind === "FERIAS" ? "férias" : "doença";
+  const kindLabel =
+    parsed.data.frozenKind === "FERIAS"
+      ? "férias"
+      : parsed.data.frozenKind === "PAUSADO"
+        ? "pausado (sem receita)"
+        : "doença";
+  const noRevenue = parsed.data.frozenKind === "PAUSADO";
 
   await prisma.$transaction(async (tx) => {
     // Status PERMANECE ACTIVE — congelado só marca o período (segue contando
@@ -986,7 +1045,7 @@ export async function suspendEnrollment(input: unknown): Promise<ActionResult> {
         leadId: enrollment.leadId,
         authorId: user.id,
         kind: "ENROLLMENT_SUSPENDED",
-        body: `Congelado (${kindLabel}) — ${parsed.data.reason}${returnLabel}. Segue ativo e cobrando; dias serão repostos no fim do contrato.`,
+        body: `Congelado (${kindLabel}) — ${parsed.data.reason}${returnLabel}. ${noRevenue ? "Cobrança PAUSADA (fora do previsto)" : "Segue ativo e cobrando"}; dias serão repostos no fim do contrato.`,
         metadata: {
           enrollmentId: enrollment.id,
           reason: parsed.data.reason,

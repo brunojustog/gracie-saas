@@ -9,7 +9,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { backfillAllSnapshots, runDailyReports } from "@/server/daily-report";
-import { runPrivateRecurrence } from "@/server/private-packages";
 import { runAutoUnfreeze } from "@/server/enrollments";
 
 export const dynamic = "force-dynamic";
@@ -62,14 +61,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, backfill: summary });
     }
     const summary = await runDailyReports();
-    // v1.2-BV: gera os ciclos de recorrência das aulas particulares do dia.
-    let recurrence: { generated: number; skipped: number } | { error: string };
-    try {
-      recurrence = await runPrivateRecurrence();
-    } catch (e) {
-      recurrence = { error: e instanceof Error ? e.message : "erro" };
-      console.error("[cron/daily-quadro] recorrência erro", e);
-    }
+    // v1.2-CD: recorrência das particulares NÃO é mais automática — o ciclo só
+    // é gerado quando o Anderson confirma o pagamento (reunião 09/10). A função
+    // segue disponível via /api/cron/private-recurrence pra backfill manual.
+    const recurrence = { generated: 0, skipped: 0, auto: false as const };
     // v1.2-BX: descongelamento automático das matrículas com retorno vencido.
     let autoUnfreeze: { unfrozen: number } | { error: string };
     try {

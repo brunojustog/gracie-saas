@@ -246,6 +246,8 @@ export async function getEnrollmentStatusCounts(membership: TenantUser) {
   // v1.1-BB: quitados (paidInFullUntil >= hoje) saem da receita recorrente.
   const today = startOfDay(new Date());
   const notPrepaid = { NOT: { paidInFullUntil: { gte: today } } };
+  // v1.2-CD: congelamento SEM receita (PAUSADO) sai da previsibilidade.
+  const notPaused = { NOT: { AND: [{ suspendedAt: { not: null } }, { frozenKind: "PAUSADO" }] } };
   const [active, frozen, requested, canceled, judicial, revenueAgg] = await Promise.all([
     prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: null } }),
     prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: { not: null } } }),
@@ -254,7 +256,7 @@ export async function getEnrollmentStatusCounts(membership: TenantUser) {
     prisma.enrollment.count({ where: { ...live, status: "CANCELED" } }),
     prisma.enrollment.count({ where: { ...live, status: "JUDICIAL" } }),
     prisma.enrollment.aggregate({
-      where: { ...live, status: "ACTIVE", ...notPrepaid },
+      where: { ...live, status: "ACTIVE", ...notPrepaid, ...notPaused },
       _sum: { monthlyValue: true },
     }),
   ]);

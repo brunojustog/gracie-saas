@@ -52,6 +52,8 @@ export async function getDueOverview(
       tenantId: membership.tenantId,
       status: "ACTIVE",
       nextDueDate: { not: null, lt: horizonEnd },
+      // v1.2-CD: congelamento SEM receita (PAUSADO) não entra em cobrança.
+      NOT: { AND: [{ suspendedAt: { not: null } }, { frozenKind: "PAUSADO" }] },
     },
     select: {
       id: true,
@@ -98,6 +100,7 @@ export async function countOverdue(membership: TenantUser): Promise<number> {
       tenantId: membership.tenantId,
       status: "ACTIVE",
       nextDueDate: { not: null, lt: overdueCutoff() },
+      NOT: { AND: [{ suspendedAt: { not: null } }, { frozenKind: "PAUSADO" }] },
     },
   });
 }
