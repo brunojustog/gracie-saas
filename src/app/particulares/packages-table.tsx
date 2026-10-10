@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatBelt } from "@/lib/belts";
 
-import { cancelPrivatePackage } from "./actions";
+import { cancelPrivatePackage, registerRenewal } from "./actions";
 import { PackageModal, type EditPackage, type FormOptions } from "./package-modal";
 import { SessionsModal, type SessionsTarget } from "./sessions-modal";
 
@@ -94,6 +94,21 @@ export function PackagesTable({
   const [editTarget, setEditTarget] = useState<EditPackage | null>(null);
   const [sessionsTarget, setSessionsTarget] = useState<SessionsTarget | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  // v1.2-CE: registrar a cobrança do mês em 1 clique (gera o novo ciclo = soma
+  // as aulas por ciclo, datado hoje). Enquanto não há integração Cielo.
+  const registerCobranca = (r: Row) =>
+    startTransition(async () => {
+      if (!r.recurringClasses) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const br = today.split("-").reverse().join("/");
+      if (!window.confirm(`Registrar cobrança do mês de ${r.lead.name}?\n+${r.recurringClasses} aulas (novo ciclo), pago em ${br}.`)) return;
+      const res = await registerRenewal({ packageId: r.id, paidAt: today, classesAdded: r.recurringClasses });
+      if (!res.ok) return void toast.error(res.error);
+      toast.success("Cobrança registrada — novo ciclo gerado");
+      router.refresh();
+    });
 
   if (rows.length === 0) {
     return (
@@ -217,6 +232,19 @@ export function PackagesTable({
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-0.5">
+                      {r.recurring && r.recurringClasses && r.status !== "CANCELED" ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                          title={`Registrar cobrança do mês (+${r.recurringClasses} aulas)`}
+                          aria-label="Registrar cobrança do mês"
+                          onClick={() => registerCobranca(r)}
+                          disabled={pending}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      ) : null}
                       <Button
                         variant="ghost"
                         size="icon"
