@@ -1,7 +1,7 @@
 /**
  * v1.2-BJ: agendamento de provas de graduação.
  *
- * Horários FIXOS (America/Sao_Paulo, -03): seg-sex 08/10/13/16h, sáb 08/11h.
+ * Horários FIXOS (America/Sao_Paulo, -03): seg-qui 08/10/13/16h, sex 08h, sáb 08/11h.
  * 1 prova por slot (dura ~1h; os slots já respeitam o espaçamento pedido).
  * Janela de provas configurável abaixo. Pedido do Anderson (reunião 16/09).
  */
@@ -19,7 +19,7 @@ const SLOTS_BY_DOW: Record<number, string[]> = {
   2: ["08:00", "10:00", "13:00", "16:00"],
   3: ["08:00", "10:00", "13:00", "16:00"],
   4: ["08:00", "10:00", "13:00", "16:00"],
-  5: ["08:00", "10:00", "13:00", "16:00"],
+  5: ["08:00"], // sexta: só 8h (demais horários bloqueados — pedido 19/10)
   6: ["08:00", "11:00"], // sábado
 };
 

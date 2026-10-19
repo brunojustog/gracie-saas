@@ -157,7 +157,7 @@ export function GraduacaoView({
       <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
         Janela de provas: <b>{ddmm(win.start)}</b> a <b>{ddmm(win.end)}</b> ·{" "}
         {totalBooked} prova{totalBooked === 1 ? "" : "s"} agendada{totalBooked === 1 ? "" : "s"}.
-        Horários fixos: seg–sex 08/10/13/16h · sáb 08/11h.
+        Horários fixos: seg–qui 08/10/13/16h · sex 08h · sáb 08/11h.
       </div>
 
       {/* v1.2-BW: painel de pagamento das taxas de prova (clicável = filtra). */}
