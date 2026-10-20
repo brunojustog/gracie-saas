@@ -247,10 +247,14 @@ export async function getEnrollmentStatusCounts(membership: TenantUser) {
   const today = startOfDay(new Date());
   const notPrepaid = { NOT: { paidInFullUntil: { gte: today } } };
   // v1.2-CD: congelamento SEM receita (PAUSADO) sai da previsibilidade.
-  const notPaused = { NOT: { AND: [{ suspendedAt: { not: null } }, { frozenKind: "PAUSADO" }] } };
-  const [active, frozen, requested, canceled, judicial, revenueAgg] = await Promise.all([
+  const pausedWhere = { AND: [{ suspendedAt: { not: null } }, { frozenKind: "PAUSADO" }] };
+  const notPaused = { NOT: pausedWhere };
+  const [active, frozen, paused, requested, canceled, judicial, revenueAgg] = await Promise.all([
     prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: null } }),
-    prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: { not: null } } }),
+    // Congelados COM receita (não-pausados) — continuam contando no total.
+    prisma.enrollment.count({ where: { ...live, status: "ACTIVE", suspendedAt: { not: null }, frozenKind: { not: "PAUSADO" } } }),
+    // v1.2-CG: congelados SEM receita (Pausado) — fora do total de alunos.
+    prisma.enrollment.count({ where: { ...live, status: "ACTIVE", ...pausedWhere } }),
     // v1.1-BN: cancelamento solicitado — já parou de cobrar, não é mais vigente.
     prisma.enrollment.count({ where: { ...live, status: "CANCEL_REQUESTED" } }),
     prisma.enrollment.count({ where: { ...live, status: "CANCELED" } }),
@@ -263,6 +267,8 @@ export async function getEnrollmentStatusCounts(membership: TenantUser) {
   return {
     ativas: active,
     congeladas: frozen,
+    // v1.2-CG: pausados (sem receita) não entram no total de alunos.
+    pausados: paused,
     totalAtivos: active + frozen,
     solicitadas: requested,
     canceladas: canceled,
@@ -459,6 +465,9 @@ export type FrozenEnrollment = {
   alunoId: string | null;
   alunoNome: string;
   frozenKind: string | null;
+  /** true = congelamento SEM receita (Pausado). v1.2-CG. */
+  noRevenue: boolean;
+  suspensionReason: string | null;
   suspendedAt: Date | null;
   expectedReturnAt: Date | null;
   overdue: boolean;
@@ -477,6 +486,7 @@ export async function getFrozenEnrollments(
       suspendedAt: true,
       expectedReturnAt: true,
       frozenKind: true,
+      suspensionReason: true,
       lead: { select: { name: true, aluno: { select: { id: true } } } },
     },
   });
@@ -486,6 +496,8 @@ export async function getFrozenEnrollments(
     alunoId: r.lead.aluno?.id ?? null,
     alunoNome: r.lead.name,
     frozenKind: r.frozenKind,
+    noRevenue: r.frozenKind === "PAUSADO",
+    suspensionReason: r.suspensionReason,
     suspendedAt: r.suspendedAt,
     expectedReturnAt: r.expectedReturnAt,
     overdue: r.expectedReturnAt != null && r.expectedReturnAt < today,

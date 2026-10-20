@@ -152,6 +152,8 @@ export async function getQuadroData(
         paidInFullUntil: true,
         paymentMethod: true,
         monthlyValue: true,
+        suspendedAt: true,
+        frozenKind: true,
         plan: { select: { id: true, name: true } },
         modality: { select: { isKids: true } },
         lead: { select: { name: true, gender: true } },
@@ -378,7 +380,13 @@ export async function getQuadroData(
   const planNames = new Map<string, Name[]>();
   const paymentNames = new Map<string, Name[]>();
 
-  for (const e of activeEnrollments) {
+  // v1.2-CG: congelado SEM receita (Pausado) sai do número de alunos — o Vittor
+  // quer ver só quem paga todo mês. Congelado com receita continua contando.
+  const paying = activeEnrollments.filter(
+    (e) => !(e.suspendedAt != null && e.frozenKind === "PAUSADO"),
+  );
+
+  for (const e of paying) {
     const item: Name = {
       id: e.id,
       name: e.lead.name,
@@ -422,7 +430,7 @@ export async function getQuadroData(
     if (!paymentNames.has(e.paymentMethod)) paymentNames.set(e.paymentMethod, []);
     paymentNames.get(e.paymentMethod)!.push(item);
   }
-  const totalActive = activeEnrollments.length;
+  const totalActive = paying.length;
   const totalAdults = adults.female + adults.male + adults.unknown;
   const totalKids = kids.female + kids.male + kids.unknown;
 

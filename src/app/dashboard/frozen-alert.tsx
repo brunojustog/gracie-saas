@@ -76,6 +76,7 @@ export function FrozenAlert({ rows }: { rows: FrozenEnrollment[] }) {
             <tr className="border-b border-sky-200 text-left text-[10px] uppercase text-sky-700/70 dark:border-sky-800 dark:text-sky-300/70">
               <th className="px-3 py-1.5 font-medium">Aluno</th>
               <th className="px-3 py-1.5 font-medium">Tipo</th>
+              <th className="px-3 py-1.5 font-medium">Observação</th>
               <th className="px-3 py-1.5 font-medium">Congelado em</th>
               <th className="px-3 py-1.5 font-medium">Retorno previsto</th>
               <th className="px-3 py-1.5 text-right font-medium">Ação</th>
@@ -94,8 +95,9 @@ export function FrozenAlert({ rows }: { rows: FrozenEnrollment[] }) {
                   )}
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">
-                  {r.frozenKind === "FERIAS" ? "Férias" : r.frozenKind === "DOENCA" ? "Atestado" : "—"}
+                  {r.frozenKind === "FERIAS" ? "Férias" : r.frozenKind === "DOENCA" ? "Atestado" : r.frozenKind === "PAUSADO" ? "Pausado (s/ receita)" : "—"}
                 </td>
+                <td className="px-3 py-2 text-muted-foreground">{r.suspensionReason ?? "—"}</td>
                 <td className="px-3 py-2 tabular-nums text-muted-foreground">{d(r.suspendedAt) ?? "—"}</td>
                 <td className="px-3 py-2 tabular-nums">
                   {r.expectedReturnAt ? (
@@ -133,7 +135,7 @@ export function FrozenAlert({ rows }: { rows: FrozenEnrollment[] }) {
             ))}
             {extendId ? (
               <tr className="border-b border-sky-100 bg-sky-50/60 dark:border-sky-900 dark:bg-sky-950/30">
-                <td colSpan={5} className="px-3 py-2">
+                <td colSpan={6} className="px-3 py-2">
                   <div className="flex flex-wrap items-end gap-2">
                     <div className="space-y-0.5">
                       <label className="text-[10px] uppercase text-muted-foreground">Novo retorno</label>

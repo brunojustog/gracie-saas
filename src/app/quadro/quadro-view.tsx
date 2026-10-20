@@ -84,9 +84,6 @@ export function QuadroBody({
         {shareSlot}
       </div>
 
-      {/* v1.2-BY: alertas de gestão (cancelamentos pendentes + congelados). */}
-      {publicMode ? null : alertsSlot}
-
       {/* Resumo consolidado do mês (v1.1-BM, item 4) — painel fixo grandão. */}
       <MonthBoard m={data.monthResumo} ativos={data.matriculas.totalActive} />
 
@@ -118,6 +115,10 @@ export function QuadroBody({
           )}
         </div>
       )}
+
+      {/* v1.2-CG: alertas de gestão (congelados + cancelamentos) ABAIXO dos
+          resumos (pedido reunião 20/10). */}
+      {publicMode ? null : alertsSlot}
 
       {dailySnapshots && dailySnapshots.length > 0 ? (
         <div className="space-y-2">

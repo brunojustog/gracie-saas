@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/top-nav";
 import { signOut } from "@/server/auth";
-import { getExamSchedule, EXAM_WINDOW } from "@/server/graduation-exams";
+import { getExamSchedule, getKidPayments, EXAM_WINDOW } from "@/server/graduation-exams";
 import { nextGraduation } from "@/server/graduations";
 import { prisma } from "@/lib/prisma";
 import { roleAtLeast } from "@/server/rbac";
@@ -12,8 +12,9 @@ import { GraduacaoView } from "./graduacao-view";
 export default async function GraduacaoPage() {
   const { tenant, user, membership } = await requireTenantUser();
 
-  const [schedule, alunoRows] = await Promise.all([
+  const [schedule, kidPayments, alunoRows] = await Promise.all([
     getExamSchedule(tenant.id),
+    getKidPayments(tenant.id),
     prisma.aluno.findMany({
       where: { tenantId: tenant.id, active: true },
       select: {
@@ -72,6 +73,7 @@ export default async function GraduacaoPage() {
         <GraduacaoView
           schedule={schedule}
           alunos={alunos}
+          kidPayments={kidPayments}
           window={EXAM_WINDOW}
           canManagePayments={roleAtLeast(membership.role, "MANAGER")}
         />

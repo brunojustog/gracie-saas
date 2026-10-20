@@ -70,6 +70,7 @@ export type ExamSlot = {
     paid: boolean;
     paymentMethod: string | null;
     paidAt: string | null;
+    amount: number | null;
   } | null;
 };
 export type ExamDay = { dateStr: string; label: string; slots: ExamSlot[] };
@@ -95,6 +96,7 @@ export async function getExamSchedule(tenantId: string): Promise<ExamDay[]> {
       paid: true,
       paymentMethod: true,
       paidAt: true,
+      amount: true,
       aluno: { select: { matricula: true, beltSize: true, lead: { select: { name: true } } } },
       professor: { select: { name: true } },
     },
@@ -124,9 +126,48 @@ export async function getExamSchedule(tenantId: string): Promise<ExamDay[]> {
               paid: e.paid,
               paymentMethod: e.paymentMethod,
               paidAt: e.paidAt ? e.paidAt.toISOString() : null,
+              amount: e.amount != null ? Number(e.amount) : null,
             }
           : null,
       };
     }),
+  }));
+}
+
+/**
+ * v1.2-CG: pagamentos de graduação dos KIDS (mais recentes primeiro).
+ */
+export type KidPaymentRow = {
+  id: string;
+  alunoNome: string;
+  matricula: string | null;
+  amount: number;
+  paymentMethod: string | null;
+  paidAt: Date;
+  notes: string | null;
+};
+
+export async function getKidPayments(tenantId: string): Promise<KidPaymentRow[]> {
+  const rows = await prisma.graduationKidPayment.findMany({
+    where: { tenantId },
+    orderBy: { paidAt: "desc" },
+    take: 500,
+    select: {
+      id: true,
+      amount: true,
+      paymentMethod: true,
+      paidAt: true,
+      notes: true,
+      aluno: { select: { matricula: true, lead: { select: { name: true } } } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    alunoNome: r.aluno.lead.name,
+    matricula: r.aluno.matricula,
+    amount: Number(r.amount),
+    paymentMethod: r.paymentMethod,
+    paidAt: r.paidAt,
+    notes: r.notes,
   }));
 }

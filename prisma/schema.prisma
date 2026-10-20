@@ -203,6 +203,7 @@ model Tenant {
   timelineEvents      TimelineEvent[]
   purchases           Purchase[]
   supplyExpenses      SupplyExpense[]
+  graduationKidPayments GraduationKidPayment[]
 }
 
 /**
@@ -1104,6 +1105,7 @@ model Aluno {
   graduations Graduation[]
   events      TimelineEvent[]
   graduationExams GraduationExam[]
+  graduationKidPayments GraduationKidPayment[]
 
   @@index([tenantId, active])
   @@index([tenantId, matricula])
@@ -1631,6 +1633,10 @@ model GraduationExam {
   paid          Boolean        @default(false)
   paymentMethod PaymentMethod?
   paidAt        DateTime?
+  // v1.2-CG: valor pago (vendedora preenche; pode negociar) + venda gerada na
+  // lojinha quando marcado como pago.
+  amount        Decimal?       @db.Decimal(10, 2)
+  saleId        String?
   createdById      String?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
@@ -1641,5 +1647,29 @@ model GraduationExam {
 
   @@unique([tenantId, scheduledAt])
   @@index([tenantId, scheduledAt])
+  @@index([alunoId])
+}
+
+/**
+ * v1.2-CG: pagamento de graduação dos KIDS (reunião 20/10). Os kids não fazem
+ * prova agendada, mas a graduação deles é cobrada. Cada registro já é um
+ * pagamento (vendedora preenche o valor; pode negociar) e vira venda na lojinha.
+ */
+model GraduationKidPayment {
+  id            String         @id @default(cuid())
+  tenantId      String
+  alunoId       String
+  amount        Decimal        @db.Decimal(10, 2)
+  paymentMethod PaymentMethod?
+  paidAt        DateTime       @default(now())
+  notes         String?
+  saleId        String? // venda gerada na lojinha
+  createdById   String?
+  createdAt     DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  aluno  Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, paidAt])
   @@index([alunoId])
 }
