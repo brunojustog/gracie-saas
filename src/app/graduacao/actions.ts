@@ -129,7 +129,7 @@ const paymentSchema = z.object({
 export async function setExamPayment(input: unknown): Promise<Result> {
   const parsed = paymentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
-  const { tenant, user } = await requireRole("MANAGER");
+  const { tenant, user } = await requireRole("SELLER");
   const d = parsed.data;
 
   const exam = await prisma.graduationExam.findFirst({
@@ -196,7 +196,7 @@ export async function addKidPayment(input: unknown): Promise<Result> {
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "input inválido" };
   }
-  const { tenant, user } = await requireRole("MANAGER");
+  const { tenant, user } = await requireRole("SELLER");
   const d = parsed.data;
 
   const aluno = await prisma.aluno.findFirst({
@@ -239,7 +239,7 @@ export async function addKidPayment(input: unknown): Promise<Result> {
 export async function removeKidPayment(input: unknown): Promise<Result> {
   const parsed = z.object({ id: z.string().min(1) }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "input inválido" };
-  const { tenant } = await requireRole("MANAGER");
+  const { tenant } = await requireRole("SELLER");
 
   const kp = await prisma.graduationKidPayment.findFirst({
     where: { id: parsed.data.id, tenantId: tenant.id },

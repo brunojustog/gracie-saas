@@ -75,7 +75,7 @@ export default async function GraduacaoPage() {
           alunos={alunos}
           kidPayments={kidPayments}
           window={EXAM_WINDOW}
-          canManagePayments={roleAtLeast(membership.role, "MANAGER")}
+          canManagePayments={roleAtLeast(membership.role, "SELLER")}
         />
       </main>
     </>
