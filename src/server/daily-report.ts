@@ -76,16 +76,18 @@ export async function getRangeDigest(tenantId: string, from: Date, to: Date) {
       }),
       // Ativos no FIM do intervalo (ponto-no-tempo). v1.1-BN: quem solicitou
       // cancelamento até `to` já saiu da base (parou de cobrar).
+      // v1.2-CH: exclui Pausado (congelamento sem receita) pra bater com o
+      // total de alunos do Quadro/relatório (getEnrollmentStatusCounts).
       prisma.enrollment.count({
         where: {
           tenantId,
           ...live,
           enrolledAt: { lte: to },
           OR: [{ canceledAt: null }, { canceledAt: { gt: to } }],
-          NOT: {
-            status: "CANCEL_REQUESTED",
-            cancelRequestedAt: { lte: to },
-          },
+          NOT: [
+            { status: "CANCEL_REQUESTED", cancelRequestedAt: { lte: to } },
+            { AND: [{ suspendedAt: { not: null } }, { frozenKind: "PAUSADO" }] },
+          ],
         },
       }),
     ]);
