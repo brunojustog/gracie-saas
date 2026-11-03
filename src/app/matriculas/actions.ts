@@ -96,6 +96,16 @@ export async function createEnrollment(input: unknown): Promise<ActionResult> {
       },
     });
 
+    // v1.2-CI: garante o registro Aluno (1:1 com Lead) já na matrícula, pra o
+    // aluno aparecer na lojinha, graduação e no cadastro sem depender de um
+    // "importar matriculados" manual. Sem login (pendente) — a atendente cria
+    // o acesso depois. Upsert por leadId (único): não duplica se já existir.
+    await tx.aluno.upsert({
+      where: { leadId: lead.id },
+      create: { tenantId: tenant.id, leadId: lead.id, active: true },
+      update: {},
+    });
+
     // Promove lead pro stage Matriculado se ainda não está nele
     if (lead.stageId !== wonStage.id) {
       await tx.lead.update({

@@ -615,6 +615,13 @@ export async function runCsvImport(
         observations: enr.observations || null,
       },
     });
+    // v1.2-CI: cria também o registro Aluno (1:1 com Lead), pra o matriculado
+    // já aparecer na lojinha/graduação/cadastro. Upsert por leadId (único).
+    await prisma.aluno.upsert({
+      where: { leadId: dbLead.id },
+      create: { tenantId: input.tenantId, leadId: dbLead.id, active: true },
+      update: {},
+    });
     enrollmentsCreated++;
   }
 
