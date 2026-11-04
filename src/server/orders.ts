@@ -38,6 +38,17 @@ export async function getOrdersForTenant(tenantId: string) {
       status: true,
       stage: true,
       isGift: true,
+      // v1.2-CJ: produto do estoque vinculado (pra baixa na entrega).
+      variantId: true,
+      stockTaken: true,
+      variant: {
+        select: {
+          id: true,
+          label: true,
+          stock: true,
+          product: { select: { name: true } },
+        },
+      },
       createdAt: true,
       payments: {
         orderBy: { paidAt: "asc" },

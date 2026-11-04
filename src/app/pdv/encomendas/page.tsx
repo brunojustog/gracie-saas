@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "@/server/auth";
 import { getOrdersForTenant } from "@/server/orders";
+import { getProductsForTenant } from "@/server/pdv";
 import { requireTenantUser } from "@/server/tenant";
 
 import { EncomendasClient } from "./encomendas-client";
 
 export default async function EncomendasPage() {
   const { tenant, user, membership } = await requireTenantUser();
-  const [orders, leadRows] = await Promise.all([
+  const [orders, leadRows, products] = await Promise.all([
     getOrdersForTenant(tenant.id),
     // v1.2-CC: alunos do tenant pra vincular a encomenda (débito vai na ficha).
     prisma.lead.findMany({
@@ -19,8 +20,19 @@ export default async function EncomendasPage() {
       select: { id: true, name: true, phone: true },
       take: 2000,
     }),
+    // v1.2-CJ: catálogo pra vincular a encomenda a um produto do estoque.
+    getProductsForTenant(tenant.id, { onlyActive: true }),
   ]);
   const leads = leadRows.map((l) => ({ id: l.id, name: l.name, phone: l.phone }));
+  // Variantes selecionáveis (achatadas): "Produto · Variante (estoque N)".
+  const variants = products.flatMap((p) =>
+    p.variants.map((v) => ({
+      id: v.id,
+      label:
+        `${p.name} · ${v.label}` +
+        (v.stock != null ? ` (estoque ${v.stock})` : " (ilimitado)"),
+    })),
+  );
 
   return (
     <main className="mx-auto max-w-[1100px] space-y-4 px-4 py-6">
@@ -49,12 +61,13 @@ export default async function EncomendasPage() {
       </header>
 
       <p className="text-sm text-muted-foreground">
-        Itens que o aluno pediu e não têm em estoque. Registro pra a Gisele
-        controlar — não mexe no estoque nem gera venda. Quando o item chegar,
-        marque como entregue e feche a venda normal na lojinha.
+        Itens que o aluno pediu. Registro pra a Gisele controlar. Se vincular um
+        produto do estoque, ao marcar <b>Entregue</b> a quantidade sai do estoque
+        automaticamente (sair de &quot;Entregue&quot; devolve). Itens sem produto
+        vinculado seguem como texto livre, sem baixa.
       </p>
 
-      <EncomendasClient orders={orders} leads={leads} />
+      <EncomendasClient orders={orders} leads={leads} variants={variants} />
     </main>
   );
 }

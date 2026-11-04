@@ -1416,6 +1416,8 @@ model ProductVariant {
   product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   saleItems SaleItem[]
   purchases Purchase[]
+  // v1.2-CJ: encomendas vinculadas a esta variante (baixa de estoque na entrega).
+  orders    Order[]
 
   @@unique([productId, label])
   @@index([productId, active])
@@ -1592,17 +1594,25 @@ model Order {
   isGift        Boolean            @default(false)
   // v1.2-CC: combinado/forma do pagamento do restante (ex.: "2x", "toda sexta").
   paymentPlan   String?
+  // v1.2-CJ: produto do estoque vinculado (opcional). Ao marcar ENTREGUE, baixa
+  // a quantidade desse produto do estoque. `stockTaken` guarda se a baixa já
+  // foi feita (evita baixar 2x em troca/reabertura/edição).
+  variantId     String?
+  stockTaken    Boolean            @default(false)
   createdById   String? // quem registrou (sem relação forte)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   // v1.2-CC: aluno vinculado + pagamentos (cada pagamento é uma venda da lojinha).
-  customerLead Lead?  @relation(fields: [customerLeadId], references: [id], onDelete: SetNull)
+  customerLead Lead?           @relation(fields: [customerLeadId], references: [id], onDelete: SetNull)
   payments     Sale[]
+  // v1.2-CJ: variante do catálogo (estoque). SetNull se o produto for apagado.
+  variant      ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status, orderedAt])
   @@index([customerLeadId])
+  @@index([variantId])
 }
 
 /** v1.2-BJ: status da prova de graduação. */

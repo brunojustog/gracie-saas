@@ -4,7 +4,7 @@ import type { PaymentMethod, PrivatePackageStatus } from "@prisma/client";
 import { format } from "date-fns";
 import { CalendarDays, ChevronLeft, ChevronRight, PencilLine, RefreshCw, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Money } from "@/components/money";
@@ -17,6 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatBelt } from "@/lib/belts";
 
 import { cancelPrivatePackage, registerRenewal } from "./actions";
@@ -94,21 +96,9 @@ export function PackagesTable({
   const [editTarget, setEditTarget] = useState<EditPackage | null>(null);
   const [sessionsTarget, setSessionsTarget] = useState<SessionsTarget | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  // v1.2-CE: registrar a cobrança do mês em 1 clique (gera o novo ciclo = soma
-  // as aulas por ciclo, datado hoje). Enquanto não há integração Cielo.
-  const registerCobranca = (r: Row) =>
-    startTransition(async () => {
-      if (!r.recurringClasses) return;
-      const today = new Date().toISOString().slice(0, 10);
-      const br = today.split("-").reverse().join("/");
-      if (!window.confirm(`Registrar cobrança do mês de ${r.lead.name}?\n+${r.recurringClasses} aulas (novo ciclo), pago em ${br}.`)) return;
-      const res = await registerRenewal({ packageId: r.id, paidAt: today, classesAdded: r.recurringClasses });
-      if (!res.ok) return void toast.error(res.error);
-      toast.success("Cobrança registrada — novo ciclo gerado");
-      router.refresh();
-    });
+  // v1.2-CJ: ao registrar a cobrança do mês, abre um diálogo pra informar a
+  // DATA em que a recorrência foi paga (antes gravava a data do clique).
+  const [renewTarget, setRenewTarget] = useState<Row | null>(null);
 
   if (rows.length === 0) {
     return (
@@ -239,8 +229,7 @@ export function PackagesTable({
                           className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
                           title={`Registrar cobrança do mês (+${r.recurringClasses} aulas)`}
                           aria-label="Registrar cobrança do mês"
-                          onClick={() => registerCobranca(r)}
-                          disabled={pending}
+                          onClick={() => setRenewTarget(r)}
                         >
                           <RefreshCw className="h-4 w-4" />
                         </Button>
@@ -314,7 +303,72 @@ export function PackagesTable({
         onClose={() => setSessionsTarget(null)}
       />
       <CancelDialog target={cancelTarget} onClose={() => setCancelTarget(null)} />
+      <RenewalDialog target={renewTarget} onClose={() => setRenewTarget(null)} />
     </>
+  );
+}
+
+/**
+ * v1.2-CJ: registra a cobrança do mês perguntando a DATA em que foi paga
+ * (padrão = hoje, editável). Soma as aulas do ciclo e gera o registro datado.
+ */
+function RenewalDialog({ target, onClose }: { target: Row | null; onClose: () => void }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [paidAt, setPaidAt] = useState("");
+
+  // Reinicia a data pra hoje toda vez que abre num pacote.
+  useEffect(() => {
+    if (target) setPaidAt(new Date().toISOString().slice(0, 10));
+  }, [target]);
+
+  const handleConfirm = () => {
+    if (!target || !target.recurringClasses || !paidAt) return;
+    startTransition(async () => {
+      const res = await registerRenewal({
+        packageId: target.id,
+        paidAt,
+        classesAdded: target.recurringClasses!,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Cobrança registrada — novo ciclo gerado");
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <Dialog open={target !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Registrar cobrança do mês</DialogTitle>
+          <DialogDescription>
+            {target?.lead.name} — gera um novo ciclo de +{target?.recurringClasses} aulas.
+            Informe a data em que a recorrência foi paga.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="renewal-paid-at">Data do pagamento</Label>
+          <Input
+            id="renewal-paid-at"
+            type="date"
+            value={paidAt}
+            onChange={(e) => setPaidAt(e.target.value)}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={pending}>
+            Voltar
+          </Button>
+          <Button onClick={handleConfirm} disabled={pending || !paidAt}>
+            {pending ? "Registrando…" : "Registrar cobrança"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

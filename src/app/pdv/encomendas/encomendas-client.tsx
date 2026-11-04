@@ -33,6 +33,8 @@ import { addOrderPayment, createOrder, setOrderStage, updateOrder, updateOrderSt
 import type { OrderRow } from "@/server/orders";
 
 export type LeadOption = { id: string; name: string; phone: string | null };
+// v1.2-CJ: variante do estoque selecionável na encomenda ("Produto · Variante").
+export type VariantPick = { id: string; label: string };
 
 // Formas de pagamento (SalePaymentMethod) pros pagamentos de encomenda.
 const SALE_PAY_METHODS: Array<{ value: string; label: string }> = [
@@ -79,7 +81,15 @@ const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const ddmm = (d: Date) => format(new Date(d), "dd/MM/yyyy", { locale: ptBR });
 
-export function EncomendasClient({ orders, leads }: { orders: OrderRow[]; leads: LeadOption[] }) {
+export function EncomendasClient({
+  orders,
+  leads,
+  variants,
+}: {
+  orders: OrderRow[];
+  leads: LeadOption[];
+  variants: VariantPick[];
+}) {
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState<StageFilter>("ALL");
 
@@ -127,7 +137,7 @@ export function EncomendasClient({ orders, leads }: { orders: OrderRow[]; leads:
         </Button>
       </div>
 
-      {creating ? <OrderForm leads={leads} onDone={() => setCreating(false)} /> : null}
+      {creating ? <OrderForm leads={leads} variants={variants} onDone={() => setCreating(false)} /> : null}
 
       {/* v1.2-BX: cards clicáveis por etapa (Kanban) = filtro. */}
       <div className="flex flex-wrap gap-2">
@@ -153,7 +163,7 @@ export function EncomendasClient({ orders, leads }: { orders: OrderRow[]; leads:
       ) : (
         <ul className="space-y-2">
           {visible.map((o) => (
-            <OrderCard key={o.id} order={o} leads={leads} />
+            <OrderCard key={o.id} order={o} leads={leads} variants={variants} />
           ))}
         </ul>
       )}
@@ -241,9 +251,10 @@ function AlunoPicker({
   );
 }
 
-function OrderForm({ order, leads, onDone }: { order?: OrderRow; leads: LeadOption[]; onDone: () => void }) {
+function OrderForm({ order, leads, variants, onDone }: { order?: OrderRow; leads: LeadOption[]; variants: VariantPick[]; onDone: () => void }) {
   const router = useRouter();
   const editing = !!order;
+  const [variantId, setVariantId] = useState<string>(order?.variantId ?? NONE);
   const [item, setItem] = useState(order?.item ?? "");
   const [quantity, setQuantity] = useState(String(order?.quantity ?? 1));
   const [matricula, setMatricula] = useState(order?.matricula ?? "");
@@ -290,6 +301,7 @@ function OrderForm({ order, leads, onDone }: { order?: OrderRow; leads: LeadOpti
         pickupAt: pickupAt || null,
         notes: notes || null,
         isGift,
+        variantId: variantId === NONE ? null : variantId,
       };
       const r = editing
         ? await updateOrder({ id: order!.id, ...payload })
@@ -311,6 +323,35 @@ function OrderForm({ order, leads, onDone }: { order?: OrderRow; leads: LeadOpti
         <div className="space-y-1 sm:col-span-2">
           <Label htmlFor="item">Produto *</Label>
           <Input id="item" value={item} onChange={(e) => setItem(e.target.value)} placeholder="ex: Kimono preto" autoFocus disabled={pending} />
+        </div>
+        {/* v1.2-CJ: vincular ao estoque (opcional). Ao entregar, baixa a quantidade. */}
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Produto do estoque (opcional)</Label>
+          <Select
+            value={variantId}
+            onValueChange={(v) => {
+              setVariantId(v);
+              // preenche a descrição se estiver vazia (tira o sufixo de estoque)
+              if (v !== NONE && !item.trim()) {
+                const pick = variants.find((x) => x.id === v);
+                if (pick) setItem(pick.label.replace(/\s*\((?:estoque \d+|ilimitado)\)\s*$/, ""));
+              }
+            }}
+            disabled={pending}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="— nenhum (item avulso, sem baixa de estoque) —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>— nenhum (item avulso, sem baixa) —</SelectItem>
+              {variants.map((v) => (
+                <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">
+            Se vincular um produto, ao marcar <b>Entregue</b> a quantidade sai do estoque automaticamente.
+          </p>
         </div>
         <div className="space-y-1">
           <Label htmlFor="qty">Quantidade</Label>
@@ -432,7 +473,7 @@ function OrderForm({ order, leads, onDone }: { order?: OrderRow; leads: LeadOpti
   );
 }
 
-function OrderCard({ order: o, leads }: { order: OrderRow; leads: LeadOption[] }) {
+function OrderCard({ order: o, leads, variants }: { order: OrderRow; leads: LeadOption[]; variants: VariantPick[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
@@ -480,7 +521,7 @@ function OrderCard({ order: o, leads }: { order: OrderRow; leads: LeadOption[] }
   if (editing) {
     return (
       <li>
-        <OrderForm order={o} leads={leads} onDone={() => setEditing(false)} />
+        <OrderForm order={o} leads={leads} variants={variants} onDone={() => setEditing(false)} />
       </li>
     );
   }

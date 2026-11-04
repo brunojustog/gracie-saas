@@ -34,6 +34,9 @@ const orderFields = {
   notes: z.string().max(2000).optional().nullable(),
   // v1.2-BX: encomenda de brinde (saída de kimono de matrícula).
   isGift: z.boolean().optional(),
+  // v1.2-CJ: produto do estoque vinculado (opcional). Ao entregar, baixa este
+  // produto do estoque. null = item avulso (texto livre, sem baixa).
+  variantId: z.string().min(1).optional().nullable(),
 };
 
 /** "YYYY-MM-DD" → Date no meio-dia BR (evita shift de fuso). null/'' → null. */
@@ -51,6 +54,38 @@ async function resolveLead(tenantId: string, leadId: string | null | undefined) 
     select: { id: true, name: true },
   });
   return { id: lead?.id ?? null, name: lead?.name ?? null };
+}
+
+/** v1.2-CJ: valida que a variante é do tenant; devolve o id ou null. */
+async function resolveVariant(tenantId: string, variantId: string | null | undefined) {
+  if (!variantId) return null;
+  const v = await prisma.productVariant.findFirst({
+    where: { id: variantId, product: { tenantId } },
+    select: { id: true },
+  });
+  return v?.id ?? null;
+}
+
+/**
+ * v1.2-CJ: move o estoque de uma variante. sign -1 baixa, +1 devolve. Só mexe
+ * se o saldo for CONTROLADO (stock != null); estoque ilimitado não decrementa.
+ * Devolve true se mexeu no estoque (pra saber se marca stockTaken).
+ */
+async function moveVariantStock(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  variantId: string,
+  qty: number,
+  sign: 1 | -1,
+): Promise<boolean> {
+  const v = await tx.productVariant.findFirst({
+    where: { id: variantId, product: { tenantId } },
+    select: { id: true, stock: true },
+  });
+  if (!v || v.stock == null) return false; // sem variante ou estoque ilimitado
+  const next = sign < 0 ? Math.max(0, v.stock - qty) : v.stock + qty;
+  await tx.productVariant.update({ where: { id: v.id }, data: { stock: next } });
+  return true;
 }
 
 /**
@@ -127,6 +162,7 @@ export async function createOrder(input: unknown): Promise<Result> {
   // Aluno vinculado (snapshot do nome tem prioridade pro customerName).
   const lead = await resolveLead(tenant.id, d.customerLeadId);
   if (d.customerLeadId && !lead.id) return { ok: false, error: "aluno inválido" };
+  const variantId = await resolveVariant(tenant.id, d.variantId);
   const amount = d.isGift ? null : d.amount ?? null;
 
   await prisma.$transaction(async (tx) => {
@@ -148,6 +184,7 @@ export async function createOrder(input: unknown): Promise<Result> {
         pickupAt: parseDay(d.pickupAt),
         notes: d.notes?.trim() || null,
         isGift: d.isGift ?? false,
+        variantId,
         orderedAt,
         createdById: user.id,
       },
@@ -183,35 +220,56 @@ export async function updateOrder(input: unknown): Promise<Result> {
   const { tenant } = await requireRole("SELLER");
   const d = parsed.data;
 
-  const found = await findOrderInTenant(tenant.id, d.id);
-  if (!found) return { ok: false, error: "encomenda não encontrada" };
+  // v1.2-CJ: precisa do estado atual (variante/qtd/estágio/baixa) pra reconciliar
+  // o estoque se o produto ou a quantidade mudarem numa encomenda já entregue.
+  const cur = await prisma.order.findFirst({
+    where: { id: d.id, tenantId: tenant.id },
+    select: { id: true, variantId: true, quantity: true, stage: true, stockTaken: true },
+  });
+  if (!cur) return { ok: false, error: "encomenda não encontrada" };
 
   const lead = await resolveLead(tenant.id, d.customerLeadId);
   if (d.customerLeadId && !lead.id) return { ok: false, error: "aluno inválido" };
+  const newVariantId = await resolveVariant(tenant.id, d.variantId);
+  const newQty = d.quantity ?? 1;
 
-  await prisma.order.update({
-    where: { id: found.id },
-    data: {
-      item: d.item.trim(),
-      quantity: d.quantity ?? 1,
-      matricula: d.matricula?.trim() || null,
-      customerName: lead.name ?? (d.customerName?.trim() || null),
-      customerLeadId: lead.id,
-      size: d.size?.trim() || null,
-      progress: d.progress?.trim() || null,
-      // paymentStatus é derivado dos pagamentos; só respeita o manual se não há
-      // pagamentos registrados ainda (mantém compat com encomendas antigas).
-      paymentMethod: d.paymentMethod?.trim() || null,
-      amount: d.isGift ? null : d.amount ?? null,
-      cost: d.cost ?? null,
-      paymentPlan: d.paymentPlan?.trim() || null,
-      pickupAt: parseDay(d.pickupAt),
-      notes: d.notes?.trim() || null,
-      isGift: d.isGift ?? false,
-    },
+  await prisma.$transaction(async (tx) => {
+    // Devolve ao estoque o que já estava baixado (se houver) e re-aplica no
+    // estado novo, mantendo a invariante: stockTaken ⇒ variante atual baixada.
+    if (cur.stockTaken && cur.variantId) {
+      await moveVariantStock(tx, tenant.id, cur.variantId, cur.quantity, 1);
+    }
+    let stockTaken = false;
+    if (cur.stage === "DELIVERED" && newVariantId) {
+      stockTaken = await moveVariantStock(tx, tenant.id, newVariantId, newQty, -1);
+    }
+    await tx.order.update({
+      where: { id: cur.id },
+      data: {
+        item: d.item.trim(),
+        quantity: newQty,
+        matricula: d.matricula?.trim() || null,
+        customerName: lead.name ?? (d.customerName?.trim() || null),
+        customerLeadId: lead.id,
+        size: d.size?.trim() || null,
+        progress: d.progress?.trim() || null,
+        // paymentStatus é derivado dos pagamentos; só respeita o manual se não há
+        // pagamentos registrados ainda (mantém compat com encomendas antigas).
+        paymentMethod: d.paymentMethod?.trim() || null,
+        amount: d.isGift ? null : d.amount ?? null,
+        cost: d.cost ?? null,
+        paymentPlan: d.paymentPlan?.trim() || null,
+        pickupAt: parseDay(d.pickupAt),
+        notes: d.notes?.trim() || null,
+        isGift: d.isGift ?? false,
+        variantId: newVariantId,
+        stockTaken,
+      },
+    });
   });
 
   revalidatePath("/pdv/encomendas");
+  revalidatePath("/pdv/produtos");
   return { ok: true };
 }
 
@@ -298,16 +356,38 @@ export async function setOrderStage(input: unknown): Promise<Result> {
   if (!parsed.success) return { ok: false, error: "input inválido" };
   const { tenant } = await requireRole("SELLER");
 
-  const found = await findOrderInTenant(tenant.id, parsed.data.id);
-  if (!found) return { ok: false, error: "encomenda não encontrada" };
-
-  await prisma.order.update({
-    where: { id: found.id },
-    data: {
-      stage: parsed.data.stage,
-      status: parsed.data.stage === "DELIVERED" ? "FULFILLED" : "OPEN",
-    },
+  const order = await prisma.order.findFirst({
+    where: { id: parsed.data.id, tenantId: tenant.id },
+    select: { id: true, variantId: true, quantity: true, stockTaken: true },
   });
+  if (!order) return { ok: false, error: "encomenda não encontrada" };
+
+  const toDelivered = parsed.data.stage === "DELIVERED";
+
+  await prisma.$transaction(async (tx) => {
+    // v1.2-CJ: entrou em ENTREGUE e ainda não baixou → baixa do estoque.
+    // Saiu de ENTREGUE e já tinha baixado → devolve ao estoque.
+    let stockTaken = order.stockTaken;
+    if (toDelivered && !order.stockTaken && order.variantId) {
+      stockTaken = await moveVariantStock(tx, tenant.id, order.variantId, order.quantity, -1);
+    } else if (!toDelivered && order.stockTaken && order.variantId) {
+      await moveVariantStock(tx, tenant.id, order.variantId, order.quantity, 1);
+      stockTaken = false;
+    } else if (!toDelivered) {
+      stockTaken = false;
+    }
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        stage: parsed.data.stage,
+        status: toDelivered ? "FULFILLED" : "OPEN",
+        stockTaken,
+      },
+    });
+  });
+
   revalidatePath("/pdv/encomendas");
+  revalidatePath("/pdv/produtos");
+  revalidatePath("/pdv");
   return { ok: true };
 }
