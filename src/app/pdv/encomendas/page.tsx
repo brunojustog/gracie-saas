@@ -62,9 +62,9 @@ export default async function EncomendasPage() {
 
       <p className="text-sm text-muted-foreground">
         Itens que o aluno pediu. Registro pra a Gisele controlar. Se vincular um
-        produto do estoque, ao marcar <b>Entregue</b> a quantidade sai do estoque
-        automaticamente (sair de &quot;Entregue&quot; devolve). Itens sem produto
-        vinculado seguem como texto livre, sem baixa.
+        produto do estoque: ao marcar <b>Chegou</b> a quantidade <b>entra</b> no
+        estoque e ao marcar <b>Entregue</b> ela <b>sai</b> (entrada e saída
+        automáticas). Itens sem produto vinculado seguem como texto livre.
       </p>
 
       <EncomendasClient orders={orders} leads={leads} variants={variants} />

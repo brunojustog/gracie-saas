@@ -350,7 +350,7 @@ function OrderForm({ order, leads, variants, onDone }: { order?: OrderRow; leads
             </SelectContent>
           </Select>
           <p className="text-[11px] text-muted-foreground">
-            Se vincular um produto, ao marcar <b>Entregue</b> a quantidade sai do estoque automaticamente.
+            Se vincular um produto: <b>Chegou</b> dá entrada no estoque e <b>Entregue</b> dá saída (automático).
           </p>
         </div>
         <div className="space-y-1">

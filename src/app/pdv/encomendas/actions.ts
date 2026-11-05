@@ -67,25 +67,58 @@ async function resolveVariant(tenantId: string, variantId: string | null | undef
 }
 
 /**
- * v1.2-CJ: move o estoque de uma variante. sign -1 baixa, +1 devolve. Só mexe
- * se o saldo for CONTROLADO (stock != null); estoque ilimitado não decrementa.
- * Devolve true se mexeu no estoque (pra saber se marca stockTaken).
+ * v1.2-CK: soma `delta` (pode ser negativo) ao estoque da variante. Só mexe se
+ * o saldo for CONTROLADO (stock != null); estoque ilimitado não altera. Piso 0.
+ * Devolve true se mexeu (pra saber se registra a quantidade aplicada).
  */
 async function moveVariantStock(
   tx: Prisma.TransactionClient,
   tenantId: string,
   variantId: string,
-  qty: number,
-  sign: 1 | -1,
+  delta: number,
 ): Promise<boolean> {
+  if (delta === 0) return false;
   const v = await tx.productVariant.findFirst({
     where: { id: variantId, product: { tenantId } },
     select: { id: true, stock: true },
   });
   if (!v || v.stock == null) return false; // sem variante ou estoque ilimitado
-  const next = sign < 0 ? Math.max(0, v.stock - qty) : v.stock + qty;
-  await tx.productVariant.update({ where: { id: v.id }, data: { stock: next } });
+  await tx.productVariant.update({
+    where: { id: v.id },
+    data: { stock: Math.max(0, v.stock + delta) },
+  });
   return true;
+}
+
+/**
+ * v1.2-CK: quantidade que a encomenda mantém NO estoque da unidade por etapa.
+ * "Chegou" (ARRIVED) e "Troca" (EXCHANGE) = item está na unidade (+qtd).
+ * "Entregue" saiu; "Pedido/Encomendado" ainda não chegou → 0.
+ */
+function stockTargetForStage(stage: string, qty: number): number {
+  return stage === "ARRIVED" || stage === "EXCHANGE" ? qty : 0;
+}
+
+/**
+ * v1.2-CK: reconcilia o estoque da encomenda. Desfaz o que estava aplicado
+ * (na variante/qtd antigas) e aplica o alvo da etapa nova na variante nova.
+ * Devolve a nova quantidade aplicada (0 se item avulso ou estoque ilimitado).
+ */
+async function reconcileOrderStock(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  cur: { variantId: string | null; stockApplied: number },
+  next: { stage: string; variantId: string | null; quantity: number },
+): Promise<number> {
+  if (cur.stockApplied !== 0 && cur.variantId) {
+    await moveVariantStock(tx, tenantId, cur.variantId, -cur.stockApplied);
+  }
+  const target = next.variantId ? stockTargetForStage(next.stage, next.quantity) : 0;
+  if (next.variantId && target !== 0) {
+    const moved = await moveVariantStock(tx, tenantId, next.variantId, target);
+    return moved ? target : 0;
+  }
+  return 0;
 }
 
 /**
@@ -220,11 +253,11 @@ export async function updateOrder(input: unknown): Promise<Result> {
   const { tenant } = await requireRole("SELLER");
   const d = parsed.data;
 
-  // v1.2-CJ: precisa do estado atual (variante/qtd/estágio/baixa) pra reconciliar
-  // o estoque se o produto ou a quantidade mudarem numa encomenda já entregue.
+  // v1.2-CJ/CK: precisa do estado atual (variante/qtd/estágio/aplicado) pra
+  // reconciliar o estoque se o produto ou a quantidade mudarem.
   const cur = await prisma.order.findFirst({
     where: { id: d.id, tenantId: tenant.id },
-    select: { id: true, variantId: true, quantity: true, stage: true, stockTaken: true },
+    select: { id: true, variantId: true, quantity: true, stage: true, stockApplied: true },
   });
   if (!cur) return { ok: false, error: "encomenda não encontrada" };
 
@@ -234,15 +267,12 @@ export async function updateOrder(input: unknown): Promise<Result> {
   const newQty = d.quantity ?? 1;
 
   await prisma.$transaction(async (tx) => {
-    // Devolve ao estoque o que já estava baixado (se houver) e re-aplica no
-    // estado novo, mantendo a invariante: stockTaken ⇒ variante atual baixada.
-    if (cur.stockTaken && cur.variantId) {
-      await moveVariantStock(tx, tenant.id, cur.variantId, cur.quantity, 1);
-    }
-    let stockTaken = false;
-    if (cur.stage === "DELIVERED" && newVariantId) {
-      stockTaken = await moveVariantStock(tx, tenant.id, newVariantId, newQty, -1);
-    }
+    const stockApplied = await reconcileOrderStock(
+      tx,
+      tenant.id,
+      { variantId: cur.variantId, stockApplied: cur.stockApplied },
+      { stage: cur.stage, variantId: newVariantId, quantity: newQty },
+    );
     await tx.order.update({
       where: { id: cur.id },
       data: {
@@ -263,7 +293,7 @@ export async function updateOrder(input: unknown): Promise<Result> {
         notes: d.notes?.trim() || null,
         isGift: d.isGift ?? false,
         variantId: newVariantId,
-        stockTaken,
+        stockApplied,
       },
     });
   });
@@ -358,30 +388,27 @@ export async function setOrderStage(input: unknown): Promise<Result> {
 
   const order = await prisma.order.findFirst({
     where: { id: parsed.data.id, tenantId: tenant.id },
-    select: { id: true, variantId: true, quantity: true, stockTaken: true },
+    select: { id: true, variantId: true, quantity: true, stockApplied: true },
   });
   if (!order) return { ok: false, error: "encomenda não encontrada" };
 
   const toDelivered = parsed.data.stage === "DELIVERED";
 
   await prisma.$transaction(async (tx) => {
-    // v1.2-CJ: entrou em ENTREGUE e ainda não baixou → baixa do estoque.
-    // Saiu de ENTREGUE e já tinha baixado → devolve ao estoque.
-    let stockTaken = order.stockTaken;
-    if (toDelivered && !order.stockTaken && order.variantId) {
-      stockTaken = await moveVariantStock(tx, tenant.id, order.variantId, order.quantity, -1);
-    } else if (!toDelivered && order.stockTaken && order.variantId) {
-      await moveVariantStock(tx, tenant.id, order.variantId, order.quantity, 1);
-      stockTaken = false;
-    } else if (!toDelivered) {
-      stockTaken = false;
-    }
+    // v1.2-CK: reconcilia o estoque pela etapa nova. Chegou → entrada (+qtd);
+    // Entregue → saída (volta a 0); outras etapas ajustam conforme o alvo.
+    const stockApplied = await reconcileOrderStock(
+      tx,
+      tenant.id,
+      { variantId: order.variantId, stockApplied: order.stockApplied },
+      { stage: parsed.data.stage, variantId: order.variantId, quantity: order.quantity },
+    );
     await tx.order.update({
       where: { id: order.id },
       data: {
         stage: parsed.data.stage,
         status: toDelivered ? "FULFILLED" : "OPEN",
-        stockTaken,
+        stockApplied,
       },
     });
   });
