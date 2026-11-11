@@ -39,9 +39,57 @@ Integração com o fluxo existente:
 - [ ] Credenciais do **Silent Order Post** (ClientId/ClientSecret) — site da Cielo, "Como gerar a credencial SOP".
 - [ ] Pedir ao suporte pra **habilitar a tokenização no SOP** (sem isso o SOP devolve PaymentToken de uso único e a recorrência não é criada — a página avisa).
 - [ ] Confirmar com a Cielo os hosts de produção do SOP (`src/server/cielo/client.ts`, `CIELO_HOSTS.production` — a doc e o exemplo oficial divergem).
-- [ ] Cadastrar o **Post de Notificação**: site da Cielo → E-commerce → Gestão API E-commerce → Configurações → URL de notificações. URL e header `X-Cielo-Secret` estão na tela de configuração.
-- [ ] Agendar o cron `cielo-reconcile`.
+- [ ] Cadastrar o **Post de Notificação** (ver "Operacional" abaixo).
+- [ ] Agendar o cron `cielo-reconcile` (ver "Operacional" abaixo).
 - [ ] Fazer 1 cobrança real de valor baixo e estornar pelo painel da Cielo.
+
+## Operacional (produção — GBAF)
+
+> **Pré-requisito:** fazer só **depois** de o PR estar na `main` e deployado (as rotas
+> `/api/cron/cielo-reconcile` e `/api/webhooks/cielo/<slug>` não existem em prod antes
+> do deploy) **e** de a integração estar **ligada em produção** em Configurações →
+> Cobrança no cartão (ambiente "Produção", credenciais reais, Salvar — isso gera o
+> `X-Cielo-Secret`). Antes disso o cron dá 404 e o webhook não tem o que validar.
+
+Em produção o tenant do GBAF é **`bgaf`** (domínio `app.gbanaliafranco.com.br`,
+alias `bgaf.simplificaonline.site`) — **não** `gracie`, que é só o slug do seed local.
+
+### 1. Cron `cielo-reconcile` (srv-apps, `178.105.191.35`)
+
+Rede de segurança diária: concilia toda recorrência ativa e dá baixa em mensalidade
+paga que o webhook por acaso tenha perdido (idempotente). Entra no **mesmo**
+`/etc/cron.d/gracie` que já roda o follow-up (*/15min) — mesmo padrão: curl com
+`Authorization: Bearer <CRON_SECRET>` lido de `/etc/gracie-cron.env`, batendo no
+domínio que resolve `127.0.0.1` via `/etc/hosts`, log em `/var/log/gracie-cron.log`.
+
+Jeito mais seguro de acertar o formato: **duplicar a linha do `followup` já existente**,
+trocando só o path para `/api/cron/cielo-reconcile` e o horário para 1x/dia de manhã.
+Linha ilustrativa (cron.d roda em **UTC**; `10 11 * * *` ≈ 08:10 BRT):
+
+```cron
+10 11 * * * root curl -fsS -m 120 -H "Authorization: Bearer $(sed -n 's/^CRON_SECRET=//p' /etc/gracie-cron.env)" https://bgaf.simplificaonline.site/api/cron/cielo-reconcile >> /var/log/gracie-cron.log 2>&1
+```
+
+Testar na mão (deve voltar `{"ok":true,...}`):
+
+```bash
+curl -fsS -H "Authorization: Bearer $(sed -n 's/^CRON_SECRET=//p' /etc/gracie-cron.env)" https://bgaf.simplificaonline.site/api/cron/cielo-reconcile
+```
+
+### 2. Post de Notificação (webhook da Cielo)
+
+Site da Cielo → **E-commerce → Gestão API E-commerce → Configurações → URL de
+notificações**. A própria tela Configurações → Cobrança no cartão já mostra a URL e o
+header prontos pra copiar (ela monta com o slug e o host certos):
+
+- **URL:** `https://app.gbanaliafranco.com.br/api/webhooks/cielo/bgaf`
+- **Header:** `X-Cielo-Secret` = valor exibido na tela (gerado ao salvar com a integração ligada).
+- **Eventos a marcar:** pagamento recorrente (confirmado/negado) e alteração de status
+  da recorrência — são os que disparam a baixa/atualização aqui.
+
+O corpo do POST só traz IDs; a baixa vem da **consulta à API** (`handleCieloNotification`).
+Toda notificação fica em `WebhookLog` (source `cielo`); se o processamento falhar, o
+cron do item 1 concilia depois.
 
 ## Não verificado ainda
 - Página do cartão no modo SOP (produção): o script da Cielo lê os campos pelas
