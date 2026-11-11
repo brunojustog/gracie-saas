@@ -172,6 +172,27 @@ model Tenant {
   // ou ?secret=). Vazio = aceita qualquer POST (só dev/setup).
   siteWebhookSecret     String?
 
+  /**
+   * v1.3-A: Cielo E-commerce 3.0 — cobrança recorrente da mensalidade no
+   * cartão (Recorrência Programada). Ver src/server/cielo/.
+   *   - cieloEnvironment: "sandbox" | "production". Null = integração desligada.
+   *   - cieloMerchantId / cieloMerchantKey: credenciais da API (headers).
+   *   - cieloSopClientId / cieloSopClientSecret: credenciais OAuth do Silent
+   *     Order Post (tokenização do cartão no navegador — o número do cartão
+   *     nunca passa pelo nosso servidor). Obrigatório em produção.
+   *   - cieloWebhookSecret: valor do header customizado `X-Cielo-Secret`
+   *     cadastrado no "Post de Notificação" do site da Cielo.
+   *   - cieloSoftDescriptor: nome na fatura do cartão (máx. 13 chars).
+   * Mesmo padrão dos outros tokens: TODO cifrar em repouso.
+   */
+  cieloEnvironment     String?
+  cieloMerchantId      String?
+  cieloMerchantKey     String?
+  cieloSopClientId     String?
+  cieloSopClientSecret String?
+  cieloWebhookSecret   String?
+  cieloSoftDescriptor  String?
+
   users               TenantUser[]
   leads               Lead[]
   modalities          Modality[]
@@ -570,6 +591,9 @@ enum LeadNoteKind {
   PRIVATE_PACKAGE_CANCELED
   // v1.2-AF: recorrência cobrada (novas aulas adicionadas ao pacote).
   PRIVATE_PACKAGE_RENEWED
+  // v1.3-A: eventos da recorrência Cielo (cartão cadastrado, cobrança
+  // recusada, recorrência desativada). Baixa paga usa PAYMENT_CONFIRMED.
+  CIELO_EVENT
 }
 
 /**
@@ -754,6 +778,28 @@ model Enrollment {
    */
   paidInFullUntil DateTime?
 
+  /**
+   * v1.3-A: recorrência no cartão via Cielo.
+   *   - cieloCardLinkToken: token do link público /p/cartao/<token> que o
+   *     aluno abre pra cadastrar o cartão. Null = sem link ativo. Regerar
+   *     invalida o anterior; é zerado quando a recorrência é criada.
+   *   - cieloCardLinkExpiresAt: validade do link (7 dias).
+   *   - cieloRecurrentPaymentId: RecurrentPaymentId da Cielo (1 por matrícula).
+   *   - cieloRecurrenceStatus: status da recorrência na Cielo (1 ativa, 2
+   *     fim, 3 desativada pela loja, 4 desativada por tentativas, 5 cartão
+   *     vencido, 8 bloqueio). Espelho — a Cielo é a fonte da verdade.
+   *   - cieloCardMasked / cieloCardBrand: só pra exibir ("final 1111 · Visa").
+   *   - cieloLastError: última recusa/erro (mostrado na tabela de matrículas).
+   */
+  cieloCardLinkToken      String?   @unique
+  cieloCardLinkExpiresAt  DateTime?
+  cieloRecurrentPaymentId String?   @unique
+  cieloRecurrenceStatus   Int?
+  cieloCardMasked         String?
+  cieloCardBrand          String?
+  cieloLastError          String?
+  cieloSyncedAt           DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -787,6 +833,8 @@ model PaymentRecord {
   method        PaymentMethod?
   confirmedById String?
   notes         String?
+  /** v1.3-A: PaymentId da Cielo quando a baixa veio da recorrência (idempotência do webhook). */
+  cieloPaymentId String? @unique
 
   createdAt DateTime @default(now())
 

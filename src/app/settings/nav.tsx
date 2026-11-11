@@ -2,6 +2,7 @@
 
 import {
   CalendarClock,
+  CreditCard,
   Download,
   FileSpreadsheet,
   Globe,
@@ -53,6 +54,7 @@ const NAV_ITEMS: Array<{
   { href: "/settings/wuzapi", label: "WhatsApp (Wuzapi)", icon: Smartphone, minRole: "ADMIN" },
   { href: "/settings/manychat", label: "Integração ManyChat", icon: MessagesSquare, minRole: "ADMIN" },
   { href: "/settings/site", label: "Leads do site (webhook)", icon: Globe, minRole: "ADMIN" },
+  { href: "/settings/cielo", label: "Cobrança no cartão (Cielo)", icon: CreditCard, minRole: "ADMIN" },
   { href: "/settings/import-csv", label: "Importar planilhas (CSV)", icon: FileSpreadsheet, minRole: "ADMIN" },
   { href: "/settings/lixeira", label: "Lixeira (leads excluídos)", icon: Trash2, minRole: "ADMIN" },
 ];
