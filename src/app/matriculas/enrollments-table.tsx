@@ -6,6 +6,7 @@ import {
   Banknote,
   CalendarCheck,
   CheckCircle2,
+  CreditCard,
   Gavel,
   PencilLine,
   Play,
@@ -61,6 +62,7 @@ import {
 } from "./actions";
 import { CollectionNotesButton } from "@/app/dashboard/collection-notes";
 
+import { CieloDialog, cieloBadge, type CieloRow } from "./cielo-dialog";
 import { EnrollmentEditModal, type EditTarget } from "./enrollment-edit-modal";
 
 type Row = {
@@ -81,6 +83,13 @@ type Row = {
   paymentMethod: PaymentMethod;
   status: EnrollmentStatus;
   observations: string | null;
+  // v1.3-A: cobrança automática no cartão (Cielo).
+  cieloRecurrentPaymentId: string | null;
+  cieloRecurrenceStatus: number | null;
+  cieloCardMasked: string | null;
+  cieloCardBrand: string | null;
+  cieloLastError: string | null;
+  cieloCardLinkExpiresAt: Date | string | null;
   lead: {
     id: string;
     name: string;
@@ -132,10 +141,16 @@ function statusView(r: { status: EnrollmentStatus; suspendedAt: Date | string | 
 export function EnrollmentsTable({
   rows,
   hideFinancials = false,
+  cieloEnabled = false,
+  canManageCielo = false,
 }: {
   rows: Row[];
   hideFinancials?: boolean;
+  /** v1.3-A: tenant com a integração Cielo configurada. */
+  cieloEnabled?: boolean;
+  canManageCielo?: boolean;
 }) {
+  const [cieloTarget, setCieloTarget] = useState<CieloRow | null>(null);
   const router = useRouter();
   const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
   const [freezeTarget, setFreezeTarget] = useState<Row | null>(null);
@@ -258,7 +273,22 @@ export function EnrollmentsTable({
                     </TableCell>
                   )}
                   <TableCell className="text-muted-foreground">
-                    {PAYMENT_LABEL[r.paymentMethod]}
+                    {(() => {
+                      const badge = cieloBadge(r);
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          <span>{PAYMENT_LABEL[r.paymentMethod]}</span>
+                          {badge ? (
+                            <span
+                              className={`inline-block w-fit rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.tone}`}
+                              title={r.cieloLastError ?? undefined}
+                            >
+                              {badge.label}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {r.lead.assignedSeller?.name ?? r.lead.assignedSeller?.email ?? "—"}
@@ -324,6 +354,19 @@ export function EnrollmentsTable({
                       >
                         <PencilLine className="h-4 w-4" />
                       </Button>
+                      {cieloEnabled && (r.status === "ACTIVE" || r.cieloRecurrentPaymentId) ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
+                          onClick={() => setCieloTarget(r)}
+                          disabled={pending}
+                          title="Cobrança automática no cartão (Cielo)"
+                          aria-label="Cobrança automática no cartão (Cielo)"
+                        >
+                          <CreditCard className="h-4 w-4" />
+                        </Button>
+                      ) : null}
                       {r.status === "ACTIVE" || r.status === "JUDICIAL" ? (
                         <CollectionNotesButton
                           enrollmentId={r.id}
@@ -462,6 +505,11 @@ export function EnrollmentsTable({
       <ReinstateDialog
         target={reinstateTarget}
         onClose={() => setReinstateTarget(null)}
+      />
+      <CieloDialog
+        target={cieloTarget}
+        onClose={() => setCieloTarget(null)}
+        canManage={canManageCielo}
       />
       <EnrollmentEditModal
         target={editTarget}

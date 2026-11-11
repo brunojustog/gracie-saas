@@ -1,10 +1,21 @@
 "use server";
 
-import { addMonths } from "date-fns";
+import { randomBytes } from "node:crypto";
+
+import { addDays, addMonths } from "date-fns";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { updateRecurrenceAmount } from "@/server/cielo/client";
+import {
+  CARD_LINK_TTL_DAYS,
+  deactivateEnrollmentRecurrence,
+  getTenantCielo,
+  syncCieloRecurrence,
+  toCents,
+} from "@/server/cielo/recurrence";
 import { findEnrollmentInScope, unfreezeEnrollment } from "@/server/enrollments";
 import { appendLeadNote } from "@/server/lead-notes";
 import { findLeadInScope } from "@/server/leads";
@@ -335,6 +346,37 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
     }
   });
 
+  // v1.3-A: valor mudou e há cobrança automática ativa → atualiza na Cielo.
+  // Não bloqueia a edição se a Cielo falhar — fica registrado pra conferir.
+  if (Number(previous.monthlyValue) !== effectiveMonthlyValue) {
+    const rec = await prisma.enrollment.findUnique({
+      where: { id: enrollment.id },
+      select: { cieloRecurrentPaymentId: true, cieloRecurrenceStatus: true },
+    });
+    if (rec?.cieloRecurrentPaymentId && rec.cieloRecurrenceStatus === 1) {
+      const cielo = await getTenantCielo(tenant.id);
+      const r = cielo
+        ? await updateRecurrenceAmount(cielo, rec.cieloRecurrentPaymentId, toCents(effectiveMonthlyValue))
+        : { ok: false as const, message: "integração Cielo não configurada" };
+      await appendLeadNote({
+        tenantId: tenant.id,
+        leadId: enrollment.leadId,
+        authorId: user.id,
+        kind: "CIELO_EVENT",
+        body: r.ok
+          ? `Valor da cobrança automática (Cielo) atualizado para R$ ${effectiveMonthlyValue.toFixed(2)}.`
+          : `ATENÇÃO: não foi possível atualizar o valor na Cielo (${r.message}). Ajuste manualmente.`,
+        metadata: { enrollmentId: enrollment.id, step: "recurrence_amount" },
+      });
+      if (!r.ok) {
+        await prisma.enrollment.update({
+          where: { id: enrollment.id },
+          data: { cieloLastError: `Valor não atualizado na Cielo: ${r.message}` },
+        });
+      }
+    }
+  }
+
   revalidatePath("/matriculas");
   revalidatePath("/kanban");
   revalidatePath("/dashboard");
@@ -658,9 +700,107 @@ export async function cancelEnrollment(input: unknown): Promise<ActionResult> {
     }
   });
 
+  // v1.3-A: cancelamento EFETIVADO direto → para a cobrança no cartão.
+  // (Solicitação não para: segue o fluxo da taxa de saída.)
+  let warning: string | undefined;
+  if (!requested) {
+    const off = await deactivateEnrollmentRecurrence(tenant.id, enrollment.id, {
+      authorId: user.id,
+      reason: "matrícula cancelada",
+    });
+    if (!off.ok) warning = `Matrícula cancelada, mas a Cielo não desativou a cobrança: ${off.error}`;
+  }
+
   revalidatePath("/matriculas");
   revalidatePath("/kanban");
+  return warning ? { ok: false, error: warning } : { ok: true, enrollmentId: enrollment.id };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// v1.3-A: cobrança automática no cartão (Cielo)
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Gera (ou regera) o link público pro aluno cadastrar o cartão. Qualquer
+ * role do tenant — é a recepção/vendedora quem manda o link no WhatsApp.
+ */
+export async function createCieloCardLink(
+  input: unknown,
+): Promise<{ ok: true; url: string; expiresAt: string } | { ok: false; error: string }> {
+  const parsed = z.object({ enrollmentId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  if (enrollment.status !== "ACTIVE") return { ok: false, error: "só matrícula ativa pode ter cobrança automática" };
+  if (!(await getTenantCielo(tenant.id))) {
+    return { ok: false, error: "configure a Cielo em Configurações → Cobrança no cartão" };
+  }
+
+  const token = randomBytes(24).toString("base64url");
+  const expiresAt = addDays(new Date(), CARD_LINK_TTL_DAYS);
+  await prisma.enrollment.update({
+    where: { id: enrollment.id },
+    data: { cieloCardLinkToken: token, cieloCardLinkExpiresAt: expiresAt },
+  });
+  await appendLeadNote({
+    tenantId: tenant.id,
+    leadId: enrollment.leadId,
+    authorId: user.id,
+    kind: "CIELO_EVENT",
+    body: `Link de cadastro do cartão gerado (válido até ${expiresAt.toLocaleDateString("pt-BR")}).`,
+    metadata: { enrollmentId: enrollment.id, step: "card_link_created" },
+  });
+
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  revalidatePath("/matriculas");
+  return { ok: true, url: `${proto}://${host}/p/cartao/${token}`, expiresAt: expiresAt.toISOString() };
+}
+
+/** Desativa a cobrança automática (sem cancelar a matrícula). ADMIN/MANAGER. */
+export async function deactivateCieloRecurrence(input: unknown): Promise<ActionResult> {
+  const parsed = z.object({ enrollmentId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, user, membership } = await requireTenantUser();
+  if (!roleAtLeast(membership.role, "MANAGER")) return { ok: false, error: "sem permissão" };
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+
+  const r = await deactivateEnrollmentRecurrence(tenant.id, enrollment.id, {
+    authorId: user.id,
+    reason: `desativada manualmente por ${user.name ?? user.email}`,
+  });
+  if (!r.ok) return r;
+  if (!r.deactivated) return { ok: false, error: "não há cobrança automática ativa" };
+  revalidatePath("/matriculas");
   return { ok: true, enrollmentId: enrollment.id };
+}
+
+/** Consulta a Cielo agora e dá baixa no que estiver pago (botão "sincronizar"). */
+export async function syncCieloEnrollment(
+  input: unknown,
+): Promise<{ ok: true; paid: number; status: number } | { ok: false; error: string }> {
+  const parsed = z.object({ enrollmentId: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "input inválido" };
+
+  const { tenant, membership } = await requireTenantUser();
+  const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
+  if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
+  const cielo = await getTenantCielo(tenant.id);
+  if (!cielo) return { ok: false, error: "integração Cielo não configurada" };
+
+  try {
+    const r = await syncCieloRecurrence(cielo, enrollment.id);
+    revalidatePath("/matriculas");
+    revalidatePath("/financeiro");
+    return { ok: true, ...r };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -694,12 +834,40 @@ export async function confirmExitFeePaid(input: unknown): Promise<ActionResult> 
     where: { id: enrollment.id },
     data: { exitFeePaidAt: new Date() },
   });
+
+  // v1.3-A: com cobrança automática Cielo, o próprio sistema desativa a
+  // recorrência — dispensa o passo manual da Gisele no banco.
+  const cieloOff = await deactivateEnrollmentRecurrence(tenant.id, enrollment.id, {
+    authorId: user.id,
+    reason: "taxa de saída paga",
+  });
+  if (cieloOff.ok && cieloOff.deactivated) {
+    await prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: { recurrenceCanceledAt: new Date() },
+    });
+    await appendLeadNote({
+      tenantId: tenant.id,
+      leadId: enrollment.leadId,
+      authorId: user.id,
+      kind: "MANUAL",
+      body: "Taxa de saída paga — recorrência no cartão desativada automaticamente na Cielo.",
+      metadata: { enrollmentId: enrollment.id, step: "exit_fee_paid" },
+    });
+    revalidatePath("/matriculas");
+    revalidatePath("/dashboard");
+    revalidatePath("/kanban");
+    return { ok: true, enrollmentId: enrollment.id };
+  }
+
   await appendLeadNote({
     tenantId: tenant.id,
     leadId: enrollment.leadId,
     authorId: user.id,
     kind: "MANUAL",
-    body: "Taxa de saída paga — aviso enviado à Gisele para cancelar a recorrência.",
+    body: cieloOff.ok
+      ? "Taxa de saída paga — aviso enviado à Gisele para cancelar a recorrência."
+      : `Taxa de saída paga — FALHA ao desativar na Cielo (${cieloOff.error}); aviso enviado à Gisele.`,
     metadata: { enrollmentId: enrollment.id, step: "exit_fee_paid" },
   });
 

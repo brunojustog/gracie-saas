@@ -205,7 +205,12 @@ export default async function MatriculasPage({
           }}
         />
 
-        <EnrollmentsTable rows={rows} hideFinancials={isSeller} />
+        <EnrollmentsTable
+          rows={rows}
+          hideFinancials={isSeller}
+          cieloEnabled={Boolean(tenant.cieloEnvironment && tenant.cieloMerchantId && tenant.cieloMerchantKey)}
+          canManageCielo={membership.role === "ADMIN" || membership.role === "MANAGER"}
+        />
       </main>
     </>
   );

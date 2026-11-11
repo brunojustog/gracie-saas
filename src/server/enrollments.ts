@@ -168,6 +168,13 @@ export async function getEnrollmentsForList(
       paymentMethod: true,
       status: true,
       observations: true,
+      // v1.3-A: cobrança automática no cartão (Cielo).
+      cieloRecurrentPaymentId: true,
+      cieloRecurrenceStatus: true,
+      cieloCardMasked: true,
+      cieloCardBrand: true,
+      cieloLastError: true,
+      cieloCardLinkExpiresAt: true,
       lead: {
         select: {
           id: true,
