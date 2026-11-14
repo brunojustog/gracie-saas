@@ -105,6 +105,7 @@ async function resolveTenantSession(): Promise<TenantSession> {
       userId: user.id,
       role: "ADMIN",
       active: true,
+      canSettleTuition: true,
       createdAt: new Date(),
     };
   }

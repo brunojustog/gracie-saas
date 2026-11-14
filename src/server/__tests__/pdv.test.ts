@@ -12,6 +12,7 @@ const membershipFactory = (
   userId: "user_anna",
   role: "SELLER",
   active: true,
+  canSettleTuition: false,
   createdAt: new Date(),
   ...overrides,
 });

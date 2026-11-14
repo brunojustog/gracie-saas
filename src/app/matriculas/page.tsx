@@ -210,6 +210,7 @@ export default async function MatriculasPage({
           hideFinancials={isSeller}
           cieloEnabled={Boolean(tenant.cieloEnvironment && tenant.cieloMerchantId && tenant.cieloMerchantKey)}
           canManageCielo={membership.role === "ADMIN" || membership.role === "MANAGER"}
+          canSettleTuition={membership.canSettleTuition || user.isSuperAdmin}
         />
       </main>
     </>

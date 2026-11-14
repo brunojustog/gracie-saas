@@ -266,6 +266,12 @@ model TenantUser {
   userId    String
   role      Role
   active    Boolean  @default(true)
+  /**
+   * v1.3-B: só quem tem isto (ou super-admin) pode dar BAIXA de mensalidade —
+   * confirmar pagamento, pagamento total/quitação e estorno. Default false:
+   * acesso é concedido explicitamente em Config → Usuários.
+   */
+  canSettleTuition Boolean @default(false)
   createdAt DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)

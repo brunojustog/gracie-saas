@@ -394,6 +394,18 @@ export async function updateEnrollment(input: unknown): Promise<ActionResult> {
 // meses curtos). Aluno 2 meses atrasado que paga 1 continua inadimplente —
 // comportamento correto: cada confirmação quita UMA mensalidade.
 
+/**
+ * v1.3-B: baixa de mensalidade (confirmar/quitar/estornar) é restrita a quem
+ * tem `canSettleTuition` — gerenciado em Config → Usuários — ou super-admin.
+ */
+function tuitionDenied(
+  membership: { canSettleTuition: boolean },
+  user: { isSuperAdmin: boolean },
+): { ok: false; error: string } | null {
+  if (membership.canSettleTuition || user.isSuperAdmin) return null;
+  return { ok: false, error: "Você não tem permissão para dar baixa de mensalidade. Fale com o administrador." };
+}
+
 const confirmPaymentSchema = z.object({
   enrollmentId: z.string().min(1),
   /** Data em que o aluno pagou. Default: hoje. */
@@ -405,6 +417,8 @@ export async function confirmPayment(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
   const { tenant, user, membership } = await requireTenantUser();
+  const denied = tuitionDenied(membership, user);
+  if (denied) return denied;
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
   if (enrollment.status !== "ACTIVE") {
@@ -474,6 +488,8 @@ export async function reversePayment(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
   const { tenant, user, membership } = await requireTenantUser();
+  const denied = tuitionDenied(membership, user);
+  if (denied) return denied;
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
 
@@ -535,6 +551,8 @@ export async function payEnrollmentInFull(
   if (!parsed.success) return { ok: false, error: "input inválido" };
 
   const { tenant, user, membership } = await requireTenantUser();
+  const denied = tuitionDenied(membership, user);
+  if (denied) return denied;
   const enrollment = await findEnrollmentInScope(membership, parsed.data.enrollmentId);
   if (!enrollment) return { ok: false, error: "matrícula não encontrada ou sem permissão" };
   if (enrollment.status !== "ACTIVE") {

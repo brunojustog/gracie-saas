@@ -48,7 +48,14 @@ const STATUS_META: Record<FinancialStatus, { label: string; dot: string; text: s
 
 const d = (x: Date | string | null) => (x ? format(new Date(x), "dd/MM/yyyy", { locale: ptBR }) : "—");
 
-export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
+export function FinanceiroView({
+  overview,
+  canSettleTuition = false,
+}: {
+  overview: FinancialOverview;
+  /** v1.3-B: pode dar baixa de mensalidade (confirmar/estornar). */
+  canSettleTuition?: boolean;
+}) {
   const [mode, setMode] = useState<Mode>("month");
   const [filter, setFilter] = useState<Filter>("all");
   const [bucket, setBucket] = useState<Bucket>("all");
@@ -145,6 +152,7 @@ export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
                     <MonthRow
                       key={r.enrollmentId}
                       r={r}
+                      canSettle={canSettleTuition}
                       onPay={() => setPayTarget({ id: r.enrollmentId, name: r.leadName, due: r.nextDueDate })}
                       onHistory={() => setHistTarget({ id: r.enrollmentId, name: r.leadName })}
                     />
@@ -186,6 +194,7 @@ export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
                     <TotalRow
                       key={r.enrollmentId}
                       r={r}
+                      canSettle={canSettleTuition}
                       onPay={() => setPayTarget({ id: r.enrollmentId, name: r.leadName, due: r.nextDueDate })}
                       onHistory={() => setHistTarget({ id: r.enrollmentId, name: r.leadName })}
                     />
@@ -201,7 +210,7 @@ export function FinanceiroView({ overview }: { overview: FinancialOverview }) {
       )}
 
       <PayDialog target={payTarget} onClose={() => setPayTarget(null)} />
-      <HistoryDialog target={histTarget} onClose={() => setHistTarget(null)} />
+      <HistoryDialog target={histTarget} canSettle={canSettleTuition} onClose={() => setHistTarget(null)} />
     </div>
   );
 }
@@ -248,7 +257,7 @@ function HistoryBtn({ onClick }: { onClick: () => void }) {
   );
 }
 
-function MonthRow({ r, onPay, onHistory }: { r: FinancialRow; onPay: () => void; onHistory: () => void }) {
+function MonthRow({ r, canSettle, onPay, onHistory }: { r: FinancialRow; canSettle: boolean; onPay: () => void; onHistory: () => void }) {
   const meta = STATUS_META[r.status];
   return (
     <tr className="border-b last:border-0">
@@ -281,18 +290,18 @@ function MonthRow({ r, onPay, onHistory }: { r: FinancialRow; onPay: () => void;
           <HistoryBtn onClick={onHistory} />
           {r.status === "paid" || r.status === "paused" ? (
             <span className="text-[11px] text-muted-foreground">{r.status === "paused" ? "pausado" : "✓"}</span>
-          ) : (
+          ) : canSettle ? (
             <Button size="sm" className="h-7 text-xs" onClick={onPay}>
               <Check className="mr-1 h-3.5 w-3.5" /> Pagar
             </Button>
-          )}
+          ) : null}
         </div>
       </td>
     </tr>
   );
 }
 
-function TotalRow({ r, onPay, onHistory }: { r: OverdueRow; onPay: () => void; onHistory: () => void }) {
+function TotalRow({ r, canSettle, onPay, onHistory }: { r: OverdueRow; canSettle: boolean; onPay: () => void; onHistory: () => void }) {
   return (
     <tr className="border-b last:border-0">
       <td className="px-3 py-2">
@@ -307,9 +316,11 @@ function TotalRow({ r, onPay, onHistory }: { r: OverdueRow; onPay: () => void; o
       <td className="px-3 py-2 text-right">
         <div className="flex items-center justify-end gap-0.5">
           <HistoryBtn onClick={onHistory} />
-          <Button size="sm" className="h-7 text-xs" onClick={onPay}>
-            <Check className="mr-1 h-3.5 w-3.5" /> Pagar
-          </Button>
+          {canSettle ? (
+            <Button size="sm" className="h-7 text-xs" onClick={onPay}>
+              <Check className="mr-1 h-3.5 w-3.5" /> Pagar
+            </Button>
+          ) : null}
         </div>
       </td>
     </tr>
@@ -369,17 +380,17 @@ function PayBody({ target, onClose }: { target: { id: string; name: string; due:
 }
 
 // ── Diálogo: histórico de pagamentos + observações + estorno — v1.2-CD ──────
-function HistoryDialog({ target, onClose }: { target: { id: string; name: string } | null; onClose: () => void }) {
+function HistoryDialog({ target, canSettle, onClose }: { target: { id: string; name: string } | null; canSettle: boolean; onClose: () => void }) {
   return (
     <Dialog open={target !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
-        {target ? <HistoryBody key={target.id} target={target} onClose={onClose} /> : null}
+        {target ? <HistoryBody key={target.id} target={target} canSettle={canSettle} onClose={onClose} /> : null}
       </DialogContent>
     </Dialog>
   );
 }
 
-function HistoryBody({ target, onClose }: { target: { id: string; name: string }; onClose: () => void }) {
+function HistoryBody({ target, canSettle, onClose }: { target: { id: string; name: string }; canSettle: boolean; onClose: () => void }) {
   const router = useRouter();
   const [payments, setPayments] = useState<PaymentHistoryRow[] | null>(null);
   const [notes, setNotes] = useState<CollectionNote[] | null>(null);
@@ -429,7 +440,7 @@ function HistoryBody({ target, onClose }: { target: { id: string; name: string }
         <section>
           <div className="mb-1 flex items-center justify-between">
             <h4 className="text-sm font-semibold">Pagamentos</h4>
-            {payments && payments.length > 0 ? (
+            {canSettle && payments && payments.length > 0 ? (
               <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" disabled={pending} onClick={() => estornar(`Baixa de ${d(payments[0].paidAt)}.`)}>
                 <Undo2 className="mr-1 h-3.5 w-3.5" /> Estornar último
               </Button>

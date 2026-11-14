@@ -30,6 +30,7 @@ export default async function UsuariosPage() {
         email: m.user.email,
         role: m.role,
         active: m.active,
+        canSettleTuition: m.canSettleTuition,
         emailVerified: m.user.emailVerified !== null,
         isSuperAdmin: m.user.isSuperAdmin,
       }))}

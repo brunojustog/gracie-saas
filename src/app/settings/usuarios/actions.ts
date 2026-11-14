@@ -99,6 +99,8 @@ const updateMembershipSchema = z.object({
   userId: z.string().min(1),
   role: z.enum(ROLE_VALUES).optional(),
   active: z.boolean().optional(),
+  // v1.3-B: quem pode dar baixa de mensalidade (confirmar/quitar/estornar).
+  canSettleTuition: z.boolean().optional(),
 });
 
 export async function updateMembership(
@@ -122,6 +124,7 @@ export async function updateMembership(
     data: {
       ...(parsed.data.role !== undefined ? { role: parsed.data.role } : {}),
       ...(parsed.data.active !== undefined ? { active: parsed.data.active } : {}),
+      ...(parsed.data.canSettleTuition !== undefined ? { canSettleTuition: parsed.data.canSettleTuition } : {}),
     },
   });
 

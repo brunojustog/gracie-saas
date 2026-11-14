@@ -49,7 +49,10 @@ export default async function FinanceiroPage({
             de pagamento é feita em Matrículas.
           </p>
         </div>
-        <FinanceiroView overview={overview} />
+        <FinanceiroView
+          overview={overview}
+          canSettleTuition={membership.canSettleTuition || user.isSuperAdmin}
+        />
       </main>
     </>
   );

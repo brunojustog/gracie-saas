@@ -143,12 +143,15 @@ export function EnrollmentsTable({
   hideFinancials = false,
   cieloEnabled = false,
   canManageCielo = false,
+  canSettleTuition = false,
 }: {
   rows: Row[];
   hideFinancials?: boolean;
   /** v1.3-A: tenant com a integração Cielo configurada. */
   cieloEnabled?: boolean;
   canManageCielo?: boolean;
+  /** v1.3-B: pode dar baixa de mensalidade (confirmar/quitar). */
+  canSettleTuition?: boolean;
 }) {
   const [cieloTarget, setCieloTarget] = useState<CieloRow | null>(null);
   const router = useRouter();
@@ -375,28 +378,32 @@ export function EnrollmentsTable({
                       ) : null}
                       {r.status === "ACTIVE" && !r.suspendedAt ? (
                         <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-                            onClick={() => setPayTarget(r)}
-                            disabled={pending}
-                            title="Confirmar pagamento da mensalidade"
-                            aria-label="Confirmar pagamento da mensalidade"
-                          >
-                            <Banknote className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-                            onClick={() => setPayFullTarget(r)}
-                            disabled={pending}
-                            title="Pagamento total (quitar vários meses)"
-                            aria-label="Pagamento total (quitar vários meses)"
-                          >
-                            <CalendarCheck className="h-4 w-4" />
-                          </Button>
+                          {canSettleTuition ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                                onClick={() => setPayTarget(r)}
+                                disabled={pending}
+                                title="Confirmar pagamento da mensalidade"
+                                aria-label="Confirmar pagamento da mensalidade"
+                              >
+                                <Banknote className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                                onClick={() => setPayFullTarget(r)}
+                                disabled={pending}
+                                title="Pagamento total (quitar vários meses)"
+                                aria-label="Pagamento total (quitar vários meses)"
+                              >
+                                <CalendarCheck className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : null}
                           <Button
                             variant="ghost"
                             size="icon"

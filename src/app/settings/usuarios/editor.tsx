@@ -33,6 +33,7 @@ type Member = {
   email: string;
   role: Role;
   active: boolean;
+  canSettleTuition: boolean;
   emailVerified: boolean;
   isSuperAdmin: boolean;
 };
@@ -137,6 +138,17 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
     });
   };
 
+  const toggleSettle = (canSettleTuition: boolean) => {
+    startTransition(async () => {
+      const result = await updateMembership({ userId: member.userId, canSettleTuition });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(canSettleTuition ? "Pode dar baixa de mensalidade" : "Baixa de mensalidade bloqueada");
+    });
+  };
+
   return (
     <li className="flex items-center gap-3 rounded-lg border bg-card p-3">
       <div className="min-w-0 flex-1">
@@ -177,6 +189,18 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
           ))}
         </SelectContent>
       </Select>
+
+      {member.role !== "PROFESSOR" ? (
+        <div className="flex items-center gap-2 text-xs" title="Pode dar baixa de mensalidade (confirmar/quitar/estornar)">
+          <Switch
+            checked={member.canSettleTuition}
+            onCheckedChange={toggleSettle}
+            disabled={pending || isSelf}
+            aria-label="Pode dar baixa de mensalidade"
+          />
+          <span className="text-muted-foreground">baixa mensal.</span>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-2 text-xs">
         <Switch
