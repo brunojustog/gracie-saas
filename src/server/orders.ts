@@ -38,8 +38,9 @@ export async function getOrdersForTenant(tenantId: string) {
       status: true,
       stage: true,
       isGift: true,
-      // v1.2-CJ/CK: produto do estoque vinculado (entrada/saída por etapa).
+      // v1.2-CJ/CK → v1.3-C: produto do estoque vinculado (baixa na entrega).
       variantId: true,
+      stockExempt: true,
       variant: {
         select: {
           id: true,

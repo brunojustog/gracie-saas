@@ -74,6 +74,8 @@ const PAY_TONE: Record<string, string> = {
 };
 const PAY_METHODS = ["Pix", "Dinheiro", "Cartão débito", "Cartão crédito", "Outro"];
 const NONE = "__none__";
+// v1.3-C: sentinela do "item avulso" no seletor de produto da encomenda.
+const AVULSO = "__avulso__";
 
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -254,7 +256,11 @@ function AlunoPicker({
 function OrderForm({ order, leads, variants, onDone }: { order?: OrderRow; leads: LeadOption[]; variants: VariantPick[]; onDone: () => void }) {
   const router = useRouter();
   const editing = !!order;
-  const [variantId, setVariantId] = useState<string>(order?.variantId ?? NONE);
+  // v1.3-C: escolha de estoque — "" = não escolhido (força decidir), AVULSO = sem
+  // baixa, ou um id de variante. Edição: deriva do estado salvo.
+  const [stockChoice, setStockChoice] = useState<string>(
+    order ? (order.variantId ?? (order.stockExempt ? AVULSO : "")) : "",
+  );
   const [item, setItem] = useState(order?.item ?? "");
   const [quantity, setQuantity] = useState(String(order?.quantity ?? 1));
   const [matricula, setMatricula] = useState(order?.matricula ?? "");
@@ -278,6 +284,8 @@ function OrderForm({ order, leads, variants, onDone }: { order?: OrderRow; leads
 
   const save = () => {
     if (!item.trim()) return void toast.error("Descreva o item");
+    // v1.3-C: obriga decidir o estoque (produto OU avulso) — fim do default silencioso.
+    if (!stockChoice) return void toast.error("Escolha o produto do estoque ou marque “item avulso”.");
     const parsedPayNow =
       !editing && payNow && !isGift && payNowAmount
         ? { amount: Number(payNowAmount.replace(",", ".")), method: payNowMethod, paidAt: orderedAt }
@@ -301,7 +309,8 @@ function OrderForm({ order, leads, variants, onDone }: { order?: OrderRow; leads
         pickupAt: pickupAt || null,
         notes: notes || null,
         isGift,
-        variantId: variantId === NONE ? null : variantId,
+        variantId: stockChoice === AVULSO ? null : stockChoice,
+        stockExempt: stockChoice === AVULSO,
       };
       const r = editing
         ? await updateOrder({ id: order!.id, ...payload })
@@ -326,13 +335,13 @@ function OrderForm({ order, leads, variants, onDone }: { order?: OrderRow; leads
         </div>
         {/* v1.2-CJ: vincular ao estoque (opcional). Ao entregar, baixa a quantidade. */}
         <div className="space-y-1 sm:col-span-2">
-          <Label>Produto do estoque (opcional)</Label>
+          <Label>Produto do estoque *</Label>
           <Select
-            value={variantId}
+            value={stockChoice}
             onValueChange={(v) => {
-              setVariantId(v);
+              setStockChoice(v);
               // preenche a descrição se estiver vazia (tira o sufixo de estoque)
-              if (v !== NONE && !item.trim()) {
+              if (v !== AVULSO && v && !item.trim()) {
                 const pick = variants.find((x) => x.id === v);
                 if (pick) setItem(pick.label.replace(/\s*\((?:estoque \d+|ilimitado)\)\s*$/, ""));
               }
@@ -340,17 +349,18 @@ function OrderForm({ order, leads, variants, onDone }: { order?: OrderRow; leads
             disabled={pending}
           >
             <SelectTrigger>
-              <SelectValue placeholder="— nenhum (item avulso, sem baixa de estoque) —" />
+              <SelectValue placeholder="— escolha o produto ou marque avulso —" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE}>— nenhum (item avulso, sem baixa) —</SelectItem>
+              <SelectItem value={AVULSO}>Item avulso (não controla estoque)</SelectItem>
               {variants.map((v) => (
                 <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <p className="text-[11px] text-muted-foreground">
-            Se vincular um produto: <b>Chegou</b> dá entrada no estoque e <b>Entregue</b> dá saída (automático).
+            Com produto vinculado, marcar <b>Entregue</b> dá <b>baixa no estoque</b> (−qtd).
+            Sem produto no estoque, use <b>item avulso</b> (entrega sem baixa).
           </p>
         </div>
         <div className="space-y-1">
@@ -546,6 +556,15 @@ function OrderCard({ order: o, leads, variants }: { order: OrderRow; leads: Lead
             {o.amount != null ? ` · venda ${brl(o.amount)}` : ""}
             {o.cost != null ? ` · custo ${brl(o.cost)}` : ""}
             {o.paymentMethod ? ` · ${o.paymentMethod}` : ""}
+          </div>
+          <div className="text-[11px]">
+            {o.variant ? (
+              <span className="text-muted-foreground">estoque: {o.variant.product.name} · {o.variant.label}</span>
+            ) : o.stockExempt ? (
+              <span className="text-muted-foreground">item avulso (sem baixa)</span>
+            ) : (
+              <span className="text-amber-700 dark:text-amber-400">⚠ sem produto do estoque — não baixa</span>
+            )}
           </div>
           {!o.isGift && o.amount != null && o.cost != null ? (
             <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">

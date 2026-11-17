@@ -1648,12 +1648,15 @@ model Order {
   isGift        Boolean            @default(false)
   // v1.2-CC: combinado/forma do pagamento do restante (ex.: "2x", "toda sexta").
   paymentPlan   String?
-  // v1.2-CJ/CK: produto do estoque vinculado (opcional). "Chegou" dá ENTRADA
-  // (+qtd) e "Entregue" dá SAÍDA (−qtd). `stockApplied` guarda a quantidade
-  // atualmente aplicada ao estoque desta encomenda (reconcilia nas transições,
-  // evita aplicar 2x).
+  // v1.2-CJ/CK → v1.3-C: produto do estoque vinculado (opcional). A BAIXA do
+  // estoque acontece ao marcar "Entregue" (−qtd); voltar a etapa devolve (+qtd).
+  // `stockApplied` guarda o delta (com sinal) atualmente aplicado ao estoque
+  // desta encomenda (reconcilia nas transições, evita aplicar 2x).
   variantId     String?
   stockApplied  Int                @default(0)
+  // v1.3-C: "item avulso" — entrega SEM baixa de estoque, escolha consciente.
+  // Pra marcar "Entregue" é obrigatório ter produto vinculado OU isto = true.
+  stockExempt   Boolean            @default(false)
   createdById   String? // quem registrou (sem relação forte)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt

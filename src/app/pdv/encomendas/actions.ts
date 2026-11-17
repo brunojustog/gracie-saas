@@ -37,6 +37,8 @@ const orderFields = {
   // v1.2-CJ: produto do estoque vinculado (opcional). Ao entregar, baixa este
   // produto do estoque. null = item avulso (texto livre, sem baixa).
   variantId: z.string().min(1).optional().nullable(),
+  // v1.3-C: "item avulso" — entrega sem baixa de estoque (escolha consciente).
+  stockExempt: z.boolean().optional(),
 };
 
 /** "YYYY-MM-DD" → Date no meio-dia BR (evita shift de fuso). null/'' → null. */
@@ -91,12 +93,13 @@ async function moveVariantStock(
 }
 
 /**
- * v1.2-CK: quantidade que a encomenda mantém NO estoque da unidade por etapa.
- * "Chegou" (ARRIVED) e "Troca" (EXCHANGE) = item está na unidade (+qtd).
- * "Entregue" saiu; "Pedido/Encomendado" ainda não chegou → 0.
+ * v1.3-C: delta (com sinal) que a encomenda aplica ao estoque por etapa.
+ * "Entregue" (DELIVERED) BAIXA o produto da prateleira (−qtd); qualquer outra
+ * etapa não mexe (0). Voltar de "Entregue" devolve o estoque (a reconciliação
+ * desfaz o −qtd aplicado).
  */
-function stockTargetForStage(stage: string, qty: number): number {
-  return stage === "ARRIVED" || stage === "EXCHANGE" ? qty : 0;
+function stockDeltaForStage(stage: string, qty: number): number {
+  return stage === "DELIVERED" ? -qty : 0;
 }
 
 /**
@@ -113,7 +116,7 @@ async function reconcileOrderStock(
   if (cur.stockApplied !== 0 && cur.variantId) {
     await moveVariantStock(tx, tenantId, cur.variantId, -cur.stockApplied);
   }
-  const target = next.variantId ? stockTargetForStage(next.stage, next.quantity) : 0;
+  const target = next.variantId ? stockDeltaForStage(next.stage, next.quantity) : 0;
   if (next.variantId && target !== 0) {
     const moved = await moveVariantStock(tx, tenantId, next.variantId, target);
     return moved ? target : 0;
@@ -196,6 +199,8 @@ export async function createOrder(input: unknown): Promise<Result> {
   const lead = await resolveLead(tenant.id, d.customerLeadId);
   if (d.customerLeadId && !lead.id) return { ok: false, error: "aluno inválido" };
   const variantId = await resolveVariant(tenant.id, d.variantId);
+  // v1.3-C: com produto vinculado nunca é "avulso"; sem produto, respeita a escolha.
+  const stockExempt = variantId ? false : (d.stockExempt ?? false);
   const amount = d.isGift ? null : d.amount ?? null;
 
   await prisma.$transaction(async (tx) => {
@@ -218,6 +223,7 @@ export async function createOrder(input: unknown): Promise<Result> {
         notes: d.notes?.trim() || null,
         isGift: d.isGift ?? false,
         variantId,
+        stockExempt,
         orderedAt,
         createdById: user.id,
       },
@@ -264,6 +270,7 @@ export async function updateOrder(input: unknown): Promise<Result> {
   const lead = await resolveLead(tenant.id, d.customerLeadId);
   if (d.customerLeadId && !lead.id) return { ok: false, error: "aluno inválido" };
   const newVariantId = await resolveVariant(tenant.id, d.variantId);
+  const newStockExempt = newVariantId ? false : (d.stockExempt ?? false);
   const newQty = d.quantity ?? 1;
 
   await prisma.$transaction(async (tx) => {
@@ -293,6 +300,7 @@ export async function updateOrder(input: unknown): Promise<Result> {
         notes: d.notes?.trim() || null,
         isGift: d.isGift ?? false,
         variantId: newVariantId,
+        stockExempt: newStockExempt,
         stockApplied,
       },
     });
@@ -388,11 +396,21 @@ export async function setOrderStage(input: unknown): Promise<Result> {
 
   const order = await prisma.order.findFirst({
     where: { id: parsed.data.id, tenantId: tenant.id },
-    select: { id: true, variantId: true, quantity: true, stockApplied: true },
+    select: { id: true, variantId: true, quantity: true, stockApplied: true, stockExempt: true },
   });
   if (!order) return { ok: false, error: "encomenda não encontrada" };
 
   const toDelivered = parsed.data.stage === "DELIVERED";
+
+  // v1.3-C: trava anti-falha — não entrega sem decidir o estoque. Ou tem produto
+  // vinculado (baixa automática), ou foi marcada "item avulso" (sem baixa).
+  if (toDelivered && !order.variantId && !order.stockExempt) {
+    return {
+      ok: false,
+      error:
+        "Pra marcar Entregue: abra Editar e vincule o produto do estoque (baixa automática) ou marque “item avulso (sem baixa)”.",
+    };
+  }
 
   await prisma.$transaction(async (tx) => {
     // v1.2-CK: reconcilia o estoque pela etapa nova. Chegou → entrada (+qtd);
